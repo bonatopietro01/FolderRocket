@@ -8,9 +8,10 @@ const OpenAI = require("openai");
 
 // Crea il collegamento con OpenAI usando la stessa API key
 // già utilizzata dal tuo analyzer.js
-const client = process.env.OPENAI_API_KEY
-    ? new OpenAI({apiKey: process.env.OPENAI_API_KEY})
-    : null;
+function getClient() {
+    const apiKey = String(process.env.OPENAI_API_KEY ?? "").trim();
+    return apiKey ? new OpenAI({apiKey}) : null;
+}
 
 
 /**
@@ -31,6 +32,7 @@ async function analyzeDeadline(
     content
 ) {
 
+    const client = getClient();
     if (!client) {
         return {expirationDate: null, source: null, reason: "AI deadline analysis is not configured"};
     }

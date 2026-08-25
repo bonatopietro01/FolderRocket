@@ -1,4 +1,4 @@
-import {LoaderCircle, Monitor, Search, SlidersHorizontal, X} from "lucide-react";
+import {LoaderCircle, Monitor, Search, SlidersHorizontal, X, ZoomIn, ZoomOut} from "lucide-react";
 import {useEffect, useRef, useState, type PointerEvent as ReactPointerEvent} from "react";
 import type {ScreenCaptureCrop} from "./DashboardSourceBlock";
 import {API_BASE_URL} from "../api";
@@ -168,7 +168,7 @@ export default function ScreenCaptureSourcePanel({crop, onCropChange}: ScreenCap
 
     async function analyseProjection() {
         setAnalysisError("");
-        let imageDataUrl = "";
+        let imageDataUrl: string;
         try {
             imageDataUrl = captureProjectionImage();
         } catch (captureError) {
@@ -201,6 +201,21 @@ export default function ScreenCaptureSourcePanel({crop, onCropChange}: ScreenCap
         const normalized = normalizeCrop(next);
         cropRef.current = normalized;
         onCropChange(normalized);
+    }
+
+    function changeZoom(direction: "in" | "out") {
+        const current = cropRef.current;
+        const factor = direction === "in" ? .72 : 1 / .72;
+        const width = clamp(current.width * factor, MIN_CROP_SIZE, 1);
+        const height = clamp(current.height * factor, MIN_CROP_SIZE, 1);
+        const centreX = current.x + current.width / 2;
+        const centreY = current.y + current.height / 2;
+        updateCrop({
+            x: clamp(centreX - width / 2, 0, 1 - width),
+            y: clamp(centreY - height / 2, 0, 1 - height),
+            width,
+            height
+        });
     }
 
     function beginCropAction(event: ReactPointerEvent<HTMLElement>, action: CropAction) {
@@ -246,7 +261,7 @@ export default function ScreenCaptureSourcePanel({crop, onCropChange}: ScreenCap
         <video className="screenCaptureHiddenVideo" ref={hiddenVideoRef} autoPlay muted playsInline />
         <div className="sourceHeader"><Monitor className="screenCaptureIcon" size={27} /><span className="sourceTitle">Screen</span>{stream && <button ref={stopButtonRef} type="button" className={stopArmed ? "screenCaptureStop armed" : "screenCaptureStop"} onClick={() => { if (stopArmed) stopCapture(); else setStopArmed(true); }} aria-pressed={stopArmed} title={stopArmed ? "Click again to stop sharing" : "Stop sharing"}><X size={15} /></button>}</div>
         {!stream ? <div className="screenCaptureEmpty"><Monitor size={26} /><strong>Project a window or screen</strong><p>Select a browser tab, a window such as Outlook, or your screen. FolderRocket only displays it locally while sharing is active.</p><button type="button" onClick={() => void startCapture()}>Choose what to project</button>{error && <small>{error}</small>}</div> : <>
-            <div className="screenCaptureToolbar"><button type="button" className={editing ? "active" : ""} onClick={() => { setProjectionHidden(false); setEditing(current => !current); }}><SlidersHorizontal size={15} />{editing ? "View" : "Adjust frame"}</button><span>{editing ? "Drag the frame or its corners." : `Live · ${zoomLevel.toFixed(1)}×`}</span><button type="button" className="screenProjectionVisibility" onClick={() => { setEditing(false); setProjectionHidden(current => !current); }}>{projectionHidden ? "Show" : "Hide"}</button></div>
+            <div className="screenCaptureToolbar"><button type="button" className={editing ? "active" : ""} onClick={() => { setProjectionHidden(false); setEditing(current => !current); }}><SlidersHorizontal size={15} />{editing ? "View" : "Adjust frame"}</button><span>{editing ? "Drag the frame or its corners." : `Live · ${zoomLevel.toFixed(1)}×`}</span><div className="screenZoomControls"><button type="button" onClick={() => changeZoom("out")} disabled={selected.width >= .999 && selected.height >= .999} title="Zoom out"><ZoomOut size={14} /></button><button type="button" onClick={() => changeZoom("in")} disabled={selected.width <= MIN_CROP_SIZE && selected.height <= MIN_CROP_SIZE} title="Zoom in"><ZoomIn size={14} /></button></div><button type="button" className="screenProjectionVisibility" onClick={() => { setEditing(false); setProjectionHidden(current => !current); }}>{projectionHidden ? "Show" : "Hide"}</button></div>
             {editing ? <div className="screenCaptureEditor" ref={editorRef}><video ref={previewVideoRef} autoPlay muted playsInline /><div className="screenCropBox" style={{left: `${selected.x * 100}%`, top: `${selected.y * 100}%`, width: `${selected.width * 100}%`, height: `${selected.height * 100}%`}} onPointerDown={event => beginCropAction(event, "move")}><span className="screenCropHandle nw" onPointerDown={event => beginCropAction(event, "nw")} /><span className="screenCropHandle ne" onPointerDown={event => beginCropAction(event, "ne")} /><span className="screenCropHandle sw" onPointerDown={event => beginCropAction(event, "sw")} /><span className="screenCropHandle se" onPointerDown={event => beginCropAction(event, "se")} /></div></div> : <div className={projectionHidden ? "screenProjectionCanvas isHidden" : "screenProjectionCanvas"}><canvas ref={canvasRef} /></div>}
             <div className={`projectionSearchPanel${projectionHidden ? " expanded" : ""}`}>
                 <div className="projectionSearchControls"><input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === "Enter") void analyseProjection(); }} placeholder="Ask about the visible text…" aria-label="Ask about the projected screen" /><button type="button" onClick={() => void analyseProjection()} disabled={isAnalysing}>{isAnalysing ? <LoaderCircle className="spinning" size={14} /> : <Search size={14} />}{isAnalysing ? "Analysing…" : "Analyse"}</button><button type="button" className="projectionSearchClear" onClick={clearProjectionSearch} disabled={isAnalysing || (!query && !analysis && !analysisError)} title="Clear search and result" aria-label="Clear search and result"><X size={14} /></button></div>

@@ -66,6 +66,8 @@ The first installer is manually downloaded and installed. Automatic updates are 
 
 The desktop launcher sets `FOLDERROCKET_DATA_DIR`, `FOLDERROCKET_UPLOADS_DIR` and `FOLDERROCKET_TOKEN_DIR`. This keeps users, workspace settings, temporary uploads and encrypted email tokens in the Windows application-data directory, not in the installed program folder.
 
+Connected-service credentials are never bundled. The installed app reads the optional local file `%APPDATA%\\FolderRocket\\config.env`; use `desktop/config.env.example` as the template. Only OpenAI, Gmail, Outlook and the optional token-encryption key are accepted from that file. It is preserved when FolderRocket is updated and is never committed to Git.
+
 ## AI mode
 
 The application will expose an explicit state, rather than silently using AI:

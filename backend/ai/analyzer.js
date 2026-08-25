@@ -2,9 +2,10 @@ require("dotenv").config();
 
 const OpenAI = require("openai");
 
-const client = process.env.OPENAI_API_KEY
-    ? new OpenAI({apiKey: process.env.OPENAI_API_KEY})
-    : null;
+function getClient() {
+    const apiKey = String(process.env.OPENAI_API_KEY ?? "").trim();
+    return apiKey ? new OpenAI({apiKey}) : null;
+}
 
 const STANDARD_COLUMNS = {
     company: "Company or organisation named in the document",
@@ -62,8 +63,9 @@ function cleanSkills(value) {
 async function analyzeDocument(text, archiveColumns) {
     const requestedColumns = getRequestedColumns(archiveColumns);
 
+    const client = getClient();
     if (!client) {
-        throw new Error("OpenAI API key is not configured in backend/.env");
+        throw new Error("OpenAI AI integration is not configured yet.");
     }
 
     const documentText = cleanText(text);

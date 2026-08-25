@@ -2,9 +2,10 @@ require("dotenv").config();
 
 const OpenAI = require("openai");
 
-const client = process.env.OPENAI_API_KEY
-    ? new OpenAI({apiKey: process.env.OPENAI_API_KEY})
-    : null;
+function getClient() {
+    const apiKey = String(process.env.OPENAI_API_KEY ?? "").trim();
+    return apiKey ? new OpenAI({apiKey}) : null;
+}
 
 const OPENAI_ALERT_BATCH_SIZE = 10;
 const OPENAI_ALERT_REQUEST_INTERVAL_MS = 3_000;
@@ -31,6 +32,8 @@ function retryDelayFromRateLimit(error) {
 
 
 async function classifyBatchWithAi(rules, batch) {
+    const client = getClient();
+    if (!client) throw new Error("OpenAI AI integration is not configured yet.");
     const safeMessages = batch.map(message => ({
         id: message.id,
         from: cleanText(message.sender),
@@ -102,10 +105,10 @@ function senderMatches(message, query) {
 
 async function classifyWithAi(rules, messages) {
     if (!rules.length) return {matches: {}, error: ""};
-    if (!client) {
+    if (!getClient()) {
         return {
             matches: {},
-            error: "OpenAI API key is not configured in backend/.env"
+            error: "OpenAI AI integration is not configured yet."
         };
     }
 

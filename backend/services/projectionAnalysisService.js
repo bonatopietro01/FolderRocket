@@ -4,9 +4,10 @@ const OpenAI = require("openai");
 const dns = require("dns").promises;
 const net = require("net");
 
-const client = process.env.OPENAI_API_KEY
-    ? new OpenAI({apiKey: process.env.OPENAI_API_KEY})
-    : null;
+function getClient() {
+    const apiKey = String(process.env.OPENAI_API_KEY ?? "").trim();
+    return apiKey ? new OpenAI({apiKey}) : null;
+}
 
 const MAX_IMAGE_DATA_URL_LENGTH = 5_500_000;
 const MAX_QUERY_LENGTH = 1_000;
@@ -134,7 +135,8 @@ async function fetchPublicPageText(url, query) {
 }
 
 async function analyzeProjection(imageDataUrl, query) {
-    if (!client) throw new Error("OpenAI API key is not configured in backend/.env");
+    const client = getClient();
+    if (!client) throw new Error("OpenAI AI integration is not configured yet.");
 
     const image = getImageDataUrl(imageDataUrl);
     const question = getQuestion(query);
@@ -176,7 +178,8 @@ async function analyzeProjection(imageDataUrl, query) {
 }
 
 async function analyzeDomainPage(url, query) {
-    if (!client) throw new Error("OpenAI API key is not configured in backend/.env");
+    const client = getClient();
+    if (!client) throw new Error("OpenAI AI integration is not configured yet.");
     const question = getQuestion(query);
     const {text, sourceUrl} = await fetchPublicPageText(url, question);
     const instruction = [

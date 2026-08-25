@@ -42,6 +42,7 @@ const {startEmailAlertScheduler} = require("./services/emailAlertScheduler");
 const {migrateLegacyConnections} = require("./services/emailTokenStore");
 const {addAuditEvent, listAuditEvents} = require("./services/auditLogService");
 const {analyzeDomainPage, analyzeProjection} = require("./services/projectionAnalysisService");
+const {integrationStatus, saveIntegrationConfiguration} = require("./services/desktopIntegrationConfigService");
 const {
     authenticateRequest,
     createEmergencyRecoveryCode,
@@ -513,6 +514,20 @@ app.put("/settings/dashboard", (req, res) => {
         res.json({message: "Dashboard settings saved."});
     } catch (error) {
         res.status(400).json({message: error instanceof Error ? error.message : "Unable to save dashboard settings."});
+    }
+});
+
+// Desktop-only credentials stay in the current Windows user's private app-data folder.
+// The response deliberately reports status only: secret values are never sent back to the UI.
+app.get("/desktop/integrations/status", requireAuthenticated, requireAdministrator, (req, res) => {
+    res.json(integrationStatus());
+});
+
+app.put("/desktop/integrations/config", requireAuthenticated, requireAdministrator, (req, res) => {
+    try {
+        res.json(saveIntegrationConfiguration(req.body?.settings));
+    } catch (error) {
+        res.status(400).json({message: error instanceof Error ? error.message : "Unable to save local integration settings."});
     }
 });
 

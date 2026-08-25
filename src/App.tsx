@@ -14,9 +14,10 @@ import ScreenCaptureSourcePanel from "./components/ScreenCaptureSourcePanel";
 import SearchWorkspace from "./components/SearchWorkspace";
 import ProcessingWorkspace from "./components/ProcessingWorkspace";
 import CargoShip from "./components/CargoShip";
+import IntegrationSetup from "./components/IntegrationSetup";
 import folderRocketWordmark from "./assets/folderrocket-wordmark.png";
 
-interface Folder extends ManagedFolder {}
+type Folder = ManagedFolder;
 interface DashboardWidths { left: number; center: number; right: number; }
 const DASHBOARD_WIDTHS_KEY = "folderrocket-dashboard-widths";
 const FOLDERS_KEY = "folderrocket-folders";
@@ -264,7 +265,7 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     if (cargoShipPopup) return <div className="cargoShipPopupPage"><CargoShip standalone onOpenFileStudio={() => setPage("processing")} /></div>;
 
     return <div className="app">
-        <header className="appHeader"><img className="appLogo" src={folderRocketWordmark} alt="FolderRocket" /><nav className="appNavigation"><button className={page === "dashboard" ? "active" : ""} type="button" onClick={() => setPage("dashboard")}>Dashboard</button><button className={page === "folders" ? "active" : ""} type="button" onClick={() => setPage("folders")}>Folder management</button><button className={page === "processing" ? "active" : ""} type="button" onClick={() => setPage("processing")}>File Studio</button>{page === "dashboard" && <button type="button" className="dashboardResetButton" onClick={resetDashboardLayout} title="Restore default dashboard size" aria-label="Restore default dashboard size"><RotateCcw size={14} /></button>}</nav><div className="appHeaderTools"><CargoShip onOpenFileStudio={() => setPage("processing")} /><AccountMenu user={user} onLogout={onLogout} /></div></header>
+        <header className="appHeader"><img className="appLogo" src={folderRocketWordmark} alt="FolderRocket" /><nav className="appNavigation"><button className={page === "dashboard" ? "active" : ""} type="button" onClick={() => setPage("dashboard")}>Dashboard</button><button className={page === "folders" ? "active" : ""} type="button" onClick={() => setPage("folders")}>Folder management</button><button className={page === "processing" ? "active" : ""} type="button" onClick={() => setPage("processing")}>File Studio</button>{page === "dashboard" && <button type="button" className="dashboardResetButton" onClick={resetDashboardLayout} title="Restore default dashboard size" aria-label="Restore default dashboard size"><RotateCcw size={14} /></button>}</nav><div className="appHeaderTools"><IntegrationSetup isAdmin={user.role === "admin"} /><CargoShip onOpenFileStudio={() => setPage("processing")} /><AccountMenu user={user} onLogout={onLogout} /></div></header>
         <div className="pageFrame"><main ref={dashboardRef} style={dashboardStyle} className={page === "dashboard" ? "dashboard" : "dashboard pageHidden"}>
             <aside className="dashboardColumn sourcesColumn">
                 <div className="sourcesColumnHeader"><span>Sources</span><div className="sourcePickerWrap" ref={sourcePickerRef}><button type="button" className="sourcesAddButton" onClick={() => setSourcePickerOpen(current => !current)} aria-expanded={sourcePickerOpen} title="Add source block"><Plus size={15} /></button>{sourcePickerOpen && <div className="sourcePicker"><button type="button" onClick={() => addSourceBlock("gmail")}><Mail className="gmailPanelIcon" size={15} />Gmail</button><button type="button" onClick={() => addSourceBlock("outlook")}><Mail className="outlookPanelIcon" size={15} />Outlook</button><button type="button" onClick={() => addSourceBlock("domain")}><span className="sourcePickerDomainIcon">◎</span>Domain</button><button type="button" onClick={() => addSourceBlock("screen")}><span className="sourcePickerScreenIcon">▣</span>Screen</button></div>}</div></div>

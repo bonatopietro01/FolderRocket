@@ -43,7 +43,9 @@ npm run desktop:package
 
 ## Configuration and privacy
 
-Copy `backend/.env.example` to `backend/.env` and complete only the integrations you choose to activate.
+For browser development, copy `backend/.env.example` to `backend/.env` and complete only the integrations you choose to activate.
+
+For the installed Windows app, credentials are deliberately not bundled. The administrator can open the **AI** button in FolderRocket and save only the services they choose to activate. The app stores them in `%APPDATA%\\FolderRocket\\config.env`, which remains on the PC across updates and is ignored by Git. `desktop/config.env.example` is available as an offline fallback template.
 
 Never commit `backend/.env`, mail tokens, user data, generated files or update-signing keys. The repository `.gitignore` protects these local files.
 
