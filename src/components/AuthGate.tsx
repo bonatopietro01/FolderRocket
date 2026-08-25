@@ -1,0 +1,289 @@
+import {useEffect, useState, type FormEvent, type ReactNode} from "react";
+import {Copy, Eye, EyeOff, History, KeyRound, LogOut, Plus, RefreshCw, ShieldCheck, UserRound} from "lucide-react";
+import {API_BASE_URL} from "../api";
+import folderRocketLoginLogo from "../assets/folderrocket-login-logo.png";
+
+export interface FolderRocketUser {
+    id: string;
+    email: string;
+    role: "admin" | "member";
+    workspacePath: string;
+    createdAt: string;
+}
+
+interface AuthGateProps {
+    children: (session: {user: FolderRocketUser; logout: () => Promise<void>}) => ReactNode;
+}
+
+type RecoveryCodeResponse = {code: string; expiresAt: string};
+
+interface AuditEvent {
+    id: string;
+    at: string;
+    user: {id: string; email: string; role: "admin" | "member"};
+    action: string;
+    details?: {method?: string; fileName?: string; count?: number; destination?: string};
+}
+
+const auditActionLabels: Record<string, string> = {
+    account_created: "Account created",
+    signed_in: "Signed in",
+    signed_out: "Signed out",
+    password_reset_signed_in: "Password reset and signed in",
+    file_uploaded: "Uploaded a file",
+    virtual_files_uploaded: "Added virtual files",
+    projection_analyzed: "Analyzed a screen projection",
+    domain_analyzed: "Analyzed a public domain page"
+};
+
+function formatAuditTimestamp(value: string) {
+    const timestamp = new Date(value);
+    return Number.isNaN(timestamp.getTime())
+        ? value
+        : new Intl.DateTimeFormat(undefined, {dateStyle: "medium", timeStyle: "short"}).format(timestamp);
+}
+
+async function readJson(response: Response) {
+    const data = await response.json().catch(() => ({})) as {message?: string};
+    if (!response.ok) throw new Error(data.message ?? "Something went wrong.");
+    return data;
+}
+
+function PasswordField({
+    autoComplete,
+    onChange,
+    value
+}: {
+    autoComplete: "current-password" | "new-password";
+    onChange: (value: string) => void;
+    value: string;
+}) {
+    const [visible, setVisible] = useState(false);
+    return <label>Password
+        <span className="passwordField">
+            <input type={visible ? "text" : "password"} autoComplete={autoComplete} minLength={12} value={value} onChange={event => onChange(event.target.value)} required />
+            <button type="button" className="passwordVisibilityButton" onClick={() => setVisible(current => !current)} aria-label={visible ? "Hide password" : "Show password"} title={visible ? "Hide password" : "Show password"}>
+                {visible ? <EyeOff size={17} /> : <Eye size={17} />}
+            </button>
+        </span>
+    </label>;
+}
+
+function AccountMenu({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<void>}) {
+    const [open, setOpen] = useState(false);
+    const [inviteEmail, setInviteEmail] = useState("");
+    const [inviteResult, setInviteResult] = useState<{email: string; code: string} | null>(null);
+    const [resetEmail, setResetEmail] = useState("");
+    const [resetResult, setResetResult] = useState("");
+    const [recoveryResult, setRecoveryResult] = useState<RecoveryCodeResponse | null>(null);
+    const [auditEvents, setAuditEvents] = useState<AuditEvent[] | null>(null);
+    const [auditLoading, setAuditLoading] = useState(false);
+    const [error, setError] = useState("");
+
+    function toggleMenu() {
+        if (open) {
+            setInviteResult(null);
+            setResetResult("");
+            setRecoveryResult(null);
+            setAuditEvents(null);
+            setError("");
+        }
+        setOpen(current => !current);
+    }
+
+    async function createInvitation() {
+        setError("");
+        setInviteResult(null);
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/invitations`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                credentials: "include",
+                body: JSON.stringify({email: inviteEmail})
+            });
+            const data = await readJson(response) as {email: string; code: string};
+            setInviteResult({email: data.email, code: data.code});
+            setInviteEmail("");
+        } catch (inviteError) {
+            setError(inviteError instanceof Error ? inviteError.message : "Unable to create invitation.");
+        }
+    }
+
+    async function generateRecoveryCode() {
+        setError("");
+        setRecoveryResult(null);
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/recovery-code`, {
+                method: "POST",
+                credentials: "include"
+            });
+            setRecoveryResult(await readJson(response) as RecoveryCodeResponse);
+        } catch (recoveryError) {
+            setError(recoveryError instanceof Error ? recoveryError.message : "Unable to generate a recovery code.");
+        }
+    }
+
+    async function generateResetCode() {
+        setError("");
+        setResetResult("");
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/admin-password-reset`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                credentials: "include",
+                body: JSON.stringify({email: resetEmail})
+            });
+            const data = await readJson(response) as {email: string; code: string};
+            setResetResult(`Temporary reset code for ${data.email}: ${data.code}`);
+            setResetEmail("");
+        } catch (resetError) {
+            setError(resetError instanceof Error ? resetError.message : "Unable to generate a reset code.");
+        }
+    }
+
+    async function loadAuditLog() {
+        setError("");
+        setAuditLoading(true);
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/admin/audit-log?limit=100`, {credentials: "include"});
+            const data = await readJson(response) as {events?: AuditEvent[]};
+            setAuditEvents(Array.isArray(data.events) ? data.events : []);
+        } catch (auditError) {
+            setError(auditError instanceof Error ? auditError.message : "Unable to load access activity.");
+        } finally {
+            setAuditLoading(false);
+        }
+    }
+
+    return <div className="accountMenuWrap">
+        <button type="button" className="accountMenuButton" onClick={toggleMenu} aria-expanded={open}>
+            <UserRound size={15} />{user.email}
+        </button>
+        {open && <div className="accountMenu">
+            <strong><ShieldCheck size={14} />{user.role === "admin" ? "Administrator" : "Personal account"}</strong>
+            <small>Private workspace active</small>
+            <div className="recoveryBox">
+                <label>Personal password recovery</label>
+                <p>Generate one code and save it somewhere safe. It is shown once and can be used once within one year.</p>
+                <button type="button" className="accountActionButton" onClick={() => void generateRecoveryCode()}><KeyRound size={14} />Generate recovery code</button>
+                {recoveryResult && <p className="inviteResult">Save this code now: <code>{recoveryResult.code}</code></p>}
+            </div>
+            {user.role === "admin" && <>
+                <div className="inviteBox">
+                    <label htmlFor="invite-email">Invite a user</label>
+                    <div><input id="invite-email" type="email" value={inviteEmail} onChange={event => setInviteEmail(event.target.value)} placeholder="email@example.com" /><button type="button" onClick={() => void createInvitation()} title="Create invitation"><Plus size={14} /></button></div>
+                    {inviteResult && <div className="inviteResult"><span>Use this code only for <strong>{inviteResult.email}</strong>:</span><div><code>{inviteResult.code}</code><button type="button" className="copyInviteCode" title="Copy invitation code" onClick={() => void navigator.clipboard?.writeText(inviteResult.code)}><Copy size={13} /></button></div></div>}
+                </div>
+                <div className="inviteBox">
+                    <label htmlFor="reset-email">Reset another user's password</label>
+                    <div><input id="reset-email" type="email" value={resetEmail} onChange={event => setResetEmail(event.target.value)} placeholder="email@example.com" /><button type="button" onClick={() => void generateResetCode()} title="Create temporary reset code"><KeyRound size={14} /></button></div>
+                    {resetResult && <p className="inviteResult">Give this privately to the user: <code>{resetResult}</code></p>}
+                </div>
+                <div className="auditBox">
+                    <div className="auditHeader"><label>Access activity</label><button type="button" className="auditRefreshButton" onClick={() => void loadAuditLog()} disabled={auditLoading} title="Refresh access activity"><RefreshCw size={13} className={auditLoading ? "spinningIcon" : ""} />{auditLoading ? "Loading" : auditEvents ? "Refresh" : "View"}</button></div>
+                    <p>Only you can view successful sign-ins and recent uploads. Recording starts now.</p>
+                    {auditEvents && (auditEvents.length ? <ul className="auditList">{auditEvents.map(event => <li key={event.id}><strong>{event.user.email}</strong><span>{auditActionLabels[event.action] ?? event.action} · {formatAuditTimestamp(event.at)}</span>{event.details?.fileName && <small>{event.details.fileName}</small>}{typeof event.details?.count === "number" && <small>{event.details.count} file{event.details.count === 1 ? "" : "s"}</small>}</li>)}</ul> : <p className="auditEmpty"><History size={13} />No activity has been recorded yet.</p>)}
+                </div>
+            </>}
+            {error && <p className="authError">{error}</p>}
+            <button type="button" className="logoutButton" onClick={() => void onLogout()}><LogOut size={14} />Sign out</button>
+        </div>}
+    </div>;
+}
+
+function AuthScreen({setupRequired, onAuthenticated}: {setupRequired: boolean; onAuthenticated: (user: FolderRocketUser) => void}) {
+    const [mode, setMode] = useState<"login" | "register" | "reset">(setupRequired ? "register" : "login");
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [inviteCode, setInviteCode] = useState("");
+    const [recoveryCode, setRecoveryCode] = useState("");
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState("");
+
+    function changeMode(nextMode: "login" | "register" | "reset") {
+        setError("");
+        setMode(nextMode);
+    }
+
+    async function submit(event: FormEvent<HTMLFormElement>) {
+        event.preventDefault();
+        setBusy(true);
+        setError("");
+        try {
+            const endpoint = mode === "reset" ? "password-reset" : mode === "login" ? "login" : "register";
+            const response = await fetch(`${API_BASE_URL}/auth/${endpoint}`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                credentials: "include",
+                body: JSON.stringify(mode === "reset" ? {email, code: recoveryCode, password} : {email, password, inviteCode})
+            });
+            const data = await readJson(response) as {user: FolderRocketUser};
+            onAuthenticated(data.user);
+        } catch (submitError) {
+            setError(submitError instanceof Error ? submitError.message : "Unable to continue.");
+        } finally { setBusy(false); }
+    }
+
+    const creatingAdmin = setupRequired && mode === "register";
+    const title = creatingAdmin ? "Create the FolderRocket administrator" : mode === "reset" ? "Reset your password" : mode === "login" ? "Welcome back" : "Create your personal workspace";
+    const description = creatingAdmin
+        ? "This first account owns the current installation and can invite other users."
+        : mode === "reset"
+            ? "Enter the recovery code you saved, or the temporary one generated by the administrator."
+            : "Every account has a private workspace and separate email connections.";
+
+    return <main className="authPage">
+        <div className="authLoginShell">
+            <img className="authPageLogo" src={folderRocketLoginLogo} alt="FolderRocket" />
+            <section className="authCard">
+                <div className="authHeading"><h1>{title}</h1><p>{description}</p></div>
+                <form onSubmit={event => void submit(event)}>
+                    <label>Email<input type="email" autoComplete="email" value={email} onChange={event => setEmail(event.target.value)} required /></label>
+                    {mode === "reset" && <label>Recovery code<input type="text" autoComplete="one-time-code" value={recoveryCode} onChange={event => setRecoveryCode(event.target.value)} required /></label>}
+                    <PasswordField autoComplete={mode === "login" ? "current-password" : "new-password"} value={password} onChange={setPassword} />
+                    {mode === "register" && !setupRequired && <label>Invitation code<input value={inviteCode} onChange={event => setInviteCode(event.target.value)} required /></label>}
+                    {error && <p className="authError">{error}</p>}
+                    <button type="submit" disabled={busy}>{busy ? "Please wait..." : creatingAdmin ? "Create administrator account" : mode === "reset" ? "Reset password" : mode === "login" ? "Sign in" : "Create account"}</button>
+                </form>
+                {!setupRequired && <div className="authLinks">
+                    {mode === "login" && <><button type="button" className="authModeButton" onClick={() => changeMode("register")}>I have an invitation code</button><button type="button" className="authModeButton" onClick={() => changeMode("reset")}>Forgot password?</button></>}
+                    {mode === "register" && <button type="button" className="authModeButton" onClick={() => changeMode("login")}>I already have an account</button>}
+                    {mode === "reset" && <button type="button" className="authModeButton" onClick={() => changeMode("login")}>Back to sign in</button>}
+                </div>}
+            </section>
+        </div>
+    </main>;
+}
+
+function AuthGate({children}: AuthGateProps) {
+    const [user, setUser] = useState<FolderRocketUser | null>(null);
+    const [setupRequired, setSetupRequired] = useState(false);
+    const [ready, setReady] = useState(false);
+
+    useEffect(() => {
+        Promise.all([
+            fetch(`${API_BASE_URL}/auth/me`, {credentials: "include"}),
+            fetch(`${API_BASE_URL}/auth/bootstrap`, {credentials: "include"})
+        ]).then(async ([sessionResponse, bootstrapResponse]) => {
+            const bootstrap = await bootstrapResponse.json().catch(() => ({setupRequired: false})) as {setupRequired?: boolean};
+            setSetupRequired(Boolean(bootstrap.setupRequired));
+            if (sessionResponse.ok) {
+                const session = await sessionResponse.json() as {user?: FolderRocketUser};
+                setUser(session.user ?? null);
+            }
+        }).finally(() => setReady(true));
+    }, []);
+
+    async function logout() {
+        await fetch(`${API_BASE_URL}/auth/logout`, {method: "POST", credentials: "include"});
+        setUser(null);
+        setSetupRequired(false);
+    }
+
+    if (!ready) return <main className="authPage"><p className="authLoading">Loading FolderRocket...</p></main>;
+    if (!user) return <AuthScreen setupRequired={setupRequired} onAuthenticated={setUser} />;
+    return <>{children({user, logout})}</>;
+}
+
+export {AccountMenu};
+export default AuthGate;

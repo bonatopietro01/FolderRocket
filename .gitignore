@@ -1,0 +1,45 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+# Local configuration and credentials. Keep only the documented examples in Git.
+.env
+.env.*
+!.env.example
+backend/.env
+backend/.env.*
+!backend/.env.example
+backend/.folderrocket-email-tokens.json
+backend/.folderrocket-token-key
+backend/data/
+backend/uploads/
+input/
+output/
+
+# Private signing material for future desktop builds and automatic updates.
+*.p12
+*.pfx
+*.pem
+*.key
+.tauri/
+release/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
