@@ -54,7 +54,7 @@ git tag -a v0.1.0 -m "First private desktop alpha"
 
 ## Desktop path
 
-The existing React UI and Express logic will be preserved. A desktop wrapper will later:
+The existing React UI and Express logic will be preserved. The first wrapper is Electron because it can run the existing Node.js and Express backend locally without a rewrite. It will:
 
 1. launch the local backend automatically;
 2. open the FolderRocket window without a manual `node server.js` command;
@@ -62,7 +62,9 @@ The existing React UI and Express logic will be preserved. A desktop wrapper wil
 4. store per-user application data under the Windows application-data directory;
 5. create a Windows installer (`.msi` and/or `.exe`).
 
-The first installer is manually downloaded and installed. Automatic updates are not required at this stage.
+The first installer is manually downloaded and installed. Automatic updates are not required at this stage. Run `npm run desktop:package` to build it. The generated installer is written outside OneDrive, in `%LOCALAPPDATA%\\FolderRocket\\releases` by default, to avoid Windows file-lock conflicts during packaging. Set `FOLDERROCKET_RELEASE_DIR` only when a different output directory is required.
+
+The desktop launcher sets `FOLDERROCKET_DATA_DIR`, `FOLDERROCKET_UPLOADS_DIR` and `FOLDERROCKET_TOKEN_DIR`. This keeps users, workspace settings, temporary uploads and encrypted email tokens in the Windows application-data directory, not in the installed program folder.
 
 ## AI mode
 

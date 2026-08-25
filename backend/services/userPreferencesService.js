@@ -1,7 +1,8 @@
 const fs = require("fs");
 const path = require("path");
+const {getRuntimeDataDirectory} = require("./runtimePaths");
 
-const PREFERENCES_DIRECTORY = path.join(__dirname, "..", "data", "preferences");
+const PREFERENCES_DIRECTORY = path.join(getRuntimeDataDirectory(), "preferences");
 
 function preferencesPath(userId) {
     return path.join(PREFERENCES_DIRECTORY, `${userId}.json`);

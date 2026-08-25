@@ -36,6 +36,7 @@ const {
 const {moveToTrash} = require("./services/trashService");
 const {searchFiles} = require("./services/searchService");
 const {readDashboardPreferences, writeDashboardPreferences} = require("./services/userPreferencesService");
+const {getRuntimeUploadsDirectory} = require("./services/runtimePaths");
 const {getEmailAlertSettings, normalizeProviderBlock, saveEmailAlertSettings} = require("./services/emailAlertSettingsService");
 const {startEmailAlertScheduler} = require("./services/emailAlertScheduler");
 const {migrateLegacyConnections} = require("./services/emailTokenStore");
@@ -639,10 +640,7 @@ app.post("/domain/analyze", requireAuthenticated, async (req, res) => {
 // i file appena ricevuti
 const upload = multer({
 
-    dest: path.join(
-        __dirname,
-        "uploads"
-    )
+    dest: getRuntimeUploadsDirectory()
 
 });
 

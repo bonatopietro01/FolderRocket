@@ -1,8 +1,9 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const {getRuntimeDataDirectory} = require("./runtimePaths");
 
-const DATA_DIRECTORY = path.join(__dirname, "..", "data");
+const DATA_DIRECTORY = getRuntimeDataDirectory();
 const AUDIT_LOG_PATH = path.join(DATA_DIRECTORY, "audit-log.json");
 const MAX_EVENTS = 500;
 

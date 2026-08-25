@@ -1,15 +1,22 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const {getRuntimeTokenDirectory} = require("./runtimePaths");
 
-const STORE_PATH = path.join(__dirname, "..", ".folderrocket-email-tokens.json");
-const KEY_PATH = path.join(__dirname, "..", ".folderrocket-token-key");
+const TOKEN_DIRECTORY = getRuntimeTokenDirectory();
+const STORE_PATH = path.join(TOKEN_DIRECTORY, ".folderrocket-email-tokens.json");
+const KEY_PATH = path.join(TOKEN_DIRECTORY, ".folderrocket-token-key");
+
+function ensureTokenDirectory() {
+    fs.mkdirSync(TOKEN_DIRECTORY, {recursive: true});
+}
 
 function getEncryptionKey() {
     const configured = String(process.env.FOLDERROCKET_TOKEN_ENCRYPTION_KEY ?? "").trim();
     if (/^[a-f0-9]{64}$/i.test(configured)) return Buffer.from(configured, "hex");
     try { return Buffer.from(fs.readFileSync(KEY_PATH, "utf8").trim(), "hex"); }
     catch {
+        ensureTokenDirectory();
         const key = crypto.randomBytes(32).toString("hex");
         fs.writeFileSync(KEY_PATH, key, {encoding: "utf8", mode: 0o600});
         return Buffer.from(key, "hex");
@@ -38,6 +45,7 @@ function readStore() {
 }
 
 function writeStore(data) {
+    ensureTokenDirectory();
     fs.writeFileSync(STORE_PATH, JSON.stringify(data, null, 2), {encoding: "utf8", mode: 0o600});
 }
 

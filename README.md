@@ -27,6 +27,20 @@ Start the frontend in a second terminal:
 npm run dev
 ```
 
+## Desktop local preview
+
+The desktop launcher starts the local backend automatically and opens FolderRocket as a Windows application:
+
+```powershell
+npm run desktop
+```
+
+It is intentionally local-only at this stage. The first installer will be generated later with:
+
+```powershell
+npm run desktop:package
+```
+
 ## Configuration and privacy
 
 Copy `backend/.env.example` to `backend/.env` and complete only the integrations you choose to activate.

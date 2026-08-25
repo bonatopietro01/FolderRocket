@@ -1,8 +1,9 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const {getRuntimeDataDirectory} = require("./runtimePaths");
 
-const DATA_DIRECTORY = path.join(__dirname, "..", "data");
+const DATA_DIRECTORY = getRuntimeDataDirectory();
 const USERS_PATH = path.join(DATA_DIRECTORY, "users.json");
 const SESSIONS_PATH = path.join(DATA_DIRECTORY, "sessions.json");
 const WORKSPACES_DIRECTORY = path.join(DATA_DIRECTORY, "workspaces");
