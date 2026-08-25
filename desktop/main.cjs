@@ -15,6 +15,12 @@ function backendDirectory() {
         : path.join(__dirname, "..", "backend");
 }
 
+function applicationIconPath() {
+    return app.isPackaged
+        ? path.join(process.resourcesPath, "app.asar", "build", "icon.ico")
+        : path.join(__dirname, "..", "build", "icon.ico");
+}
+
 function backendIsReady() {
     return new Promise(resolve => {
         const request = http.get(`${APP_ORIGIN}/health`, response => {
@@ -83,6 +89,7 @@ function createWindow() {
         autoHideMenuBar: true,
         backgroundColor: "#0e1424",
         title: "FolderRocket",
+        icon: applicationIconPath(),
         webPreferences: {
             contextIsolation: true,
             nodeIntegration: false,

@@ -39,12 +39,14 @@
     "appId": "com.bonatopietro.folderrocket",
     "productName": "FolderRocket",
     "asar": true,
+    "icon": "build/icon.ico",
     "directories": {
       "output": "release"
     },
     "files": [
       "dist/**/*",
       "desktop/**/*",
+      "build/icon.ico",
       "package.json"
     ],
     "extraResources": [
