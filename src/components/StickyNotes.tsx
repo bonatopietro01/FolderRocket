@@ -9,7 +9,7 @@ const colors: NoteColor[] = ["yellow", "purple", "blue", "green"];
 
 function storageKey(scope: string) { return `folderrocket-sticky-notes-${scope}`; }
 function defaultNoteLayout(index: number): Pick<StickyNote, "x" | "y" | "width" | "height"> {
-    return {x: 8, y: 136 + index * 82, width: 165, height: 76};
+    return {x: 8, y: 112 + index * 70, width: 142, height: 66};
 }
 function readNotes(scope: string): StickyNote[] {
     try {
@@ -53,7 +53,7 @@ function FloatingStickyNote({note, deleteArmed, floatingScale, onChange, onDelet
         // A post-it grows only for explicit new lines. Long wrapped text remains
         // inside the textarea and scrolls instead of changing the card's height.
         const lineCount = Math.max(1, text.split("\n").length);
-        const nextHeight = Math.max(76, Math.min(Math.max(76, window.innerHeight - note.y - 8), 76 + (lineCount - 1) * 20 + (note.relatedFiles?.length ? 19 : 0)));
+        const nextHeight = Math.max(66, Math.min(Math.max(66, window.innerHeight - note.y - 8), 66 + (lineCount - 1) * 18 + (note.relatedFiles?.length ? 17 : 0)));
         onChange({text, height: nextHeight});
     }
     return <article ref={noteRef} className={`floatingStickyNote ${note.color}`} style={{left: note.x, top: note.y, width: note.width, height: note.height, transform: `scale(${displayScale})`, transformOrigin: "top left"}}>

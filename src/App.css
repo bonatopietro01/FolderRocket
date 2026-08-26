@@ -2545,7 +2545,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .floatingStickyNote .stickyNoteTop > .stickyNoteDelete { position:absolute; top:0; right:-5px; }
 
 /* Post-it is part of the application navigation, aligned with the page buttons. */
-.appNavigation .notesQuickAdd { position:static; min-width:0; padding:8px 10px; }
+.appNavigation .notesQuickAdd { position:fixed; z-index:14; top:59px; right:auto; bottom:auto; left:10px; min-width:0; padding:8px 10px; white-space:nowrap; }
 .searchAiBadge { display:inline-grid; min-width:21px; height:17px; place-items:center; border:1px solid #8e66b4; border-radius:8px; background:#efe3fc; color:#643b8d; font-size:9px; font-weight:900; }
 .cargoShipHeaderActions .cargoShipClose:hover { background:#c84d43; color:#fff; }
 
@@ -2563,10 +2563,15 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 
 /* Cargo Ship stays deliberately compact. Its bottom-right grip changes the panel
    size; the content scrolls instead of creating large empty gaps. */
+.floatingStickyNote { min-width:124px; min-height:64px; padding:6px; }
+.floatingStickyNote textarea { min-height:22px; font-size:12px; line-height:1.3; }
+.floatingStickyNote small { margin-top:3px; font-size:10px; line-height:1.2; }
 .cargoShip { min-width:250px; min-height:230px; }
+.cargoShip.cargoShipStandalone { inset:1px; width:auto; height:auto; min-width:0; min-height:0; }
 .cargoShipHeader { min-height:28px; padding:4px 6px 4px 8px; }
-.cargoShipHeaderActions { gap:4px; }
-.cargoShipHeaderActions button { width:19px; height:19px; }
+.cargoShipHeaderActions { display:flex; height:20px; align-items:center; justify-content:center; gap:4px; }
+.cargoShipHeaderActions button { display:flex; width:19px; height:19px; align-items:center; justify-content:center; padding:0; line-height:0; }
+.cargoShipHeaderActions button svg { display:block; flex:0 0 auto; margin:0; }
 .cargoShipModes { grid-template-columns:repeat(auto-fit, minmax(0, 1fr)); gap:2px; padding:3px 4px; }
 .cargoShipModes button { gap:2px; padding:4px 2px; font-size:10px; }
 .cargoDropArea { grid-template-rows:auto minmax(42px, 1fr) auto auto; align-content:start; gap:3px; padding:5px; }

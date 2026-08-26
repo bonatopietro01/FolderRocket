@@ -11,7 +11,7 @@ app.disableHardwareAcceleration();
 const PORT = Number(process.env.FOLDERROCKET_PORT) || 3000;
 const APP_ORIGIN = `http://localhost:${PORT}`;
 const CARGO_SHIP_DOCK_SIZE = {width: 70, height: 70};
-const CARGO_SHIP_DEFAULT_PANEL_SIZE = {width: 270, height: 270};
+const CARGO_SHIP_DEFAULT_PANEL_SIZE = {width: 250, height: 230};
 const CARGO_SHIP_MINIMUM_PANEL_SIZE = {width: 250, height: 230};
 const CARGO_SHIP_MAXIMUM_PANEL_SIZE = {width: 880, height: 760};
 let backendProcess = null;
@@ -219,18 +219,26 @@ function normaliseCargoShipPanelSize(size) {
     };
 }
 
-function prepareCargoShipPanelWindow(size) {
+function prepareCargoShipPanelWindow(size, position = null) {
     cargoWindow.setResizable(true);
     cargoWindow.setMinimumSize(CARGO_SHIP_MINIMUM_PANEL_SIZE.width, CARGO_SHIP_MINIMUM_PANEL_SIZE.height);
     cargoWindow.setMaximumSize(CARGO_SHIP_MAXIMUM_PANEL_SIZE.width, CARGO_SHIP_MAXIMUM_PANEL_SIZE.height);
-    cargoWindow.setBounds(size);
+    cargoWindow.setBounds(position ? {...position, ...size} : size);
+    // Native edge-resizing is disabled: the deliberate in-panel grip is the
+    // only resize control, so a click on the corner cannot resize the window.
+    cargoWindow.setResizable(false);
 }
 
 function setCargoShipWindowExpanded(expanded) {
     if (!cargoWindow || cargoWindow.isDestroyed()) return false;
     cargoShipExpanded = expanded;
     if (expanded) {
-        prepareCargoShipPanelWindow(cargoShipPanelSize);
+        const [x, y] = cargoWindow.getPosition();
+        const [width, height] = cargoWindow.getSize();
+        prepareCargoShipPanelWindow(cargoShipPanelSize, {
+            x: Math.round(x + (width - cargoShipPanelSize.width) / 2),
+            y: Math.round(y + (height - cargoShipPanelSize.height) / 2)
+        });
     } else {
         cargoWindow.setResizable(true);
         cargoWindow.setMinimumSize(1, 1);

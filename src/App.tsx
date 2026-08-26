@@ -28,6 +28,7 @@ const DASHBOARD_HEIGHT_KEY = "folderrocket-dashboard-height";
 const AI_MODE_KEY = "folderrocket-ai-mode";
 const APP_ZOOM_KEY = "folderrocket-app-zoom";
 const FLOATING_TOOLS_SCALE_KEY = "folderrocket-floating-tools-scale";
+const CARGO_SHIP_SCALE_KEY = "folderrocket-cargo-ship-scale";
 const MIN_DASHBOARD_HEIGHT = 440;
 const MAX_DASHBOARD_HEIGHT = 1400;
 
@@ -121,6 +122,8 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     const sourceBlocksStorageKey = `${SOURCE_BLOCKS_KEY}-${user.id}`;
     const appZoomStorageKey = `${APP_ZOOM_KEY}-${user.id}`;
     const floatingToolsScaleStorageKey = `${FLOATING_TOOLS_SCALE_KEY}-${user.id}`;
+    const cargoShipScaleStorageKey = `${CARGO_SHIP_SCALE_KEY}-${user.id}`;
+    const isCargoShipWindow = new URLSearchParams(window.location.search).has("folderrocketCargoShip");
     const [page, setPage] = useState<"dashboard" | "folders" | "processing">("dashboard");
     const [folders, setFolders] = useState<Folder[]>(() => readFolders(foldersStorageKey, user.workspacePath, user.role === "admin"));
     const [dashboardWidths, setDashboardWidths] = useState<DashboardWidths | null>(() => readDashboardWidths(widthsStorageKey));
@@ -135,6 +138,7 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     const [navigation, setNavigation] = useState({canGoBack: false, canGoForward: false});
     const [appZoom, setAppZoom] = useState(() => readAppZoom(appZoomStorageKey));
     const [floatingToolsScale, setFloatingToolsScale] = useState(() => readFloatingToolsScale(floatingToolsScaleStorageKey));
+    const [cargoShipScale, setCargoShipScale] = useState(() => readFloatingToolsScale(cargoShipScaleStorageKey));
     const [noteAddRequest, setNoteAddRequest] = useState(0);
     const initialAppZoomRef = useRef(appZoom);
     const dashboardRef = useRef<HTMLElement | null>(null);
@@ -152,6 +156,7 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     useEffect(() => { localStorage.setItem(`${AI_MODE_KEY}-${user.id}`, aiMode ? "on" : "off"); }, [aiMode, user.id]);
     useEffect(() => { localStorage.setItem(appZoomStorageKey, String(appZoom)); }, [appZoom, appZoomStorageKey]);
     useEffect(() => { localStorage.setItem(floatingToolsScaleStorageKey, String(floatingToolsScale)); }, [floatingToolsScale, floatingToolsScaleStorageKey]);
+    useEffect(() => { localStorage.setItem(cargoShipScaleStorageKey, String(cargoShipScale)); }, [cargoShipScale, cargoShipScaleStorageKey]);
     const aiEnabled = aiConfigured && aiMode;
 
     useEffect(() => {
@@ -171,12 +176,22 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     }, []);
 
     useEffect(() => {
-        if (!window.folderRocketDesktop) return;
+        if (!window.folderRocketDesktop || isCargoShipWindow) return;
         let active = true;
         void window.folderRocketDesktop.setZoomFactor(initialAppZoomRef.current).then(value => { if (active) setAppZoom(Math.max(.75, Math.min(1.5, value))); });
         const unsubscribe = window.folderRocketDesktop.onZoomChanged(value => { if (active) setAppZoom(Math.max(.75, Math.min(1.5, value))); });
         return () => { active = false; unsubscribe(); };
-    }, []);
+    }, [isCargoShipWindow]);
+
+    useEffect(() => {
+        const syncCargoScale = (event: StorageEvent) => {
+            if (event.key !== cargoShipScaleStorageKey) return;
+            const next = Number(event.newValue);
+            if (Number.isFinite(next) && next >= .8 && next <= 1.3) setCargoShipScale(next);
+        };
+        window.addEventListener("storage", syncCargoScale);
+        return () => window.removeEventListener("storage", syncCargoScale);
+    }, [cargoShipScaleStorageKey]);
 
     function setDesktopZoom(next: number) {
         const zoom = Math.max(.75, Math.min(1.5, Math.round(next * 100) / 100));
@@ -344,14 +359,14 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     const cargoShipProps = {
         onOpenFileStudio: () => setPage("processing"),
         aiEnabled,
-        floatingScale: floatingToolsScale,
+        cargoScale: cargoShipScale,
         storageScope: user.id,
         folders,
         onVirtualFilesAdd: (folderId: string, files: VirtualFile[]) => updateFolder(folderId, {virtualFiles: [...(folders.find(folder => folder.id === folderId)?.virtualFiles ?? []), ...files.filter(file => !(folders.find(folder => folder.id === folderId)?.virtualFiles ?? []).some(existing => existing.path === file.path))]})
     };
-    if (new URLSearchParams(window.location.search).has("folderrocketCargoShip")) return <CargoShip {...cargoShipProps} standalone />;
+    if (isCargoShipWindow) return <CargoShip {...cargoShipProps} standalone />;
     return <div className="app">
-        <header className="appHeader"><img className="appLogo" src={folderRocketWordmark} alt="FolderRocket" /><nav className="appNavigation"><button type="button" className="notesQuickAdd" onClick={() => setNoteAddRequest(current => current + 1)} title="Add a post-it"><StickyNoteIcon size={14}/><span>Post-it</span></button><button className={page === "dashboard" ? "active" : ""} type="button" onClick={() => setPage("dashboard")}>Dashboard</button><button className={page === "folders" ? "active" : ""} type="button" onClick={() => setPage("folders")}>Folder management</button><button className={page === "processing" ? "active" : ""} type="button" onClick={() => setPage("processing")}>File Studio</button>{page === "dashboard" && <button type="button" className="dashboardResetButton" onClick={resetDashboardLayout} title="Restore default dashboard size" aria-label="Restore default dashboard size"><RotateCcw size={14} /></button>}</nav><div className="appHeaderTools"><IntegrationSetup isAdmin={user.role === "admin"} onAIStatusChange={setAiConfigured} aiMode={aiMode} onAIModeChange={setAiMode} /><CargoShip {...cargoShipProps} /><AccountMenu user={user} onLogout={onLogout} aiEnabled={aiEnabled} appZoom={appZoom} onAppZoomChange={setDesktopZoom} floatingToolsScale={floatingToolsScale} onFloatingToolsScaleChange={setFloatingToolsScale} /></div></header>
+        <header className="appHeader"><img className="appLogo" src={folderRocketWordmark} alt="FolderRocket" /><nav className="appNavigation"><button type="button" className="notesQuickAdd" onClick={() => setNoteAddRequest(current => current + 1)} title="Add a post-it"><StickyNoteIcon size={14}/><span>Post-it</span></button><button className={page === "dashboard" ? "active" : ""} type="button" onClick={() => setPage("dashboard")}>Dashboard</button><button className={page === "folders" ? "active" : ""} type="button" onClick={() => setPage("folders")}>Folder management</button><button className={page === "processing" ? "active" : ""} type="button" onClick={() => setPage("processing")}>File Studio</button>{page === "dashboard" && <button type="button" className="dashboardResetButton" onClick={resetDashboardLayout} title="Restore default dashboard size" aria-label="Restore default dashboard size"><RotateCcw size={14} /></button>}</nav><div className="appHeaderTools"><IntegrationSetup isAdmin={user.role === "admin"} onAIStatusChange={setAiConfigured} aiMode={aiMode} onAIModeChange={setAiMode} /><CargoShip {...cargoShipProps} /><AccountMenu user={user} onLogout={onLogout} aiEnabled={aiEnabled} appZoom={appZoom} onAppZoomChange={setDesktopZoom} floatingToolsScale={floatingToolsScale} onFloatingToolsScaleChange={setFloatingToolsScale} cargoShipScale={cargoShipScale} onCargoShipScaleChange={setCargoShipScale} /></div></header>
         <StickyNotes key={user.id} storageScope={user.id} folders={folders} aiEnabled={aiEnabled} floatingScale={floatingToolsScale} addRequest={noteAddRequest} /><div className="pageFrame"><main ref={dashboardRef} style={dashboardStyle} className={page === "dashboard" ? "dashboard" : "dashboard pageHidden"}>
             <aside className="dashboardColumn sourcesColumn">
                 <div className="sourcesColumnHeader"><span>Sources</span><div className="sourcePickerWrap" ref={sourcePickerRef}><button type="button" className="sourcesAddButton" onClick={() => setSourcePickerOpen(current => !current)} aria-expanded={sourcePickerOpen} title="Add source block"><Plus size={15} /></button>{sourcePickerOpen && <div className="sourcePicker"><button type="button" onClick={() => addSourceBlock("gmail")}><Mail className="gmailPanelIcon" size={15} />Gmail</button><button type="button" onClick={() => addSourceBlock("outlook")}><Mail className="outlookPanelIcon" size={15} />Outlook</button><button type="button" onClick={() => addSourceBlock("domain")}><span className="sourcePickerDomainIcon">◎</span>Domain</button><button type="button" onClick={() => addSourceBlock("screen")}><span className="sourcePickerScreenIcon">▣</span>Screen</button></div>}</div></div>
