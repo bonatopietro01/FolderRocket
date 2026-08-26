@@ -17,9 +17,10 @@ interface DomainSourcePanelProps {
     title?: string;
     url?: string;
     onUrlChange: (url: string) => void;
+    aiEnabled?: boolean;
 }
 
-export default function DomainSourcePanel({title = "Domain", url = "", onUrlChange}: DomainSourcePanelProps) {
+export default function DomainSourcePanel({title = "Domain", url = "", onUrlChange, aiEnabled = false}: DomainSourcePanelProps) {
     const [draft, setDraft] = useState(url);
     const [loadedUrl, setLoadedUrl] = useState(url);
     const [error, setError] = useState("");
@@ -105,8 +106,8 @@ export default function DomainSourcePanel({title = "Domain", url = "", onUrlChan
         </div>
         {error && <p className="domainError">{error}</p>}
         {loadedUrl ? <>
-            <div className="domainFrameWrap"><div className="domainZoomViewport"><iframe key={loadedUrl} src={loadedUrl} title={`Embedded ${title}`} /></div></div>
-            <div className="domainAiPanel"><div className="domainAiControls"><input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === "Enter") void analyseDomain(); }} placeholder="Ask AI about this page..." aria-label="Ask AI about this domain" /><button type="button" onClick={() => void analyseDomain()} disabled={isAnalysing} title="Read public page text and analyse"><span>{isAnalysing ? <LoaderCircle className="spinning" size={14} /> : <Search size={14} />}</span>{isAnalysing ? "Analysing..." : "Analyse"}</button><button type="button" className="domainAiClear" onClick={clearAnalysis} disabled={isAnalysing || (!query && !analysis && !analysisError)} title="Clear question and result" aria-label="Clear question and result"><X size={14} /></button></div><p>Reads public page text directly; no screenshot is captured.</p>{(analysis || analysisError) && <div className={analysisError ? "domainAiResult error" : "domainAiResult"}>{analysisError || analysis}{analysis && <button type="button" onClick={downloadAnalysis} title="Download result as text file"><Download size={14} />Download .txt</button>}</div>}</div>
+            <div className="domainFrameWrap"><div className="domainZoomViewport"><iframe key={loadedUrl} src={loadedUrl} title={`Embedded ${title}`} /></div><p className="domainEmbedHelp">If this area stays blank, the website blocks embedded pages. Use ↗ to open it externally.</p></div>
+            {aiEnabled && <div className="domainAiPanel"><div className="domainAiControls"><input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === "Enter") void analyseDomain(); }} placeholder="Ask AI about this page..." aria-label="Ask AI about this domain" /><button type="button" onClick={() => void analyseDomain()} disabled={isAnalysing} title="Read public page text and analyse"><span>{isAnalysing ? <LoaderCircle className="spinning" size={14} /> : <Search size={14} />}</span>{isAnalysing ? "Analysing..." : "Analyse"}</button><button type="button" className="domainAiClear" onClick={clearAnalysis} disabled={isAnalysing || (!query && !analysis && !analysisError)} title="Clear question and result" aria-label="Clear question and result"><X size={14} /></button></div><p>Reads public page text directly; no screenshot is captured.</p>{(analysis || analysisError) && <div className={analysisError ? "domainAiResult error" : "domainAiResult"}>{analysisError || analysis}{analysis && <button type="button" onClick={downloadAnalysis} title="Download result as text file"><Download size={14} />Download .txt</button>}</div>}</div>}
         </> : <div className="domainEmpty"><Globe2 size={24} /><p>Add a page address to open it inside this block.</p></div>}
     </section>;
 }

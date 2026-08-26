@@ -157,7 +157,7 @@ function FileKindIcon({name}: {name: string}) {
     return <span className="fileKindIcon generic"><File size={14} /></span>;
 }
 
-function GmailSourcePanel({storageScope, alertBlockId}: {storageScope: string; alertBlockId: string}) {
+function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {storageScope: string; alertBlockId: string; aiEnabled?: boolean}) {
     const alertSettingsUrl = `${API_BASE_URL}/email/alerts/settings/gmail?blockId=${encodeURIComponent(alertBlockId)}`;
     const gmailUrl = (endpoint: string) => `${API_BASE_URL}/email/gmail${endpoint}${endpoint.includes("?") ? "&" : "?"}blockId=${encodeURIComponent(alertBlockId)}`;
     const gmailAuthUrl = (endpoint: string) => `${API_BASE_URL}/auth/gmail${endpoint}?blockId=${encodeURIComponent(alertBlockId)}`;
@@ -183,6 +183,7 @@ function GmailSourcePanel({storageScope, alertBlockId}: {storageScope: string; a
     const [analysisCompletedAt, setAnalysisCompletedAt] = useState<Date | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const visibleWarnings = useMemo(() => warnings.filter(rule => aiEnabled || rule.kind !== "ai"), [aiEnabled, warnings]);
 
     const visibleAttachments = useMemo(
         () => attachments.filter(
@@ -194,7 +195,7 @@ function GmailSourcePanel({storageScope, alertBlockId}: {storageScope: string; a
     const inboxItems = useMemo<GmailInboxItem[]>(() => {
         const alertsByMessage = new Map<string, {alert: GmailAlertMessage; alertKind: WarningKind; alertColor: string}>();
         for (const result of warningResults) {
-            const rule = warnings.find(item => item.id === result.ruleId);
+            const rule = visibleWarnings.find(item => item.id === result.ruleId);
             if (!rule || !rule.enabled) continue;
             for (const alert of result.messages ?? []) {
                 const current = alertsByMessage.get(alert.id);
@@ -211,13 +212,13 @@ function GmailSourcePanel({storageScope, alertBlockId}: {storageScope: string; a
             const secondDate = second.type === "attachment" ? second.attachment.receivedAt : second.alert.receivedAt;
             return new Date(secondDate).getTime() - new Date(firstDate).getTime();
         });
-    }, [visibleAttachments, warningResults, warnings]);
+    }, [visibleAttachments, visibleWarnings, warningResults]);
 
     const warningMessages = useMemo(() => {
         const grouped: Record<WarningKind, GmailAlertMessage[]> = {ai: [], sender: []};
         const seen: Record<WarningKind, Set<string>> = {ai: new Set(), sender: new Set()};
         for (const result of warningResults) {
-            const rule = warnings.find(item => item.id === result.ruleId);
+            const rule = visibleWarnings.find(item => item.id === result.ruleId);
             const kind = rule?.enabled ? rule.kind : undefined;
             if (!kind) continue;
             for (const message of result.messages ?? []) {
@@ -228,10 +229,10 @@ function GmailSourcePanel({storageScope, alertBlockId}: {storageScope: string; a
         }
         for (const kind of ["ai", "sender"] as WarningKind[]) grouped[kind].sort((first, second) => new Date(second.receivedAt).getTime() - new Date(first.receivedAt).getTime());
         return grouped;
-    }, [warningResults, warnings]);
+    }, [visibleWarnings, warningResults]);
 
     const checkWarnings = useCallback(async (rulesToCheck = warnings) => {
-        const activeRules = rulesToCheck.filter(rule => rule.enabled !== false);
+        const activeRules = rulesToCheck.filter(rule => rule.enabled !== false && (aiEnabled || rule.kind !== "ai"));
         if (!connected || !activeRules.length) return;
         setWarningLoading(true);
         setWarningError("");
@@ -249,7 +250,7 @@ function GmailSourcePanel({storageScope, alertBlockId}: {storageScope: string; a
             setWarningResults(results);
             localStorage.setItem(storageKey(WARNING_RESULTS_KEY, storageScope), JSON.stringify(results));
             if (Array.isArray(data.attachments) && data.attachments.length) setAttachments(current => mergeAttachments(current, data.attachments ?? []));
-            const aiError = results.find(result => warnings.find(rule => rule.id === result.ruleId)?.kind === "ai" && result.error)?.error;
+            const aiError = aiEnabled ? results.find(result => warnings.find(rule => rule.id === result.ruleId)?.kind === "ai" && result.error)?.error : undefined;
             if (aiError) setWarningError(aiError);
             else setAnalysisCompletedAt(new Date());
             const nextSeen = {...seenByRule};
@@ -268,7 +269,7 @@ function GmailSourcePanel({storageScope, alertBlockId}: {storageScope: string; a
         finally {
             setWarningLoading(false);
         }
-    }, [connected, days, endDate, mode, startDate, storageScope, warnings]);
+    }, [aiEnabled, connected, days, endDate, mode, startDate, storageScope, warnings]);
 
     const refresh = useCallback(async () => {
         if (!connected) {
@@ -303,10 +304,16 @@ function GmailSourcePanel({storageScope, alertBlockId}: {storageScope: string; a
     }, [attachmentReader, checkWarnings, connected]);
 
     useEffect(() => {
-        fetch(gmailUrl("/status"), {credentials: "include"})
-            .then(response => response.json())
-            .then((data: {connected?: boolean}) => setConnected(Boolean(data.connected)))
-            .catch(() => setConnected(false));
+        let active = true;
+        const refreshConnection = () => {
+            void fetch(gmailUrl("/status"), {credentials: "include"})
+                .then(response => response.json())
+                .then((data: {connected?: boolean}) => { if (active) setConnected(Boolean(data.connected)); })
+                .catch(() => { if (active) setConnected(false); });
+        };
+        refreshConnection();
+        window.addEventListener("focus", refreshConnection);
+        return () => { active = false; window.removeEventListener("focus", refreshConnection); };
     }, [alertBlockId]);
 
     useEffect(() => {
@@ -488,8 +495,8 @@ function GmailSourcePanel({storageScope, alertBlockId}: {storageScope: string; a
                 <Mail className="gmailPanelIcon" size={29} />
                 <span className="sourceTitle">Gmail</span>
                 {connected && <button type="button" className="gmailWarningToggle" onClick={toggleWarnings} title="Gmail alerts"><BellRing size={15} /></button>}
-                {connected && warnings.length > 0 && <span className={warningLoading ? "gmailAnalysisStatus analyzing" : "gmailAnalysisStatus"}>{warningLoading ? "Analyzing…" : analysisCompletedAt ? `Completed ${analysisCompletedAt.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})}` : "Ready to analyze"}</span>}
-                {connected && warnings.filter(rule => rule.enabled).map(rule => {
+                {connected && visibleWarnings.length > 0 && <span className={warningLoading ? "gmailAnalysisStatus analyzing" : "gmailAnalysisStatus"}>{warningLoading ? "Analyzing…" : analysisCompletedAt ? `Completed ${analysisCompletedAt.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})}` : "Ready to analyze"}</span>}
+                {connected && visibleWarnings.filter(rule => rule.enabled).map(rule => {
                     const result = warningResults.find(item => item.ruleId === rule.id);
                     return result ? <button key={`ready-${rule.id}`} type="button" className={`gmailAlertCount alertColor-${rule.color}`} title={`Show ${rule.label} emails`} onClick={() => toggleWarningPreview(rule.kind)}>{result.total}</button> : <span key={`ready-${rule.id}`} className={`emailAlertReadyDot alertColor-${rule.color}`} title={`${rule.label} is active`} />;
                 })}
@@ -499,7 +506,7 @@ function GmailSourcePanel({storageScope, alertBlockId}: {storageScope: string; a
                 <span className="emailConnectionPrimary"><i />{connected ? "CONNECTED" : "DISCONNECTED"}</span>
                 <span>{connected ? "FolderRocket can read Gmail" : "FolderRocket cannot read Gmail"}</span>
                 {connected && <span className={`emailPollingState ${liveReading ? "live" : "manual"}`}>{liveReading ? "Virtual reading: ON (every minute)" : "Virtual reading: OFF"}</span>}
-                {connected && warnings.some(rule => rule.kind === "ai") && <span className="emailCostState">AI alerts enabled</span>}
+                {connected && aiEnabled && warnings.some(rule => rule.kind === "ai") && <span className="emailCostState">AI alerts enabled</span>}
                 {connected && <button type="button" className="emailDisconnectButton" title="Remove Gmail access and stop every check" onClick={() => void disconnect()}><Unplug size={13} />Disconnect</button>}
             </div>
 
@@ -528,14 +535,15 @@ function GmailSourcePanel({storageScope, alertBlockId}: {storageScope: string; a
                                     window.dispatchEvent(new CustomEvent("folderrocket-email-alert-favorites", {detail: nextFavorites}));
                                 }}
                             onCheckNow={rules => void checkWarnings(rules)}
+                            allowAi={aiEnabled}
                         />
                         {warningLoading && <p className="gmailWarningStatus">Checking the current Gmail view…</p>}
                         {warningError && <p className="emailError">{warningError}</p>}
                     </div>}
                     <div className="emailToolbar">
                         <button type="button" onClick={() => setShowSettings(current => !current)} title="Attachment period"><Settings2 size={16} /></button>
-                        <button type="button" onClick={() => void refresh()} disabled={loading} title="Refresh"><RefreshCw className={loading ? "spin" : ""} size={16} /></button>
                         <button type="button" className={`emailReadAttachmentsButton${attachmentReader.enabled ? " active" : ""}`} onClick={() => { const enabled = !attachmentReader.enabled; setAttachmentReader(current => ({...current, enabled})); if (!enabled) { setShowSettings(false); setAttachments([]); } }}>Read attachments</button>
+                        {attachmentReader.enabled && <button type="button" onClick={() => void refresh()} disabled={loading} title="Refresh attachments"><RefreshCw className={loading ? "spin" : ""} size={16} /></button>}
                         <label className="liveReadingLabel"><input type="checkbox" checked={liveReading} onChange={event => setLiveReading(event.target.checked)} /> Virtual reading</label>
                     </div>
 

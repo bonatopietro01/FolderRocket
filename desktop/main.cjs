@@ -1,13 +1,21 @@
-const {app, BrowserWindow, dialog, shell, session} = require("electron");
+const {app, BrowserWindow, desktopCapturer, dialog, ipcMain, shell, session} = require("electron");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 const {spawn} = require("node:child_process");
 
+// FolderRocket does not need GPU rendering. Software rendering avoids blank windows
+// on Windows installations where Electron's GPU cache/process cannot initialise.
+app.disableHardwareAcceleration();
+
 const PORT = Number(process.env.FOLDERROCKET_PORT) || 3000;
 const APP_ORIGIN = `http://localhost:${PORT}`;
+const CARGO_SHIP_DOCK_SIZE = {width: 70, height: 70};
+const CARGO_SHIP_PANEL_SIZE = {width: 324, height: 370};
 let backendProcess = null;
 let mainWindow = null;
+let cargoWindow = null;
+let selectedDisplaySourceId = "";
 
 const desktopConfigKeys = new Set([
     "OPENAI_API_KEY",
@@ -116,7 +124,7 @@ function createWindow() {
     mainWindow = new BrowserWindow({
         width: 1440,
         height: 940,
-        minWidth: 1024,
+        minWidth: 640,
         minHeight: 700,
         show: false,
         autoHideMenuBar: true,
@@ -124,6 +132,7 @@ function createWindow() {
         title: "FolderRocket",
         icon: applicationIconPath(),
         webPreferences: {
+            preload: path.join(__dirname, "preload.cjs"),
             contextIsolation: true,
             nodeIntegration: false,
             sandbox: true
@@ -131,32 +140,86 @@ function createWindow() {
     });
 
     mainWindow.webContents.setWindowOpenHandler(({url}) => {
-        try {
-            const requested = new URL(url);
-            if (requested.origin === APP_ORIGIN && requested.searchParams.get("cargoShip") === "1") {
-                return {
-                    action: "allow",
-                    overrideBrowserWindowOptions: {
-                        width: 390,
-                        height: 560,
-                        minWidth: 330,
-                        minHeight: 430,
-                        autoHideMenuBar: true,
-                        backgroundColor: "#0e1424",
-                        title: "FolderRocket Cargo Ship",
-                        icon: applicationIconPath(),
-                        webPreferences: {contextIsolation: true, nodeIntegration: false, sandbox: true}
-                    }
-                };
-            }
-        } catch {
-            return {action: "deny"};
-        }
         if (/^(https?:|mailto:)/i.test(url)) void shell.openExternal(url);
         return {action: "deny"};
     });
+    mainWindow.webContents.on("will-navigate", (event, url) => {
+        if (!url.startsWith(APP_ORIGIN)) {
+            event.preventDefault();
+            if (/^(https?:|mailto:)/i.test(url)) void shell.openExternal(url);
+        }
+    });
+    const notifyNavigationState = () => {
+        if (!mainWindow?.isDestroyed()) mainWindow.webContents.send("folderrocket:navigation-changed");
+    };
+    mainWindow.webContents.on("did-navigate", notifyNavigationState);
+    mainWindow.webContents.on("did-navigate-in-page", notifyNavigationState);
+    mainWindow.webContents.on("zoom-changed", () => {
+        if (!mainWindow?.isDestroyed()) mainWindow.webContents.send("folderrocket:zoom-changed", mainWindow.webContents.getZoomFactor());
+    });
     mainWindow.once("ready-to-show", () => mainWindow?.show());
     void mainWindow.loadURL(APP_ORIGIN);
+}
+
+function createCargoShipWindow() {
+    if (cargoWindow && !cargoWindow.isDestroyed()) {
+        cargoWindow.show();
+        cargoWindow.focus();
+        return cargoWindow;
+    }
+    cargoWindow = new BrowserWindow({
+        width: CARGO_SHIP_DOCK_SIZE.width,
+        height: CARGO_SHIP_DOCK_SIZE.height,
+        minWidth: CARGO_SHIP_DOCK_SIZE.width,
+        minHeight: CARGO_SHIP_DOCK_SIZE.height,
+        show: false,
+        frame: false,
+        transparent: true,
+        resizable: false,
+        alwaysOnTop: true,
+        skipTaskbar: true,
+        hasShadow: false,
+        backgroundColor: "#00000000",
+        title: "FolderRocket Cargo Ship",
+        icon: applicationIconPath(),
+        webPreferences: {
+            preload: path.join(__dirname, "preload.cjs"),
+            contextIsolation: true,
+            nodeIntegration: false,
+            sandbox: true
+        }
+    });
+    cargoWindow.webContents.setWindowOpenHandler(({url}) => {
+        if (/^(https?:|mailto:)/i.test(url)) void shell.openExternal(url);
+        return {action: "deny"};
+    });
+    cargoWindow.webContents.on("will-navigate", (event, url) => {
+        if (!url.startsWith(APP_ORIGIN)) {
+            event.preventDefault();
+            if (/^(https?:|mailto:)/i.test(url)) void shell.openExternal(url);
+        }
+    });
+    cargoWindow.once("ready-to-show", () => cargoWindow?.show());
+    cargoWindow.on("closed", () => { cargoWindow = null; });
+    void cargoWindow.loadURL(`${APP_ORIGIN}/?folderrocketCargoShip=1`);
+    return cargoWindow;
+}
+
+function setCargoShipWindowExpanded(expanded) {
+    if (!cargoWindow || cargoWindow.isDestroyed()) return false;
+    const size = expanded ? CARGO_SHIP_PANEL_SIZE : CARGO_SHIP_DOCK_SIZE;
+    // Release old fixed bounds before applying the new dock/panel bounds.
+    // Electron otherwise may retain the 70px maximum size from the dock.
+    cargoWindow.setResizable(true);
+    cargoWindow.setMinimumSize(1, 1);
+    cargoWindow.setMaximumSize(10000, 10000);
+    cargoWindow.setBounds({width: size.width, height: size.height});
+    cargoWindow.setMinimumSize(size.width, size.height);
+    cargoWindow.setMaximumSize(size.width, size.height);
+    cargoWindow.setSize(size.width, size.height, true);
+    cargoWindow.setResizable(false);
+    cargoWindow.show();
+    return true;
 }
 
 app.whenReady().then(async () => {
@@ -165,6 +228,91 @@ app.whenReady().then(async () => {
     });
     session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
         callback(permission === "display-capture" || permission === "media");
+    });
+    session.defaultSession.setDisplayMediaRequestHandler(async (request, callback) => {
+        if (request.securityOrigin !== APP_ORIGIN) {
+            callback({});
+            return;
+        }
+        try {
+            const sources = await desktopCapturer.getSources({types: ["screen", "window"], thumbnailSize: {width: 160, height: 90}});
+            const source = sources.find(item => item.id === selectedDisplaySourceId);
+            selectedDisplaySourceId = "";
+            callback(source ? {video: source} : {});
+        } catch (error) {
+            console.error("FolderRocket display capture could not start.", error);
+            selectedDisplaySourceId = "";
+            callback({});
+        }
+    });
+    ipcMain.handle("folderrocket:list-display-sources", async event => {
+        if (event.sender.getURL().startsWith(APP_ORIGIN) === false) return [];
+        const sources = await desktopCapturer.getSources({types: ["screen", "window"], thumbnailSize: {width: 360, height: 220}, fetchWindowIcons: true});
+        return sources.map(source => ({id: source.id, name: source.name, thumbnail: source.thumbnail.toDataURL()}));
+    });
+    ipcMain.handle("folderrocket:select-display-source", (event, sourceId) => {
+        if (event.sender.getURL().startsWith(APP_ORIGIN) === false || typeof sourceId !== "string" || sourceId.length > 300) return false;
+        selectedDisplaySourceId = sourceId;
+        return true;
+    });
+    ipcMain.handle("folderrocket:capture-page-region", async (event, requestedRegion) => {
+        const sourceWindow = BrowserWindow.fromWebContents(event.sender);
+        if (event.sender.getURL().startsWith(APP_ORIGIN) === false || !sourceWindow || sourceWindow.isDestroyed()) {
+            throw new Error("FolderRocket window is not available.");
+        }
+        const contentBounds = sourceWindow.getContentBounds();
+        const raw = requestedRegion && typeof requestedRegion === "object" ? requestedRegion : {};
+        const x = Math.max(0, Math.min(contentBounds.width - 1, Math.floor(Number(raw.x) || 0)));
+        const y = Math.max(0, Math.min(contentBounds.height - 1, Math.floor(Number(raw.y) || 0)));
+        const width = Math.max(1, Math.min(contentBounds.width - x, Math.floor(Number(raw.width) || 1)));
+        const height = Math.max(1, Math.min(contentBounds.height - y, Math.floor(Number(raw.height) || 1)));
+        const image = await sourceWindow.webContents.capturePage({x, y, width, height});
+        return image.toDataURL();
+    });
+    ipcMain.handle("folderrocket:navigation-state", event => {
+        if (event.sender.getURL().startsWith(APP_ORIGIN) === false) return {canGoBack: false, canGoForward: false};
+        const history = event.sender.navigationHistory;
+        return {canGoBack: history.canGoBack(), canGoForward: history.canGoForward()};
+    });
+    ipcMain.handle("folderrocket:zoom-factor", event => {
+        if (event.sender.getURL().startsWith(APP_ORIGIN) === false) return 1;
+        return event.sender.getZoomFactor();
+    });
+    ipcMain.handle("folderrocket:set-zoom-factor", (event, factor) => {
+        if (event.sender.getURL().startsWith(APP_ORIGIN) === false) return 1;
+        const requested = Number(factor);
+        const next = Number.isFinite(requested) ? Math.max(.75, Math.min(1.5, requested)) : 1;
+        event.sender.setZoomFactor(next);
+        return next;
+    });
+    ipcMain.handle("folderrocket:open-cargo-ship-window", event => {
+        if (event.sender.getURL().startsWith(APP_ORIGIN) === false) return false;
+        createCargoShipWindow();
+        return true;
+    });
+    ipcMain.handle("folderrocket:close-cargo-ship-window", event => {
+        if (event.sender.getURL().startsWith(APP_ORIGIN) === false || !cargoWindow || cargoWindow.isDestroyed() || cargoWindow.webContents.id !== event.sender.id) return false;
+        cargoWindow.close();
+        return true;
+    });
+    ipcMain.handle("folderrocket:set-cargo-ship-expanded", (event, expanded) => {
+        if (event.sender.getURL().startsWith(APP_ORIGIN) === false || !cargoWindow || cargoWindow.isDestroyed() || cargoWindow.webContents.id !== event.sender.id) return false;
+        return setCargoShipWindowExpanded(Boolean(expanded));
+    });
+    ipcMain.handle("folderrocket:move-cargo-ship-window", (event, position) => {
+        if (event.sender.getURL().startsWith(APP_ORIGIN) === false || !cargoWindow || cargoWindow.isDestroyed() || cargoWindow.webContents.id !== event.sender.id || !position || typeof position !== "object") return false;
+        const x = Number(position.x);
+        const y = Number(position.y);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+        cargoWindow.setPosition(Math.round(x), Math.round(y), true);
+        return true;
+    });
+    ipcMain.handle("folderrocket:navigate-history", (event, direction) => {
+        if (event.sender.getURL().startsWith(APP_ORIGIN) === false || !["back", "forward"].includes(direction)) return false;
+        const history = event.sender.navigationHistory;
+        if (direction === "back" && history.canGoBack()) { history.goBack(); return true; }
+        if (direction === "forward" && history.canGoForward()) { history.goForward(); return true; }
+        return false;
     });
     if (!await backendIsReady()) startBackend();
     if (!await waitForBackend()) {

@@ -1,31 +1,57 @@
-import {useEffect, useState, type DragEvent} from "react";
-import {FilePlus2, FileText, MailPlus, Rocket, RotateCw, Send, SlidersHorizontal, Trash2, X} from "lucide-react";
+import {useEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type RefObject} from "react";
+import {FilePlus2, FileText, MailPlus, Minus, Rocket, RotateCw, ScanSearch, Send, SlidersHorizontal, Trash2, X, Zap} from "lucide-react";
 import {API_BASE_URL} from "../api";
 import {EMAIL_ATTACHMENT_TYPE} from "./GmailSourcePanel";
 import {OUTLOOK_ATTACHMENT_TYPE} from "./OutlookSourcePanel";
 import {SEARCH_RESULT_TYPE} from "./SearchWorkspace";
+import type {ManagedFolder, VirtualFile} from "./FolderManagement";
 
 type CargoFile = {id: string; kind: "file"; file: File; name: string; size: number};
 type CargoPath = {id: string; kind: "path"; name: string; path: string; size?: number};
 type CargoAttachment = {id: string; kind: "attachment"; provider: "gmail" | "outlook"; name: string; size?: number; attachmentId: string; messageId: string; mimeType: string; sourceBlockId?: string};
 type CargoItem = CargoFile | CargoPath | CargoAttachment;
-type CargoMode = "transport" | "text" | "email" | "convert";
+type CargoMode = "transport" | "text" | "email" | "convert" | "lens";
 
 interface RemoteAttachment { attachmentId: string; messageId: string; mimeType: string; name: string; size?: number; sourceBlockId?: string; }
 interface PathItem {name: string; path: string; size?: number}
 interface EmailSource {provider: "gmail" | "outlook"; blockId: string; email: string; label: string}
+interface CargoLayout {x: number; y: number; width: number; height: number}
 
 function cargoId() { return crypto.randomUUID(); }
 function formatSize(bytes?: number) { return !bytes ? "" : bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`; }
 function readPayload<T>(value: string): T[] { try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed as T[] : []; } catch { return []; } }
+function layoutKey(scope: string) { return `folderrocket-cargo-ship-layout-${scope}`; }
+const COMPACT_CARGO_SIZE = {width: 324, height: 370};
+function defaultCargoLayout(): CargoLayout { return {x: typeof window === "undefined" ? 24 : Math.max(12, window.innerWidth - COMPACT_CARGO_SIZE.width - 18), y: 76, ...COMPACT_CARGO_SIZE}; }
+function readCargoLayout(scope: string): CargoLayout {
+    const fallback = defaultCargoLayout();
+    try {
+        const saved = JSON.parse(localStorage.getItem(layoutKey(scope)) || "null") as CargoLayout | null;
+        if (saved && [saved.x, saved.y, saved.width, saved.height].every(Number.isFinite)) {
+            return {x: Math.max(8, saved.x), y: Math.max(8, saved.y), ...COMPACT_CARGO_SIZE};
+        }
+    } catch { /* Use the default ship location. */ }
+    return fallback;
+}
 
-export default function CargoShip({onOpenFileStudio, standalone = false}: {onOpenFileStudio: () => void; standalone?: boolean}) {
+interface CargoShipProps {
+    onOpenFileStudio: () => void;
+    aiEnabled: boolean;
+    floatingScale: number;
+    storageScope: string;
+    standalone?: boolean;
+    folders: ManagedFolder[];
+    onVirtualFilesAdd: (folderId: string, files: VirtualFile[]) => void;
+}
+
+export default function CargoShip({onOpenFileStudio, aiEnabled, floatingScale, storageScope, standalone = false, folders, onVirtualFilesAdd}: CargoShipProps) {
+    const initialLayoutRef = useRef<CargoLayout>(readCargoLayout(storageScope));
     const [mode, setMode] = useState<CargoMode>("transport");
     const [items, setItems] = useState<CargoItem[]>([]);
     const [dropActive, setDropActive] = useState(false);
     const [text, setText] = useState("");
     const [fileName, setFileName] = useState("FolderRocket note");
-    const [textFormat, setTextFormat] = useState<"txt" | "pdf" | "docx">("txt");
+    const [textFormat, setTextFormat] = useState<"note" | "txt" | "pdf" | "docx">("txt");
     const [recipient, setRecipient] = useState("");
     const [emailSubject, setEmailSubject] = useState("FolderRocket note");
     const [emailSources, setEmailSources] = useState<EmailSource[]>([]);
@@ -33,10 +59,31 @@ export default function CargoShip({onOpenFileStudio, standalone = false}: {onOpe
     const [convertFormat, setConvertFormat] = useState("pdf");
     const [working, setWorking] = useState(false);
     const [message, setMessage] = useState("");
-    const [popupBlocked, setPopupBlocked] = useState(false);
+    const [open, setOpen] = useState(false);
+    const [minimized, setMinimized] = useState(true);
+    const [dragging, setDragging] = useState(false);
+    const [position, setPosition] = useState(() => ({x: initialLayoutRef.current.x, y: initialLayoutRef.current.y}));
+    const shipSize = COMPACT_CARGO_SIZE;
+    const [lensQuery, setLensQuery] = useState("");
+    const [lensAnalysis, setLensAnalysis] = useState("");
+    const [lensImage, setLensImage] = useState("");
+    const [lensFormat, setLensFormat] = useState<"txt" | "docx" | "pdf">("txt");
+    const [lensError, setLensError] = useState("");
+    const [lensWorking, setLensWorking] = useState(false);
+    const [lensCapturing, setLensCapturing] = useState(false);
+    const shipRef = useRef<HTMLElement>(null);
+    const dockRef = useRef<HTMLButtonElement>(null);
+    const dockMovedRef = useRef(false);
+    const [targetFolderId, setTargetFolderId] = useState("");
+    const [instantDelivery, setInstantDelivery] = useState(false);
+    const shipScale = Math.max(.8, Math.min(1.3, floatingScale));
 
     useEffect(() => {
-        if (!standalone) return;
+        localStorage.setItem(layoutKey(storageScope), JSON.stringify({x: position.x, y: position.y, ...COMPACT_CARGO_SIZE}));
+    }, [position, storageScope]);
+
+    useEffect(() => {
+        if (!open) return;
         let active = true;
         fetch(`${API_BASE_URL}/cargo-ship/email-sources`, {credentials: "include"})
             .then(response => response.ok ? response.json() : {sources: []})
@@ -48,15 +95,7 @@ export default function CargoShip({onOpenFileStudio, standalone = false}: {onOpe
             })
             .catch(() => { if (active) setEmailSources([]); });
         return () => { active = false; };
-    }, [standalone]);
-
-    function launchPopup() {
-        const url = new URL(window.location.href);
-        url.searchParams.set("cargoShip", "1");
-        const popup = window.open(url.toString(), "folderrocket-cargo-ship", "popup=yes,width=350,height=470,resizable=yes,scrollbars=yes");
-        if (!popup) setPopupBlocked(true);
-        else { popup.focus(); setPopupBlocked(false); }
-    }
+    }, [open]);
 
     function addItems(incoming: CargoItem[]) {
         if (!incoming.length) return;
@@ -69,6 +108,11 @@ export default function CargoShip({onOpenFileStudio, standalone = false}: {onOpe
         setMessage(`${incoming.length} item${incoming.length === 1 ? "" : "s"} loaded aboard.`);
     }
 
+    function addOrAutoSend(incoming: CargoItem[]) {
+        addItems(incoming);
+        if (instantDelivery && targetFolderId) void sendToFolder(incoming);
+    }
+
     function handleDrop(event: DragEvent<HTMLDivElement>) {
         event.preventDefault();
         event.stopPropagation();
@@ -79,17 +123,17 @@ export default function CargoShip({onOpenFileStudio, standalone = false}: {onOpe
         if (gmail || outlook) {
             const provider = gmail ? "gmail" : "outlook";
             const attachments = readPayload<RemoteAttachment>(gmail || outlook).filter(item => item && item.name && item.attachmentId && item.messageId);
-            addItems(attachments.map(item => ({...item, id: cargoId(), kind: "attachment" as const, provider})));
+            addOrAutoSend(attachments.map(item => ({...item, id: cargoId(), kind: "attachment" as const, provider})));
             return;
         }
         if (search) {
             const paths = readPayload<PathItem>(search).filter(item => item && item.name && item.path);
-            addItems(paths.map(item => ({...item, id: cargoId(), kind: "path" as const})));
+            addOrAutoSend(paths.map(item => ({...item, id: cargoId(), kind: "path" as const})));
             return;
         }
         const files = Array.from(event.dataTransfer.files);
         if (files.length) {
-            addItems(files.map(file => ({id: cargoId(), kind: "file" as const, file, name: file.name, size: file.size})));
+            addOrAutoSend(files.map(file => ({id: cargoId(), kind: "file" as const, file, name: file.name, size: file.size})));
             return;
         }
         const droppedText = event.dataTransfer.getData("text/plain").trim();
@@ -114,6 +158,19 @@ export default function CargoShip({onOpenFileStudio, standalone = false}: {onOpe
 
     async function createTextFile() {
         if (!text.trim() || working) return;
+        if (textFormat === "note") {
+            const noteText = fileName.trim() ? `${fileName.trim()}\n\n${text.trim()}` : text.trim();
+            const detail = {storageScope, text: noteText};
+            window.dispatchEvent(new CustomEvent("folderrocket:create-sticky-note", {detail}));
+            if ("BroadcastChannel" in window) {
+                const channel = new BroadcastChannel("folderrocket-sticky-notes");
+                channel.postMessage(detail);
+                channel.close();
+            }
+            setText("");
+            setMessage("A new note is ready on the left side of the workspace.");
+            return;
+        }
         setWorking(true); setMessage("");
         try {
             const response = await fetch(`${API_BASE_URL}/cargo-ship/text-file`, {method: "POST", headers: {"Content-Type": "application/json"}, credentials: "include", body: JSON.stringify({name: fileName, text, format: textFormat})});
@@ -149,6 +206,20 @@ export default function CargoShip({onOpenFileStudio, standalone = false}: {onOpe
         return data.files ?? [];
     }
 
+    async function stageAttachments(attachments: CargoAttachment[]) {
+        if (!attachments.length) return [] as PathItem[];
+        return Promise.all(attachments.map(async attachment => {
+            const blockQuery = attachment.sourceBlockId ? `?blockId=${encodeURIComponent(attachment.sourceBlockId)}` : "";
+            const response = await fetch(`${API_BASE_URL}/email/${attachment.provider}/attachments/save-reference${blockQuery}`, {
+                method: "POST", credentials: "include", headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({messageId: attachment.messageId, attachmentId: attachment.attachmentId, name: attachment.name})
+            });
+            const data = await response.json().catch(() => ({})) as {name?: string; path?: string; size?: number; message?: string};
+            if (!response.ok || !data.path || !data.name) throw new Error(data.message ?? `Unable to prepare ${attachment.name}.`);
+            return {name: data.name, path: data.path, size: data.size};
+        }));
+    }
+
     async function convertItems() {
         if (working) return;
         const pathItems = items.filter((item): item is CargoPath => item.kind === "path");
@@ -168,27 +239,175 @@ export default function CargoShip({onOpenFileStudio, standalone = false}: {onOpe
         finally { setWorking(false); }
     }
 
-    function openFileStudio() {
-        if (window.opener && !window.opener.closed) {
-            window.opener.postMessage({type: "folderrocket-open-file-studio"}, window.location.origin);
-            window.opener.focus();
-            return;
-        }
-        onOpenFileStudio();
+    async function sendToFolder(candidateItems = items) {
+        const target = folders.find(folder => folder.id === targetFolderId);
+        if (!target || working) { setMessage("Choose a FolderRocket folder first."); return; }
+        const pathItems = candidateItems.filter((item): item is CargoPath => item.kind === "path");
+        const localItems = candidateItems.filter((item): item is CargoFile => item.kind === "file");
+        const attachments = candidateItems.filter((item): item is CargoAttachment => item.kind === "attachment");
+        if (!pathItems.length && !localItems.length && !attachments.length) { setMessage("Add a file, attachment, or search result."); return; }
+        setWorking(true); setMessage("Sending cargo…");
+        try {
+            const staged = await stageLocalFiles(localItems);
+            const stagedAttachments = await stageAttachments(attachments);
+            const sendable = [...pathItems.map(item => ({name: item.name, path: item.path, size: item.size})), ...staged, ...stagedAttachments];
+            if (target.storage === "imaginary") {
+                onVirtualFilesAdd(target.id, sendable.map(item => ({...item, createdAt: new Date().toISOString()})));
+            } else {
+                if (!target.path) throw new Error("This folder needs a valid path.");
+                const response = await fetch(`${API_BASE_URL}/files/move`, {method: "POST", credentials: "include", headers: {"Content-Type": "application/json"}, body: JSON.stringify({destination: target.path, paths: sendable.map(item => item.path)})});
+                const data = await response.json().catch(() => ({})) as {message?: string};
+                if (!response.ok) throw new Error(data.message ?? "Unable to send the cargo.");
+                window.dispatchEvent(new CustomEvent("folderrocket-files-moved"));
+            }
+            const sentIds = new Set(candidateItems.map(item => item.id));
+            setItems(current => current.filter(item => !sentIds.has(item.id)));
+            setMessage(`${sendable.length} file${sendable.length === 1 ? "" : "s"} sent to ${target.name}.`);
+        } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to send the cargo."); }
+        finally { setWorking(false); }
     }
 
-    if (!standalone) return <div className="cargoShipLauncherWrap">
-        <button type="button" className="cargoShipLauncher" onClick={launchPopup} title="Open Cargo Ship in a separate window"><Rocket size={17} />Cargo Ship</button>
-        {popupBlocked && <small className="cargoPopupBlocked">Allow pop-ups for FolderRocket to launch Cargo Ship.</small>}
-    </div>;
+    function startDrag(event: ReactPointerEvent<HTMLElement>, targetRef: RefObject<HTMLElement | HTMLButtonElement | null> = shipRef, allowButton = false) {
+        if (!allowButton && (event.target as Element).closest("button, input, select, textarea")) return;
+        const bounds = targetRef.current?.getBoundingClientRect();
+        if (!bounds) return;
+        event.preventDefault();
+        const offsetX = event.clientX - bounds.left;
+        const offsetY = event.clientY - bounds.top;
+        const renderedWidth = bounds.width;
+        const renderedHeight = bounds.height;
+        dockMovedRef.current = false;
+        setDragging(true);
+        const move = (moveEvent: PointerEvent) => {
+            if (Math.abs(moveEvent.clientX - event.clientX) > 4 || Math.abs(moveEvent.clientY - event.clientY) > 4) dockMovedRef.current = true;
+            setPosition({
+                x: Math.max(8, Math.min(window.innerWidth - renderedWidth - 8, moveEvent.clientX - offsetX)),
+                y: Math.max(8, Math.min(window.innerHeight - renderedHeight - 8, moveEvent.clientY - offsetY))
+            });
+        };
+        const stop = () => {
+            setDragging(false);
+            window.removeEventListener("pointermove", move);
+            window.removeEventListener("pointerup", stop);
+            window.removeEventListener("pointercancel", stop);
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", stop);
+        window.addEventListener("pointercancel", stop);
+    }
 
-    return <main className="cargoShipStandaloneWindow"><section className="cargoShip cargoShipStandalone">
-        <header className="cargoShipHeader"><span><Rocket size={18} />Cargo Ship <small>{items.length} on board</small></span><button type="button" title="Close Cargo Ship" onClick={() => window.close()}><X size={16} /></button></header>
-        <div className="cargoShipModes" role="tablist"><button type="button" className={mode === "transport" ? "active" : ""} onClick={() => setMode("transport")}>Files</button><button type="button" className={mode === "text" ? "active" : ""} onClick={() => setMode("text")}><FilePlus2 size={13} />Text</button><button type="button" className={mode === "email" ? "active" : ""} onClick={() => setMode("email")}><MailPlus size={13} />Email</button><button type="button" className={mode === "convert" ? "active" : ""} onClick={() => setMode("convert")}><RotateCw size={13} />Convert</button></div>
-        {mode === "transport" && <div className={dropActive ? "cargoDropArea active" : "cargoDropArea"} onDragOver={event => { event.preventDefault(); setDropActive(true); }} onDragLeave={() => setDropActive(false)} onDrop={handleDrop}><p>Drop files, email attachments, search results, or text here.</p><div className="cargoItemList">{items.length ? items.map(item => <div className="cargoItem" draggable key={item.id} onDragStart={event => handleItemDrag(event, item)}><FileText size={14} /><span title={item.name}>{item.name}</span><small>{formatSize(item.size)}</small><button type="button" title="Remove from Cargo Ship" onClick={() => setItems(current => current.filter(currentItem => currentItem.id !== item.id))}><Trash2 size={13} /></button></div>) : <em>Your Cargo Ship is empty.</em>}</div>{items.length > 0 && <button type="button" className="cargoClear" onClick={() => setItems([])}>Clear cargo</button>}</div>}
-        {mode === "text" && <div className="cargoForm"><input value={fileName} onChange={event => setFileName(event.target.value)} placeholder="File name" /><textarea value={text} onChange={event => setText(event.target.value)} placeholder="Paste or write text here…" /><div><select value={textFormat} onChange={event => setTextFormat(event.target.value as "txt" | "pdf" | "docx")}><option value="txt">TXT file</option><option value="pdf">PDF file</option><option value="docx">Word document</option></select><button type="button" onClick={() => void createTextFile()} disabled={!text.trim() || working}><FilePlus2 size={14} />Create</button></div></div>}
+    function startStandaloneDockDrag(event: ReactPointerEvent<HTMLButtonElement>) {
+        if (!standalone) return;
+        const startScreenX = event.screenX;
+        const startScreenY = event.screenY;
+        const startWindowX = window.screenX;
+        const startWindowY = window.screenY;
+        dockMovedRef.current = false;
+        const move = (moveEvent: PointerEvent) => {
+            const deltaX = moveEvent.screenX - startScreenX;
+            const deltaY = moveEvent.screenY - startScreenY;
+            if (Math.abs(deltaX) > 4 || Math.abs(deltaY) > 4) dockMovedRef.current = true;
+            void window.folderRocketDesktop?.moveCargoShipWindow({x: startWindowX + deltaX, y: startWindowY + deltaY});
+        };
+        const stop = () => { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", stop); window.removeEventListener("pointercancel", stop); };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", stop);
+        window.addEventListener("pointercancel", stop);
+    }
+
+    async function captureBehindShip() {
+        if (!window.folderRocketDesktop?.capturePageRegion) { setLensError("Lens is available in the local FolderRocket desktop app."); return; }
+        setLensError(""); setLensCapturing(true);
+        try {
+            await new Promise<void>(resolve => window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve())));
+            const imageDataUrl = await window.folderRocketDesktop.capturePageRegion({x: Math.round(position.x), y: Math.round(position.y + 39 * shipScale), width: Math.round(shipSize.width * shipScale), height: Math.max(80, Math.round((shipSize.height - 39) * shipScale))});
+            setLensImage(imageDataUrl);
+            return imageDataUrl;
+        } catch (error) { setLensError(error instanceof Error ? error.message : "Lens capture failed."); return ""; }
+        finally { setLensCapturing(false); }
+    }
+
+    async function analyseBehindShip() {
+        if (!aiEnabled || lensWorking) return;
+        setLensWorking(true); setLensError(""); setLensAnalysis("");
+        try {
+            const imageDataUrl = lensImage || await captureBehindShip();
+            if (!imageDataUrl) return;
+            const response = await fetch(`${API_BASE_URL}/projection/analyze`, {method: "POST", credentials: "include", headers: {"Content-Type": "application/json"}, body: JSON.stringify({imageDataUrl, query: lensQuery})});
+            const data = await response.json().catch(() => ({})) as {analysis?: string; message?: string};
+            if (!response.ok) throw new Error(data.message || "Lens analysis failed.");
+            setLensAnalysis(data.analysis || "No readable information was found behind Cargo Ship.");
+        } catch (error) { setLensError(error instanceof Error ? error.message : "Lens analysis failed."); }
+        finally { setLensWorking(false); }
+    }
+
+    async function saveLensScreenshot() {
+        if (lensWorking) return;
+        setLensWorking(true); setLensError("");
+        try {
+            const imageDataUrl = lensImage || await captureBehindShip();
+            if (!imageDataUrl) return;
+            const response = await fetch(`${API_BASE_URL}/cargo-ship/lens-screenshot`, {method: "POST", credentials: "include", headers: {"Content-Type": "application/json"}, body: JSON.stringify({imageDataUrl})});
+            const data = await response.json().catch(() => ({})) as {file?: PathItem; message?: string};
+            if (!response.ok || !data.file) throw new Error(data.message || "Unable to save screenshot.");
+            addOrAutoSend([{...data.file, id: cargoId(), kind: "path"}]);
+            setMessage(`${data.file.name} is ready in Cargo Ship.`);
+        } catch (error) { setLensError(error instanceof Error ? error.message : "Unable to save screenshot."); }
+        finally { setLensWorking(false); }
+    }
+
+    async function saveLensText() {
+        if (!lensAnalysis.trim() || lensWorking) return;
+        setLensWorking(true); setLensError("");
+        try {
+            const response = await fetch(`${API_BASE_URL}/cargo-ship/text-file`, {method: "POST", credentials: "include", headers: {"Content-Type": "application/json"}, body: JSON.stringify({name: "Lens reading", text: lensAnalysis, format: lensFormat})});
+            const data = await response.json().catch(() => ({})) as {file?: PathItem; message?: string};
+            if (!response.ok || !data.file) throw new Error(data.message || "Unable to save the AI reading.");
+            addOrAutoSend([{...data.file, id: cargoId(), kind: "path"}]);
+            setMessage(`${data.file.name} is ready in Cargo Ship.`);
+        } catch (error) { setLensError(error instanceof Error ? error.message : "Unable to save the AI reading."); }
+        finally { setLensWorking(false); }
+    }
+
+    function openShip() {
+        if (standalone) {
+            setMinimized(false);
+            setOpen(true);
+            void window.folderRocketDesktop?.setCargoShipExpanded(true);
+            return;
+        }
+        setPosition(current => ({x: Math.max(8, Math.min(window.innerWidth - shipSize.width * shipScale - 8, current.x)), y: Math.max(8, Math.min(window.innerHeight - shipSize.height * shipScale - 8, current.y))}));
+        setMinimized(false);
+        setOpen(true);
+    }
+    function minimizeShip() {
+        setOpen(false);
+        setMinimized(true);
+        if (standalone) void window.folderRocketDesktop?.setCargoShipExpanded(false);
+    }
+    function closeShip() {
+        if (standalone) {
+            void window.folderRocketDesktop?.closeCargoShipWindow();
+            return;
+        }
+        setOpen(false);
+        setMinimized(false);
+    }
+    const shipPanel = <section ref={shipRef} className={`${dragging ? "cargoShip moving" : "cargoShip"}${standalone ? " cargoShipStandalone" : ""}${lensCapturing ? " lensCapturing" : ""}`} style={standalone ? undefined : {left: position.x, top: position.y, width: shipSize.width, height: shipSize.height, transform: `scale(${shipScale})`, transformOrigin: "top left"}}>
+        <header className="cargoShipHeader" onPointerDown={standalone ? undefined : startDrag}><span><Rocket size={15} />Cargo Ship <small>{items.length} on board</small></span><span className="cargoShipHeaderActions"><button type="button" title="Minimize to a movable bubble" onClick={minimizeShip}><Minus size={14} /></button><button type="button" className="cargoShipClose" title="Close Cargo Ship" onClick={closeShip}><X size={14} /></button></span></header>
+        <div className="cargoShipModes" role="tablist"><button type="button" className={mode === "transport" ? "active" : ""} onClick={() => setMode("transport")}>Files</button><button type="button" className={mode === "text" ? "active" : ""} onClick={() => setMode("text")}><FilePlus2 size={11} />Text</button><button type="button" className={mode === "email" ? "active" : ""} onClick={() => setMode("email")}><MailPlus size={11} />Email</button><button type="button" className={mode === "convert" ? "active" : ""} onClick={() => setMode("convert")}><RotateCw size={11} />Convert</button>{aiEnabled && <button type="button" className={mode === "lens" ? "active" : ""} onClick={() => setMode("lens")}><ScanSearch size={11} />Lens</button>}</div>
+        {mode === "transport" && <div className={dropActive ? "cargoDropArea active" : "cargoDropArea"} onDragOver={event => { event.preventDefault(); setDropActive(true); }} onDragLeave={() => setDropActive(false)} onDrop={handleDrop}><p>{targetFolderId ? (instantDelivery ? `Instant delivery is ON for ${folders.find(folder => folder.id === targetFolderId)?.name ?? "the selected folder"}.` : "Delivery is manual. Files stay on board until you organise them.") : "Choose a FolderRocket folder, then optionally activate instant delivery."}</p><div className="cargoItemList">{items.length ? items.map(item => <div className="cargoItem" draggable key={item.id} onDragStart={event => handleItemDrag(event, item)}><FileText size={14} /><span title={item.name}>{item.name}</span><small>{formatSize(item.size)}</small><button type="button" title="Remove from Cargo Ship" onClick={() => setItems(current => current.filter(currentItem => currentItem.id !== item.id))}><Trash2 size={13} /></button></div>) : <em>Your Cargo Ship is empty.</em>}</div><div className="cargoFolderSend"><select value={targetFolderId} onChange={event => setTargetFolderId(event.target.value)}><option value="">Choose FolderRocket folder…</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folder.storage === "imaginary" ? "◇ " : ""}{folder.name}</option>)}</select><button type="button" className={instantDelivery ? "cargoInstantToggle active" : "cargoInstantToggle"} onClick={() => setInstantDelivery(current => !current)} disabled={!targetFolderId} aria-pressed={instantDelivery} title="Toggle instant delivery"><Zap size={13}/>{instantDelivery ? "Instant ON" : "Instant"}</button><button type="button" onClick={() => void sendToFolder()} disabled={!targetFolderId || !items.length || working}>Organise</button></div><button type="button" className="cargoClear" onClick={() => setItems([])}>Clear cargo</button></div>}
+        {mode === "text" && <div className="cargoForm"><input value={fileName} onChange={event => setFileName(event.target.value)} placeholder="File name or note title" /><textarea value={text} onChange={event => setText(event.target.value)} placeholder="Paste or write text here…" /><div><select value={textFormat} onChange={event => setTextFormat(event.target.value as "note" | "txt" | "pdf" | "docx")}><option value="note">Post-it note</option><option value="txt">TXT file</option><option value="pdf">PDF file</option><option value="docx">Word document</option></select><button type="button" onClick={() => void createTextFile()} disabled={!text.trim() || working}><FilePlus2 size={14} />{textFormat === "note" ? "Create note" : "Create"}</button></div></div>}
         {mode === "email" && <div className="cargoForm"><select value={emailSourceKey} onChange={event => setEmailSourceKey(event.target.value)} disabled={!emailSources.length}><option value="">{emailSources.length ? "Choose connected mailbox" : "No connected mailbox"}</option>{emailSources.map(source => <option key={`${source.provider}:${source.blockId}`} value={`${source.provider}:${source.blockId}`}>{source.label}</option>)}</select><input value={recipient} onChange={event => setRecipient(event.target.value)} placeholder="To: name@example.com" /><input value={emailSubject} onChange={event => setEmailSubject(event.target.value)} placeholder="Email subject" /><textarea value={text} onChange={event => setText(event.target.value)} placeholder="Write the email text here…" /><button type="button" onClick={() => void createEmailDraft()} disabled={!emailSources.length || !text.trim() || working}><Send size={14} />{working ? "Saving draft…" : "Save draft in mailbox"}</button><small className="cargoEmailNote">The draft is not sent automatically. Review and send it in Gmail or Outlook.</small></div>}
-        {mode === "convert" && <div className="cargoConvert"><p>Converts local files and search results. Email attachments must first be dropped into a folder.</p><select value={convertFormat} onChange={event => setConvertFormat(event.target.value)}><option value="pdf">PDF</option><option value="txt">TXT</option><option value="xlsx">XLSX</option><option value="csv">CSV</option></select><button type="button" onClick={() => void convertItems()} disabled={working}><RotateCw className={working ? "cargoSpin" : ""} size={15} />{working ? "Converting…" : "Convert cargo"}</button><button type="button" className="cargoStudioLink" onClick={openFileStudio}><SlidersHorizontal size={14} />Open File Studio</button></div>}
+        {mode === "convert" && <div className="cargoConvert"><p>Converts local files and search results on this PC. Email attachments must first be dropped into a folder.</p><select value={convertFormat} onChange={event => setConvertFormat(event.target.value)}><option value="pdf">PDF</option><option value="txt">TXT</option><option value="xlsx">XLSX</option><option value="csv">CSV</option></select><button type="button" onClick={() => void convertItems()} disabled={working}><RotateCw className={working ? "cargoSpin" : ""} size={15} />{working ? "Converting…" : "Convert cargo"}</button><button type="button" className="cargoStudioLink" onClick={onOpenFileStudio}><SlidersHorizontal size={14} />Open File Studio</button></div>}
+        {mode === "lens" && aiEnabled && <div className="cargoLens"><p>Lens captures the FolderRocket area directly behind Cargo Ship only when you press a button. Save it as a PNG, read its text with AI, or turn the reading into a file.</p><div className="cargoLensActions"><button type="button" onClick={() => void captureBehindShip()} disabled={lensWorking}>Capture screenshot</button><button type="button" onClick={() => void saveLensScreenshot()} disabled={lensWorking}>{lensWorking ? "Working…" : "Save PNG"}</button></div>{lensImage && <img className="cargoLensPreview" src={lensImage} alt="Captured area behind Cargo Ship" />}<textarea value={lensQuery} onChange={event => setLensQuery(event.target.value)} placeholder="Ask what is behind Cargo Ship, or leave empty to read and summarise the text…" /><button type="button" onClick={() => void analyseBehindShip()} disabled={lensWorking}><ScanSearch size={14}/>{lensWorking ? "Analysing…" : "Read text / analyse with AI"}</button>{lensError && <small className="cargoLensError">{lensError}</small>}{lensAnalysis && <><div className="cargoLensResult">{lensAnalysis}</div><div className="cargoLensSaveText"><select value={lensFormat} onChange={event => setLensFormat(event.target.value as "txt" | "docx" | "pdf")}><option value="txt">TXT</option><option value="docx">Word</option><option value="pdf">PDF</option></select><button type="button" onClick={() => void saveLensText()} disabled={lensWorking}>Save reading</button></div></>}</div>}
         {message && <p className="cargoMessage">{message}</p>}
-    </section></main>;
+    </section>;
+    if (standalone) return <main className="cargoShipStandaloneWindow">{minimized && <button ref={dockRef} type="button" className="cargoShipDock cargoShipDockStandalone" onPointerDown={startStandaloneDockDrag} onClick={() => { if (!dockMovedRef.current) openShip(); }} title="Open or move Cargo Ship"><Rocket size={25}/>{items.length > 0 && <small>{items.length}</small>}</button>}{open && shipPanel}</main>;
+    if (window.folderRocketDesktop?.openCargoShipWindow) return <div className="cargoShipRoot"><div className="cargoShipLauncherWrap"><button type="button" className="cargoShipLauncher" onClick={() => void window.folderRocketDesktop?.openCargoShipWindow()} title="Open Cargo Ship on the desktop"><Rocket size={17} />Cargo Ship</button></div></div>;
+    return <div className="cargoShipRoot">
+        <div className="cargoShipLauncherWrap"><button type="button" className={open ? "cargoShipLauncher active" : "cargoShipLauncher"} onClick={() => { if (open) minimizeShip(); else openShip(); }} title={open ? "Minimize Cargo Ship" : "Open movable Cargo Ship"}><Rocket size={17} />Cargo Ship {items.length > 0 && <small>{items.length}</small>}</button></div>
+        {minimized && <button ref={dockRef} type="button" className={dragging ? "cargoShipDock moving" : "cargoShipDock"} style={{left: position.x, top: position.y, transform: `scale(${shipScale})`, transformOrigin: "top left"}} onPointerDown={event => startDrag(event, dockRef, true)} onClick={() => { if (!dockMovedRef.current) openShip(); }} title="Open or move Cargo Ship"><Rocket size={25}/>{items.length > 0 && <small>{items.length}</small>}</button>}
+        {open && shipPanel}
+    </div>;
 }

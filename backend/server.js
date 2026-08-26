@@ -42,6 +42,7 @@ const {startEmailAlertScheduler} = require("./services/emailAlertScheduler");
 const {migrateLegacyConnections} = require("./services/emailTokenStore");
 const {addAuditEvent, listAuditEvents} = require("./services/auditLogService");
 const {analyzeDomainPage, analyzeProjection} = require("./services/projectionAnalysisService");
+const {createStickyNote} = require("./services/stickyNoteAiService");
 const {integrationStatus, saveIntegrationConfiguration} = require("./services/desktopIntegrationConfigService");
 const {
     authenticateRequest,
@@ -1204,6 +1205,18 @@ app.post("/search-files", async (req, res) => {
     }
 });
 
+app.post("/sticky-notes/ai", async (req, res) => {
+    try {
+        if (!integrationStatus().aiConfigured) throw new Error("Enable the OpenAI AI integration before creating AI notes.");
+        const folders = Array.isArray(req.body?.folders)
+            ? req.body.folders.filter(folder => typeof folder === "string").map(folder => assertUserPath(req.user, folder))
+            : [];
+        res.json(await createStickyNote(req.body?.prompt, folders));
+    } catch (error) {
+        res.status(400).json({message: error instanceof Error ? error.message : "Unable to create the AI note."});
+    }
+});
+
 app.post("/list-folder-files", (req, res) => {
     try {
         const folder = assertUserPath(req.user, req.body?.folder);
@@ -1370,6 +1383,23 @@ app.post("/cargo-ship/text-file", requireAuthenticated, async (req, res) => {
         res.json({file: {name: path.basename(targetPath), path: targetPath, size: stats.size}});
     } catch (error) {
         res.status(400).json({message: error instanceof Error ? error.message : "Unable to create the Cargo Ship file."});
+    }
+});
+
+app.post("/cargo-ship/lens-screenshot", requireAuthenticated, (req, res) => {
+    try {
+        const imageDataUrl = typeof req.body?.imageDataUrl === "string" ? req.body.imageDataUrl : "";
+        const match = imageDataUrl.match(/^data:image\/png;base64,([a-z0-9+/=\s]+)$/i);
+        if (!match) throw new Error("A valid PNG screenshot is required.");
+        if (imageDataUrl.length > 5_500_000) throw new Error("The lens screenshot is too large. Resize Cargo Ship and try again.");
+        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+        const targetPath = nextAvailableFilePath(cargoShipDirectory(req.user), `Lens screenshot ${timestamp}.png`);
+        fs.writeFileSync(targetPath, Buffer.from(match[1].replace(/\s/g, ""), "base64"));
+        const stats = fs.statSync(targetPath);
+        addAuditEvent({user: req.user, action: "cargo_lens_screenshot_created", details: {fileName: path.basename(targetPath)}});
+        res.json({file: {name: path.basename(targetPath), path: targetPath, size: stats.size}});
+    } catch (error) {
+        res.status(400).json({message: error instanceof Error ? error.message : "Unable to save the lens screenshot."});
     }
 });
 

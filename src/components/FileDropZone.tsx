@@ -40,6 +40,7 @@ interface Props {
     onVirtualFilesAdd?: (files: Array<{name: string; path: string; size?: number}>) => void;
     sourceFolderPaths?: string[];
     storageScope?: string;
+    aiEnabled?: boolean;
 
     // Indica se il blocco è selezionato
     selected?: boolean;
@@ -134,7 +135,8 @@ function FileDropZone({
     onVirtualFilesAdd,
     sourceFolderPaths = [],
     storageScope = "default",
-    selected = false
+    selected = false,
+    aiEnabled = false
 }: Props) {
 
     // ==================================================
@@ -1656,7 +1658,7 @@ function FileDropZone({
 
         <div
 
-            className="folderDropZone"
+            className={aiEnabled ? "folderDropZone aiEnabled" : "folderDropZone"}
 
             onClick={
                 onClick
@@ -1721,6 +1723,8 @@ function FileDropZone({
             ========================================== */}
 
             <div
+
+                className="deadlineControls"
 
                 ref={
                     deadlineAreaRef

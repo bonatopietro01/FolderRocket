@@ -29,7 +29,7 @@ function savedValue(configured: boolean, description: string) {
     return configured ? `${description} is saved locally.` : `${description} still needs setup.`;
 }
 
-export default function IntegrationSetup({isAdmin}: {isAdmin: boolean}) {
+export default function IntegrationSetup({isAdmin, onAIStatusChange, aiMode, onAIModeChange}: {isAdmin: boolean; onAIStatusChange?: (ready: boolean) => void; aiMode: boolean; onAIModeChange: (enabled: boolean) => void}) {
     const wrapperRef = useRef<HTMLDivElement>(null);
     const [open, setOpen] = useState(false);
     const [status, setStatus] = useState<IntegrationStatus | null>(null);
@@ -47,6 +47,7 @@ export default function IntegrationSetup({isAdmin}: {isAdmin: boolean}) {
             const data = await response.json().catch(() => ({})) as IntegrationStatus & {message?: string};
             if (!response.ok) throw new Error(data.message || "Unable to read integration status.");
             setStatus(data);
+            onAIStatusChange?.(Boolean(data.aiConfigured));
             setMessage("");
         } catch (error) {
             setMessage(error instanceof Error ? error.message : "Unable to read integration status.");
@@ -97,6 +98,7 @@ export default function IntegrationSetup({isAdmin}: {isAdmin: boolean}) {
             const data = await response.json().catch(() => ({})) as IntegrationStatus & {message?: string};
             if (!response.ok) throw new Error(data.message || "Unable to save integration settings.");
             setStatus(data);
+            onAIStatusChange?.(Boolean(data.aiConfigured));
             setFields(EMPTY_FIELDS);
             setMessage("Saved locally. FolderRocket is ready to use the configured services.");
         } catch (error) {
@@ -108,7 +110,7 @@ export default function IntegrationSetup({isAdmin}: {isAdmin: boolean}) {
 
     const aiReady = Boolean(status?.aiConfigured);
     return <div className="integrationSetup" ref={wrapperRef}>
-        <button type="button" className={aiReady ? "integrationLauncher ready" : "integrationLauncher"} onClick={togglePanel} aria-expanded={open} title="AI and connected services"><Sparkles size={14} />AI</button>
+        <button type="button" className={aiReady && aiMode ? "integrationLauncher ready" : "integrationLauncher"} onClick={togglePanel} aria-expanded={open} title="AI and connected services"><Sparkles size={14} />AI {aiMode ? "ON" : "OFF"}</button>
         {open && <section className="integrationSetupPanel" role="dialog" aria-label="AI and connected services">
             <header><span><Sparkles size={17} />AI integrated FolderRocket</span><button type="button" onClick={() => setOpen(false)} aria-label="Close integration settings"><X size={16} /></button></header>
             {!isAdmin ? <p className="integrationNotice">Only the local administrator can configure paid AI and mailbox connections.</p> : <>
@@ -118,6 +120,7 @@ export default function IntegrationSetup({isAdmin}: {isAdmin: boolean}) {
                         <div><Sparkles size={16} /><strong>AI</strong><small>{savedValue(aiReady, "OpenAI connection")}</small></div>
                         <input type={showSecrets ? "text" : "password"} value={fields.openAiKey} onChange={event => updateField("openAiKey", event.target.value)} placeholder={aiReady ? "New OpenAI API key (optional)" : "OpenAI API key"} autoComplete="off" />
                     </article>
+                    <button type="button" className={aiMode ? "integrationAiMode enabled" : "integrationAiMode"} disabled={!aiReady} onClick={() => onAIModeChange(!aiMode)} aria-pressed={aiMode}><Sparkles size={15}/><span><strong>AI mode: {aiMode ? "ON" : "OFF"}</strong><small>{aiMode ? "AI alerts, Archive, Deadlines, and AI notes are available." : aiReady ? "Turn this on only when you want AI features to use credit." : "Save an OpenAI key first."}</small></span></button>
                     <article className={status?.gmailConfigured ? "integrationCard ready" : "integrationCard"}>
                         <div><Mail size={16} /><strong>Gmail</strong><small>{savedValue(Boolean(status?.gmailConfigured), "Gmail app credentials")}</small></div>
                         <input type="text" value={fields.gmailClientId} onChange={event => updateField("gmailClientId", event.target.value)} placeholder={status?.gmailConfigured ? "New Gmail client ID (optional)" : "Gmail client ID"} autoComplete="off" />

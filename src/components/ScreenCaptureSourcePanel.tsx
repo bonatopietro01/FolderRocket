@@ -4,6 +4,8 @@ import type {ScreenCaptureCrop} from "./DashboardSourceBlock";
 import {API_BASE_URL} from "../api";
 
 const MIN_CROP_SIZE = .08;
+const MIN_ZOOM = 1;
+const MAX_ZOOM = 8;
 const DEFAULT_CROP: ScreenCaptureCrop = {x: 0, y: 0, width: 1, height: 1};
 
 function clamp(value: number, minimum: number, maximum: number) {
@@ -22,20 +24,34 @@ function normalizeCrop(crop?: ScreenCaptureCrop): ScreenCaptureCrop {
     };
 }
 
+function zoomedCrop(crop: ScreenCaptureCrop, zoom: number): ScreenCaptureCrop {
+    const safeZoom = clamp(zoom, MIN_ZOOM, MAX_ZOOM);
+    const width = Math.max(MIN_CROP_SIZE, crop.width / safeZoom);
+    const height = Math.max(MIN_CROP_SIZE, crop.height / safeZoom);
+    return {
+        x: crop.x + (crop.width - width) / 2,
+        y: crop.y + (crop.height - height) / 2,
+        width,
+        height
+    };
+}
+
 type CropAction = "move" | "nw" | "ne" | "sw" | "se";
 
 interface ScreenCaptureSourcePanelProps {
     crop?: ScreenCaptureCrop;
     onCropChange: (crop: ScreenCaptureCrop) => void;
+    aiEnabled?: boolean;
 }
 
-export default function ScreenCaptureSourcePanel({crop, onCropChange}: ScreenCaptureSourcePanelProps) {
+export default function ScreenCaptureSourcePanel({crop, onCropChange, aiEnabled = false}: ScreenCaptureSourcePanelProps) {
     const hiddenVideoRef = useRef<HTMLVideoElement>(null);
     const previewVideoRef = useRef<HTMLVideoElement>(null);
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const editorRef = useRef<HTMLDivElement>(null);
     const stopButtonRef = useRef<HTMLButtonElement>(null);
     const cropRef = useRef(normalizeCrop(crop));
+    const zoomRef = useRef(MIN_ZOOM);
     const [stream, setStream] = useState<MediaStream | null>(null);
     const [editing, setEditing] = useState(false);
     const [projectionHidden, setProjectionHidden] = useState(false);
@@ -45,6 +61,10 @@ export default function ScreenCaptureSourcePanel({crop, onCropChange}: ScreenCap
     const [analysisError, setAnalysisError] = useState("");
     const [isAnalysing, setIsAnalysing] = useState(false);
     const [stopArmed, setStopArmed] = useState(false);
+    const [displaySources, setDisplaySources] = useState<FolderRocketDisplaySource[]>([]);
+    const [loadingSources, setLoadingSources] = useState(false);
+    const [, setCropRevision] = useState(0);
+    const [zoom, setZoom] = useState(MIN_ZOOM);
 
     useEffect(() => { cropRef.current = normalizeCrop(crop); }, [crop]);
 
@@ -89,7 +109,7 @@ export default function ScreenCaptureSourcePanel({crop, onCropChange}: ScreenCap
                 const width = Math.round(displayWidth * pixelRatio);
                 const height = Math.round(displayHeight * pixelRatio);
                 if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
-                const selected = cropRef.current;
+                const selected = zoomedCrop(cropRef.current, zoomRef.current);
                 const sourceWidth = video.videoWidth || 1;
                 const sourceHeight = video.videoHeight || 1;
                 const context = canvas.getContext("2d");
@@ -97,7 +117,10 @@ export default function ScreenCaptureSourcePanel({crop, onCropChange}: ScreenCap
                     context.imageSmoothingQuality = "high";
                     const croppedWidth = selected.width * sourceWidth;
                     const croppedHeight = selected.height * sourceHeight;
-                    const scale = Math.max(width / croppedWidth, height / croppedHeight);
+                    // Keep the captured window's proportions. "Cover" made parts of
+                    // a screen disappear in narrow source blocks; "contain" shows the
+                    // full selected area with a subtle background border when needed.
+                    const scale = Math.min(width / croppedWidth, height / croppedHeight);
                     const drawnWidth = croppedWidth * scale;
                     const drawnHeight = croppedHeight * scale;
                     context.fillStyle = "#081523";
@@ -111,26 +134,87 @@ export default function ScreenCaptureSourcePanel({crop, onCropChange}: ScreenCap
         return () => window.cancelAnimationFrame(animationFrame);
     }, [stream]);
 
-    async function startCapture() {
+    async function requestCapture(sourceId?: string) {
         if (!navigator.mediaDevices?.getDisplayMedia) { setError("This browser cannot share a screen or window."); return; }
         setError("");
         try {
             const nextStream = await navigator.mediaDevices.getDisplayMedia({video: true, audio: false});
             stream?.getTracks().forEach(track => track.stop());
             setStream(nextStream);
+            zoomRef.current = MIN_ZOOM;
+            setZoom(MIN_ZOOM);
             setProjectionHidden(false);
             setAnalysis("");
             setAnalysisError("");
             setStopArmed(false);
         } catch (captureError) {
             const message = captureError instanceof Error ? captureError.message : "Screen sharing was cancelled.";
+            if (sourceId && /invalid capture constraints/i.test(message) && navigator.mediaDevices?.getUserMedia) {
+                try {
+                    const nextStream = await navigator.mediaDevices.getUserMedia({
+                        audio: false,
+                        video: {
+                            mandatory: {
+                                chromeMediaSource: "desktop",
+                                chromeMediaSourceId: sourceId,
+                                maxWidth: 4096,
+                                maxHeight: 2160,
+                                minWidth: 640,
+                                minHeight: 360
+                            }
+                        }
+                    } as MediaStreamConstraints);
+                    stream?.getTracks().forEach(track => track.stop());
+                    setStream(nextStream);
+                    zoomRef.current = MIN_ZOOM;
+                    setZoom(MIN_ZOOM);
+                    setProjectionHidden(false);
+                    setAnalysis("");
+                    setAnalysisError("");
+                    setStopArmed(false);
+                    return;
+                } catch (legacyCaptureError) {
+                    const fallbackMessage = legacyCaptureError instanceof Error ? legacyCaptureError.message : "Screen sharing was cancelled.";
+                    setError(`Screen sharing could not start: ${fallbackMessage}`);
+                    return;
+                }
+            }
             setError(message === "NotAllowedError" ? "Screen sharing was cancelled." : message);
         }
+    }
+
+    async function startCapture() {
+        if (window.folderRocketDesktop) {
+            setLoadingSources(true);
+            setError("");
+            try {
+                const sources = await window.folderRocketDesktop.listDisplaySources();
+                if (!sources.length) throw new Error("No windows or screens are available to share.");
+                setDisplaySources(sources);
+            } catch (sourceError) {
+                setError(sourceError instanceof Error ? sourceError.message : "Unable to list screens to share.");
+            } finally {
+                setLoadingSources(false);
+            }
+            return;
+        }
+        await requestCapture();
+    }
+
+    async function selectDisplaySource(source: FolderRocketDisplaySource) {
+        if (!window.folderRocketDesktop) { await requestCapture(); return; }
+        setError("");
+        const selected = await window.folderRocketDesktop.selectDisplaySource(source.id);
+        if (!selected) { setError("That screen is no longer available. Choose another one."); return; }
+        setDisplaySources([]);
+        await requestCapture(source.id);
     }
 
     function stopCapture() {
         stream?.getTracks().forEach(track => track.stop());
         setStream(null);
+        zoomRef.current = MIN_ZOOM;
+        setZoom(MIN_ZOOM);
         setEditing(false);
         setProjectionHidden(false);
         setAnalysis("");
@@ -150,7 +234,7 @@ export default function ScreenCaptureSourcePanel({crop, onCropChange}: ScreenCap
         if (!video || video.readyState < HTMLMediaElement.HAVE_CURRENT_DATA || !video.videoWidth || !video.videoHeight) {
             throw new Error("The projection is not ready yet. Wait a moment and try again.");
         }
-        const selected = cropRef.current;
+        const selected = zoomedCrop(cropRef.current, zoomRef.current);
         const sourceWidth = video.videoWidth;
         const sourceHeight = video.videoHeight;
         const cropWidth = Math.max(1, Math.round(selected.width * sourceWidth));
@@ -200,22 +284,17 @@ export default function ScreenCaptureSourcePanel({crop, onCropChange}: ScreenCap
     function updateCrop(next: ScreenCaptureCrop) {
         const normalized = normalizeCrop(next);
         cropRef.current = normalized;
+        setCropRevision(current => current + 1);
         onCropChange(normalized);
     }
 
     function changeZoom(direction: "in" | "out") {
-        const current = cropRef.current;
-        const factor = direction === "in" ? .72 : 1 / .72;
-        const width = clamp(current.width * factor, MIN_CROP_SIZE, 1);
-        const height = clamp(current.height * factor, MIN_CROP_SIZE, 1);
-        const centreX = current.x + current.width / 2;
-        const centreY = current.y + current.height / 2;
-        updateCrop({
-            x: clamp(centreX - width / 2, 0, 1 - width),
-            y: clamp(centreY - height / 2, 0, 1 - height),
-            width,
-            height
-        });
+        const factor = direction === "in" ? 1.25 : 1 / 1.25;
+        const next = clamp(zoomRef.current * factor, MIN_ZOOM, MAX_ZOOM);
+        zoomRef.current = next;
+        setZoom(next);
+        setEditing(false);
+        setProjectionHidden(false);
     }
 
     function beginCropAction(event: ReactPointerEvent<HTMLElement>, action: CropAction) {
@@ -256,18 +335,19 @@ export default function ScreenCaptureSourcePanel({crop, onCropChange}: ScreenCap
     }
 
     const selected = normalizeCrop(crop);
-    const zoomLevel = Math.max(1, 1 / Math.max(selected.width, selected.height));
+    const zoomLevel = zoom;
     return <section className="sourceCard screenCaptureCard">
         <video className="screenCaptureHiddenVideo" ref={hiddenVideoRef} autoPlay muted playsInline />
         <div className="sourceHeader"><Monitor className="screenCaptureIcon" size={27} /><span className="sourceTitle">Screen</span>{stream && <button ref={stopButtonRef} type="button" className={stopArmed ? "screenCaptureStop armed" : "screenCaptureStop"} onClick={() => { if (stopArmed) stopCapture(); else setStopArmed(true); }} aria-pressed={stopArmed} title={stopArmed ? "Click again to stop sharing" : "Stop sharing"}><X size={15} /></button>}</div>
-        {!stream ? <div className="screenCaptureEmpty"><Monitor size={26} /><strong>Project a window or screen</strong><p>Select a browser tab, a window such as Outlook, or your screen. FolderRocket only displays it locally while sharing is active.</p><button type="button" onClick={() => void startCapture()}>Choose what to project</button>{error && <small>{error}</small>}</div> : <>
-            <div className="screenCaptureToolbar"><button type="button" className={editing ? "active" : ""} onClick={() => { setProjectionHidden(false); setEditing(current => !current); }}><SlidersHorizontal size={15} />{editing ? "View" : "Adjust frame"}</button><span>{editing ? "Drag the frame or its corners." : `Live · ${zoomLevel.toFixed(1)}×`}</span><div className="screenZoomControls"><button type="button" onClick={() => changeZoom("out")} disabled={selected.width >= .999 && selected.height >= .999} title="Zoom out"><ZoomOut size={14} /></button><button type="button" onClick={() => changeZoom("in")} disabled={selected.width <= MIN_CROP_SIZE && selected.height <= MIN_CROP_SIZE} title="Zoom in"><ZoomIn size={14} /></button></div><button type="button" className="screenProjectionVisibility" onClick={() => { setEditing(false); setProjectionHidden(current => !current); }}>{projectionHidden ? "Show" : "Hide"}</button></div>
+        {!stream ? <div className="screenCaptureEmpty"><Monitor size={26} /><strong>Project a window or screen</strong><p>Select a browser tab, a window such as Outlook, or your screen. FolderRocket only displays it locally while sharing is active.</p><button type="button" onClick={() => void startCapture()} disabled={loadingSources}>{loadingSources ? "Looking for screens…" : "Choose what to project"}</button>{error && <small>{error}</small>}</div> : <>
+            <div className="screenCaptureToolbar"><button type="button" className={editing ? "active" : ""} onClick={() => { setProjectionHidden(false); setEditing(current => !current); }}><SlidersHorizontal size={15} />{editing ? "View" : "Adjust frame"}</button><span>{editing ? "Drag the frame or its corners." : `Live · ${zoomLevel.toFixed(1)}×`}</span><div className="screenZoomControls"><button type="button" onClick={() => changeZoom("out")} disabled={zoom <= MIN_ZOOM} title="Zoom out" aria-label="Zoom out"><ZoomOut size={14} /></button><button type="button" onClick={() => changeZoom("in")} disabled={zoom >= MAX_ZOOM} title="Zoom in" aria-label="Zoom in"><ZoomIn size={14} /></button></div><button type="button" className="screenProjectionVisibility" onClick={() => { setEditing(false); setProjectionHidden(current => !current); }}>{projectionHidden ? "Show" : "Hide"}</button></div>
             {editing ? <div className="screenCaptureEditor" ref={editorRef}><video ref={previewVideoRef} autoPlay muted playsInline /><div className="screenCropBox" style={{left: `${selected.x * 100}%`, top: `${selected.y * 100}%`, width: `${selected.width * 100}%`, height: `${selected.height * 100}%`}} onPointerDown={event => beginCropAction(event, "move")}><span className="screenCropHandle nw" onPointerDown={event => beginCropAction(event, "nw")} /><span className="screenCropHandle ne" onPointerDown={event => beginCropAction(event, "ne")} /><span className="screenCropHandle sw" onPointerDown={event => beginCropAction(event, "sw")} /><span className="screenCropHandle se" onPointerDown={event => beginCropAction(event, "se")} /></div></div> : <div className={projectionHidden ? "screenProjectionCanvas isHidden" : "screenProjectionCanvas"}><canvas ref={canvasRef} /></div>}
-            <div className={`projectionSearchPanel${projectionHidden ? " expanded" : ""}`}>
+            {aiEnabled && <div className={`projectionSearchPanel${projectionHidden ? " expanded" : ""}`}>
                 <div className="projectionSearchControls"><input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === "Enter") void analyseProjection(); }} placeholder="Ask about the visible text…" aria-label="Ask about the projected screen" /><button type="button" onClick={() => void analyseProjection()} disabled={isAnalysing}>{isAnalysing ? <LoaderCircle className="spinning" size={14} /> : <Search size={14} />}{isAnalysing ? "Analysing…" : "Analyse"}</button><button type="button" className="projectionSearchClear" onClick={clearProjectionSearch} disabled={isAnalysing || (!query && !analysis && !analysisError)} title="Clear search and result" aria-label="Clear search and result"><X size={14} /></button></div>
                 <p>Captures one current frame only after confirmation; uses AI credit.</p>
                 {(projectionHidden || analysis || analysisError) && <div className={`projectionAnalysisResult${analysisError ? " error" : ""}`}>{isAnalysing ? "Analysing the current frame…" : analysisError || analysis || "The projection is hidden. Ask a question to analyse the current frame."}</div>}
-            </div>
+            </div>}
         </>}
+        {displaySources.length > 0 && <div className="screenSourceDialogBackdrop" onMouseDown={event => { if (event.target === event.currentTarget) setDisplaySources([]); }}><section className="screenSourceDialog" role="dialog" aria-modal="true" aria-label="Choose what to project"><header><div><strong>Choose what to project</strong><span>Select a screen or a window for FolderRocket.</span></div><button type="button" onClick={() => setDisplaySources([])} title="Cancel"><X size={18}/></button></header><div className="screenSourceDialogGrid">{displaySources.map(source => <button type="button" key={source.id} onClick={() => void selectDisplaySource(source)}><span className="screenSourcePreview"><img src={source.thumbnail} alt="" /></span><strong>{source.name}</strong></button>)}</div></section></div>}
     </section>;
 }

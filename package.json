@@ -1,7 +1,7 @@
 {
   "name": "folderrocket",
   "private": true,
-  "version": "0.2.0-alpha.0",
+  "version": "0.2.0-alpha.1",
   "description": "Local-first desktop workspace for files and document workflows.",
   "author": "Pietro Bonato",
   "type": "module",
@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "desktop": "npm run build && electron .",
+    "auth:reset-admin": "node scripts/reset-local-admin.cjs",
     "desktop:package": "npm run build && node scripts/package-desktop.cjs"
   },
   "dependencies": {
