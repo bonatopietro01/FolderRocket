@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld("folderRocketDesktop", {
     closeCargoShipWindow: () => ipcRenderer.invoke("folderrocket:close-cargo-ship-window"),
     setCargoShipExpanded: expanded => ipcRenderer.invoke("folderrocket:set-cargo-ship-expanded", expanded),
     moveCargoShipWindow: position => ipcRenderer.invoke("folderrocket:move-cargo-ship-window", position),
+    resizeCargoShipWindow: size => ipcRenderer.invoke("folderrocket:resize-cargo-ship-window", size),
     navigateHistory: direction => ipcRenderer.invoke("folderrocket:navigate-history", direction),
     onNavigationChanged: callback => {
         const listener = () => callback();

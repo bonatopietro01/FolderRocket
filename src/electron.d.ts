@@ -16,6 +16,7 @@ interface Window {
         closeCargoShipWindow: () => Promise<boolean>;
         setCargoShipExpanded: (expanded: boolean) => Promise<boolean>;
         moveCargoShipWindow: (position: {x: number; y: number}) => Promise<boolean>;
+        resizeCargoShipWindow: (size: {width: number; height: number}) => Promise<boolean>;
         navigateHistory: (direction: "back" | "forward") => Promise<boolean>;
         onNavigationChanged: (callback: () => void) => () => void;
         onZoomChanged: (callback: (zoomFactor: number) => void) => () => void;

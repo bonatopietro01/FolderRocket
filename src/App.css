@@ -2560,3 +2560,32 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 @container (max-width: 156px) {
     .floatingStickyNote .stickyNoteColors { display:none; }
 }
+
+/* Cargo Ship stays deliberately compact. Its bottom-right grip changes the panel
+   size; the content scrolls instead of creating large empty gaps. */
+.cargoShip { min-width:250px; min-height:230px; }
+.cargoShipHeader { min-height:28px; padding:4px 6px 4px 8px; }
+.cargoShipHeaderActions { gap:4px; }
+.cargoShipHeaderActions button { width:19px; height:19px; }
+.cargoShipModes { grid-template-columns:repeat(auto-fit, minmax(0, 1fr)); gap:2px; padding:3px 4px; }
+.cargoShipModes button { gap:2px; padding:4px 2px; font-size:10px; }
+.cargoDropArea { grid-template-rows:auto minmax(42px, 1fr) auto auto; align-content:start; gap:3px; padding:5px; }
+.cargoDropArea > p { margin:0; font-size:9px; text-align:left; }
+.cargoItemList { flex:0 1 122px; max-height:122px; }
+.cargoItemList > em { padding:9px 4px; }
+.cargoItem { min-height:23px; padding:3px 1px; }
+.cargoFolderSend { gap:4px; margin-top:1px; }
+.cargoFolderSend select { padding:5px; }
+.cargoFolderSend button { min-height:27px; padding:5px 6px; }
+.cargoClear { margin-top:1px; padding:2px; }
+.cargoForm, .cargoConvert { align-content:start; gap:4px; padding:5px; }
+.cargoForm input, .cargoForm textarea, .cargoForm select, .cargoConvert select { padding:5px 6px; }
+.cargoForm textarea { min-height:38px; height:clamp(38px, 11vh, 64px); }
+.cargoForm > div { gap:4px; }
+.cargoForm > div select { flex:0 1 118px; width:118px; }
+.cargoForm button, .cargoConvert > button { min-height:28px; padding:5px 7px; }
+.cargoConvert { grid-template-columns:minmax(0, 1fr) auto; grid-auto-rows:min-content; }
+.cargoConvert p { line-height:1.15; }
+.cargoConvert .cargoStudioLink { min-height:26px; }
+.cargoMessage { padding:4px 7px 5px; }
+.cargoShipResize { right:2px; bottom:2px; width:17px; height:17px; z-index:3; }

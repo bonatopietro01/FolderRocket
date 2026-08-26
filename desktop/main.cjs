@@ -11,10 +11,14 @@ app.disableHardwareAcceleration();
 const PORT = Number(process.env.FOLDERROCKET_PORT) || 3000;
 const APP_ORIGIN = `http://localhost:${PORT}`;
 const CARGO_SHIP_DOCK_SIZE = {width: 70, height: 70};
-const CARGO_SHIP_PANEL_SIZE = {width: 324, height: 370};
+const CARGO_SHIP_DEFAULT_PANEL_SIZE = {width: 270, height: 270};
+const CARGO_SHIP_MINIMUM_PANEL_SIZE = {width: 250, height: 230};
+const CARGO_SHIP_MAXIMUM_PANEL_SIZE = {width: 880, height: 760};
 let backendProcess = null;
 let mainWindow = null;
 let cargoWindow = null;
+let cargoShipExpanded = false;
+let cargoShipPanelSize = {...CARGO_SHIP_DEFAULT_PANEL_SIZE};
 let selectedDisplaySourceId = "";
 
 const desktopConfigKeys = new Set([
@@ -200,24 +204,42 @@ function createCargoShipWindow() {
         }
     });
     cargoWindow.once("ready-to-show", () => cargoWindow?.show());
-    cargoWindow.on("closed", () => { cargoWindow = null; });
+    cargoWindow.on("closed", () => { cargoWindow = null; cargoShipExpanded = false; });
     void cargoWindow.loadURL(`${APP_ORIGIN}/?folderrocketCargoShip=1`);
     return cargoWindow;
 }
 
+function normaliseCargoShipPanelSize(size) {
+    const width = Number(size?.width);
+    const height = Number(size?.height);
+    if (!Number.isFinite(width) || !Number.isFinite(height)) return null;
+    return {
+        width: Math.max(CARGO_SHIP_MINIMUM_PANEL_SIZE.width, Math.min(CARGO_SHIP_MAXIMUM_PANEL_SIZE.width, Math.round(width))),
+        height: Math.max(CARGO_SHIP_MINIMUM_PANEL_SIZE.height, Math.min(CARGO_SHIP_MAXIMUM_PANEL_SIZE.height, Math.round(height)))
+    };
+}
+
+function prepareCargoShipPanelWindow(size) {
+    cargoWindow.setResizable(true);
+    cargoWindow.setMinimumSize(CARGO_SHIP_MINIMUM_PANEL_SIZE.width, CARGO_SHIP_MINIMUM_PANEL_SIZE.height);
+    cargoWindow.setMaximumSize(CARGO_SHIP_MAXIMUM_PANEL_SIZE.width, CARGO_SHIP_MAXIMUM_PANEL_SIZE.height);
+    cargoWindow.setBounds(size);
+}
+
 function setCargoShipWindowExpanded(expanded) {
     if (!cargoWindow || cargoWindow.isDestroyed()) return false;
-    const size = expanded ? CARGO_SHIP_PANEL_SIZE : CARGO_SHIP_DOCK_SIZE;
-    // Release old fixed bounds before applying the new dock/panel bounds.
-    // Electron otherwise may retain the 70px maximum size from the dock.
-    cargoWindow.setResizable(true);
-    cargoWindow.setMinimumSize(1, 1);
-    cargoWindow.setMaximumSize(10000, 10000);
-    cargoWindow.setBounds({width: size.width, height: size.height});
-    cargoWindow.setMinimumSize(size.width, size.height);
-    cargoWindow.setMaximumSize(size.width, size.height);
-    cargoWindow.setSize(size.width, size.height, true);
-    cargoWindow.setResizable(false);
+    cargoShipExpanded = expanded;
+    if (expanded) {
+        prepareCargoShipPanelWindow(cargoShipPanelSize);
+    } else {
+        cargoWindow.setResizable(true);
+        cargoWindow.setMinimumSize(1, 1);
+        cargoWindow.setMaximumSize(10000, 10000);
+        cargoWindow.setBounds(CARGO_SHIP_DOCK_SIZE);
+        cargoWindow.setMinimumSize(CARGO_SHIP_DOCK_SIZE.width, CARGO_SHIP_DOCK_SIZE.height);
+        cargoWindow.setMaximumSize(CARGO_SHIP_DOCK_SIZE.width, CARGO_SHIP_DOCK_SIZE.height);
+        cargoWindow.setResizable(false);
+    }
     cargoWindow.show();
     return true;
 }
@@ -305,6 +327,14 @@ app.whenReady().then(async () => {
         const y = Number(position.y);
         if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
         cargoWindow.setPosition(Math.round(x), Math.round(y), true);
+        return true;
+    });
+    ipcMain.handle("folderrocket:resize-cargo-ship-window", (event, size) => {
+        if (event.sender.getURL().startsWith(APP_ORIGIN) === false || !cargoWindow || cargoWindow.isDestroyed() || cargoWindow.webContents.id !== event.sender.id || !cargoShipExpanded) return false;
+        const nextSize = normaliseCargoShipPanelSize(size);
+        if (!nextSize) return false;
+        cargoShipPanelSize = nextSize;
+        prepareCargoShipPanelWindow(nextSize);
         return true;
     });
     ipcMain.handle("folderrocket:navigate-history", (event, direction) => {
