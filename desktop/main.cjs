@@ -1,6 +1,7 @@
 const {app, BrowserWindow, desktopCapturer, dialog, ipcMain, screen, shell, session} = require("electron");
 const fs = require("node:fs");
 const http = require("node:http");
+const net = require("node:net");
 const path = require("node:path");
 const {spawn} = require("node:child_process");
 
@@ -12,8 +13,8 @@ app.disableHardwareAcceleration();
 
 if (!app.requestSingleInstanceLock()) app.quit();
 
-const PORT = Number(process.env.FOLDERROCKET_PORT) || 3000;
-const APP_ORIGIN = `http://localhost:${PORT}`;
+let PORT = Number(process.env.FOLDERROCKET_PORT) || 3000;
+let APP_ORIGIN = `http://localhost:${PORT}`;
 const CARGO_SHIP_DOCK_SIZE = {width: 70, height: 70};
 const CARGO_SHIP_DEFAULT_PANEL_SIZE = {width: 250, height: 230};
 const CARGO_SHIP_MINIMUM_PANEL_SIZE = {width: 250, height: 230};
@@ -131,6 +132,52 @@ function readBackendHealth() {
         });
         request.on("error", () => resolve({ready: false, desktop: false}));
     });
+}
+
+function useBackendPort(port) {
+    PORT = port;
+    APP_ORIGIN = `http://localhost:${PORT}`;
+}
+
+function portIsAvailable(port) {
+    return new Promise(resolve => {
+        const probe = net.createServer();
+        const finish = available => {
+            probe.removeAllListeners();
+            resolve(available);
+        };
+
+        probe.once("error", () => finish(false));
+        probe.listen({port, host: "127.0.0.1", exclusive: true}, () => {
+            probe.close(() => finish(true));
+        });
+    });
+}
+
+async function selectAvailableBackendPort() {
+    for (let candidate = PORT + 1; candidate <= PORT + 20; candidate += 1) {
+        if (await portIsAvailable(candidate)) {
+            useBackendPort(candidate);
+            return true;
+        }
+    }
+    return false;
+}
+
+async function prepareBackendEndpoint() {
+    const currentHealth = await readBackendHealth();
+    if (currentHealth.ready && currentHealth.desktop) return currentHealth;
+
+    // A manually launched Node server, an older FolderRocket build, or another
+    // local app must never prevent the desktop app from starting. In that case
+    // FolderRocket simply uses a free private loopback port instead of port 3000.
+    if (!await portIsAvailable(PORT)) {
+        if (!await selectAvailableBackendPort()) {
+            throw new Error("FolderRocket could not reserve a local backend port.");
+        }
+    }
+
+    return {ready: false, desktop: false};
 }
 
 async function backendIsReady() {
@@ -532,13 +579,16 @@ app.whenReady().then(async () => {
             return false;
         }
     });
-    const existingBackend = await readBackendHealth();
-    if (existingBackend.ready && !existingBackend.desktop) {
+    let existingBackend;
+    try {
+        existingBackend = await prepareBackendEndpoint();
+    }
+    catch (error) {
         await dialog.showMessageBox({
             type: "error",
-            title: "FolderRocket needs its local backend",
-            message: "Another local server is using port 3000.",
-            detail: "Close the manual 'node server.js' process, then launch FolderRocket again with npm run desktop. The desktop app will use its own private backend and saved email connections."
+            title: "FolderRocket could not start",
+            message: "FolderRocket could not reserve a local connection.",
+            detail: error instanceof Error ? error.message : "No local backend port is available."
         });
         app.quit();
         return;
@@ -549,7 +599,7 @@ app.whenReady().then(async () => {
             type: "error",
             title: "FolderRocket could not start",
             message: "The local FolderRocket backend did not respond.",
-            detail: "Close other FolderRocket or Node processes using port 3000, then try again."
+            detail: "Restart FolderRocket. It automatically chooses a free local connection when port 3000 is unavailable."
         });
         app.quit();
         return;
