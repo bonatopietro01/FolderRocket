@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const OpenAI = require("openai");
 const readFileContent = require("../ai/reader");
 
 function termsFromQuery(query) {
@@ -10,8 +11,36 @@ function termsFromQuery(query) {
         .slice(0, 12);
 }
 
-async function searchFiles(folders, query) {
-    const terms = termsFromQuery(query);
+async function expandTermsWithAi(query, baseTerms) {
+    const apiKey = String(process.env.OPENAI_API_KEY ?? "").trim();
+    if (!apiKey) throw new Error("OpenAI AI integration is not configured yet.");
+    const client = new OpenAI({apiKey});
+    try {
+        const response = await client.chat.completions.create({
+            model: "gpt-4.1-mini",
+            response_format: {type: "json_object"},
+            temperature: 0,
+            messages: [
+                {role: "system", content: "Turn a request for a local file into up to 12 short search terms. Include the important original terms and likely document/content synonyms. Return JSON only: {\"terms\":[\"term\"]}. Do not invent people, companies, or facts."},
+                {role: "user", content: String(query ?? "").slice(0, 1200)}
+            ]
+        });
+        const parsed = JSON.parse(response.choices[0]?.message?.content || "{}");
+        const aiTerms = Array.isArray(parsed.terms) ? parsed.terms : [];
+        const normalized = aiTerms
+            .filter(term => typeof term === "string")
+            .flatMap(term => termsFromQuery(term))
+            .slice(0, 12);
+        return [...new Set([...baseTerms, ...normalized])].slice(0, 16);
+    } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        throw new Error(`AI Search Assistant failed: ${reason}`);
+    }
+}
+
+async function searchFiles(folders, query, options = {}) {
+    const baseTerms = termsFromQuery(query);
+    const terms = options.ai ? await expandTermsWithAi(query, baseTerms) : baseTerms;
     if (!terms.length) throw new Error("Scrivi una richiesta più specifica");
     const results = [];
     const visitedFolders = new Set();

@@ -3,7 +3,7 @@ import { Archive, File, FileSpreadsheet, FileText, Flame, Image, Send, Search, E
 import { API_BASE_URL } from "../api";
 
 interface FolderSource { name: string; path: string; }
-interface Props { folders: FolderSource[]; selectedFolderCount: number; onToggleFolders: () => void; aiEnabled: boolean; }
+interface Props { folders: FolderSource[]; selectedFolderCount: number; onToggleFolders: () => void; aiEnabled: boolean; compact?: boolean; }
 interface Result { name: string; path: string; matches: string[]; size?: number; }
 export const SEARCH_RESULT_TYPE = "application/x-folderrocket-search-results";
 
@@ -23,7 +23,7 @@ function formatSize(bytes?: number) {
     return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function SearchWorkspace({folders, selectedFolderCount, onToggleFolders, aiEnabled}: Props) {
+export default function SearchWorkspace({folders, selectedFolderCount, onToggleFolders, aiEnabled, compact = false}: Props) {
     const [query, setQuery] = useState("");
     const [messages, setMessages] = useState<string[]>([]);
     const [results, setResults] = useState<Result[]>([]);
@@ -75,7 +75,7 @@ export default function SearchWorkspace({folders, selectedFolderCount, onToggleF
         setLoading(true);
         setMessages([text]);
         try {
-            const response = await fetch(`${API_BASE_URL}/search-files`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({query: text, folders: folders.map(folder => folder.path)})});
+            const response = await fetch(`${API_BASE_URL}/search-files`, {method: "POST", headers: {"Content-Type": "application/json"}, credentials: "include", body: JSON.stringify({query: text, folders: folders.map(folder => folder.path), ai: aiEnabled})});
             const data = await response.json() as {results?: Result[]; message?: string};
             if (!response.ok) throw new Error(data.message ?? "Ricerca non riuscita");
             const found = data.results ?? [];
@@ -98,12 +98,16 @@ export default function SearchWorkspace({folders, selectedFolderCount, onToggleF
 
     function selectOrOpenResult(result: Result) { toggleResultSelection(result.path); }
 
-    return <section className="searchResultsCard">
-        <section className="searchCard searchWorkspace">
-            <div className="resultsHeader"><Search size={20} /><span>{aiEnabled ? "AI Search Assistant" : "Search Assistant"}</span>{aiEnabled && <small className="searchAiBadge">AI</small>}<button type="button" className={selectedFolderCount ? "searchFolderToggle selected" : "searchFolderToggle"} onClick={onToggleFolders} title={selectedFolderCount ? "Deselect all folders" : "Select all folders"}><ListChecks size={17} /></button></div>
+    const searchHeader = <>
+            <div className="resultsHeader"><Search size={compact ? 15 : 20} /><span>{compact ? aiEnabled ? "AI search" : "Search" : aiEnabled ? "AI Search Assistant" : "Search Assistant"}</span><button type="button" className={selectedFolderCount ? "searchFolderToggle selected" : "searchFolderToggle"} onClick={onToggleFolders} title={selectedFolderCount ? "Deselect all folders" : "Select all folders"}><ListChecks size={compact ? 14 : 17} /></button></div>
             <div className="searchMessages">{messages.length ? messages.map((message, index) => <p key={`${message}-${index}`}>{message}</p>) : <p>{selectedFolderCount ? aiEnabled ? `${selectedFolderCount} folder${selectedFolderCount === 1 ? "" : "s"} selected. AI mode is active.` : `${selectedFolderCount} folder${selectedFolderCount === 1 ? "" : "s"} selected for search.` : "Select one or more folder blocks to search."}</p>}</div>
             <div className="searchComposer"><input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === "Enter") void search(); }} placeholder={aiEnabled ? "Describe a file or its contents" : "Search names and file text"} /><button type="button" onClick={() => void search()} disabled={loading || !folders.length} title={folders.length ? "Search selected folders" : "Select a folder first"}><Send size={16} /></button><button type="button" title="Clear search" onClick={() => { setQuery(""); setResults([]); setMessages([]); setSelectedPaths([]); }}>×</button></div>
-        </section>
+    </>;
+
+    return <section className={compact ? "searchResultsCard compactSearchWorkspace" : "searchResultsCard"}>
+        {compact
+            ? <header className="sourceHeader searchCompactHeader">{searchHeader}</header>
+            : <section className="searchCard searchWorkspace">{searchHeader}</section>}
         <section className={results.length ? "resultsCard" : "resultsCard isEmptyResults"}>
             <div className="resultsBody">{results.length > 0 && <div className="searchSelectionActions"><button className="clearSelectionButton" type="button" disabled={!selectedPaths.length} onClick={() => setSelectedPaths([])}>Deselect all</button><button className="clearSelectionButton" type="button" disabled={!selectedPaths.length} onClick={() => { setResults(current => current.filter(result => !selectedPaths.includes(result.path))); setSelectedPaths([]); }}>Hide selected</button><button className="clearSelectionButton" type="button" disabled={!selectedPaths.length} onClick={() => void openSelectedFiles()}>Open files</button></div>}{results.length ? results.map(result => { const source = folders.find(folder => result.path.startsWith(folder.path)); const inFireMountain = firePaths.includes(result.path); const selected = selectedPaths.includes(result.path); return <div className={`${selected ? "searchResult selectedAttachment" : "searchResult"}${inFireMountain ? " inFireMountain" : ""}`} key={result.path} draggable onClick={() => void selectOrOpenResult(result)} onDragStart={event => { const dragged = selected ? results.filter(item => selectedPaths.includes(item.path)) : [result]; event.dataTransfer.effectAllowed = "copy"; const value = JSON.stringify(dragged); event.dataTransfer.setData(SEARCH_RESULT_TYPE, value); event.dataTransfer.setData("text/plain", `folderrocket-search:${value}`); }}><span className="searchResultName"><FileKindIcon name={result.name} /><strong>{result.name}</strong><em>{formatSize(result.size)}</em></span><span className="searchResultMeta"><small>{source?.name ?? "Unconfigured folder"}</small><button type="button" title="Open file" className={selected ? "resultOpenButton visible" : "resultOpenButton"} onClick={event => { event.stopPropagation(); void openSelectedFiles(); }}><ExternalLink size={13}/></button><button type="button" title={inFireMountain ? "Remove from Fire Mountain" : "Send to Fire Mountain"} onClick={event => { event.stopPropagation(); if (inFireMountain) window.dispatchEvent(new CustomEvent("folderrocket-remove-from-fire", {detail: [result.path]})); else window.dispatchEvent(new CustomEvent("folderrocket-add-to-fire", {detail: selected ? results.filter(item => selectedPaths.includes(item.path)) : [result]})); }}><Flame size={13} /></button></span></div>; }) : <p className="sourcePlaceholder">Files found will appear here.</p>}</div>
         </section>

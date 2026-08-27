@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>FolderRocket Gmail Bridge</title>
+  <style>
+    body{width:390px;margin:0;padding:22px;background:#f4f8fc;color:#1e3347;font:14px/1.4 Segoe UI,Arial,sans-serif}h1{margin:0 0 8px;font-size:20px}p{color:#5c6f80}label{display:grid;gap:5px;margin-top:14px;font-weight:700}input{border:1px solid #b9cad9;border-radius:7px;padding:9px;font:inherit}button{margin-top:16px;border:0;border-radius:7px;background:#176fc8;color:#fff;cursor:pointer;font-weight:800;padding:9px 12px}small{display:block;margin-top:13px;color:#748597}#status{min-height:20px;margin:10px 0 0;color:#176f4b;font-weight:700}
+  </style>
+</head>
+<body>
+  <h1>FolderRocket Gmail Bridge</h1>
+  <p>Paste the personal Browser bridge code generated in FolderRocket settings. It stays in this browser only.</p>
+  <label>FolderRocket local address<input id="backendUrl" type="url" placeholder="http://127.0.0.1:3000"></label>
+  <label>Browser bridge code<input id="bridgeToken" type="password" autocomplete="off" placeholder="frb_…"></label>
+  <button id="save" type="button">Save bridge</button>
+  <p id="status" role="status"></p>
+  <small>The extension starts a transfer only when you drag an attachment from Gmail. It never scans or uploads your inbox on its own.</small>
+  <script src="options.js"></script>
+</body>
+</html>

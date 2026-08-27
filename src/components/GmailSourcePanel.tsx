@@ -140,6 +140,11 @@ function formatSize(bytes: number): string {
         : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+function formatReceivedAt(value: string): string {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("en-GB", {day: "2-digit", month: "short"});
+}
+
 function mergeAttachments(current: EmailAttachment[], incoming: EmailAttachment[]) {
     const merged = new Map(current.map(item => [`${item.messageId}:${item.attachmentId}`, item]));
     for (const item of incoming) merged.set(`${item.messageId}:${item.attachmentId}`, item);
@@ -475,18 +480,44 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
         }
     }
 
+    async function connectGmail() {
+        setError("");
+        try {
+            const response = await fetch(`${gmailAuthUrl("/start")}&format=json`, {
+                headers: {Accept: "application/json"},
+                credentials: "include"
+            });
+            const data = await response.json() as {authorizationUrl?: string; message?: string};
+            if (!response.ok || !data.authorizationUrl) throw new Error(data.message ?? "Gmail could not start the authorization.");
+            const openedByDesktop = window.folderRocketDesktop
+                ? await window.folderRocketDesktop.openExternal(data.authorizationUrl)
+                : false;
+            if (!openedByDesktop) {
+                const popup = window.open(data.authorizationUrl, "_blank", "noopener,noreferrer");
+                if (!popup) window.location.assign(data.authorizationUrl);
+            }
+        }
+        catch (connectionError) {
+            setError(connectionError instanceof Error ? connectionError.message : "Gmail could not start the authorization.");
+        }
+    }
+
     function openMessage(event: React.MouseEvent<HTMLButtonElement>, messageId: string) {
         event.stopPropagation();
         window.open(`https://mail.google.com/mail/u/0/#all/${encodeURIComponent(messageId)}`, "_blank", "noopener,noreferrer");
     }
 
     function dragAttachments(event: React.DragEvent<HTMLElement>, attachment: EmailAttachment) {
+        event.stopPropagation();
         const attachmentId = `${attachment.messageId}:${attachment.attachmentId}`;
         const dragged = selectedIds.includes(attachmentId)
             ? visibleAttachments.filter(item => selectedIds.includes(`${item.messageId}:${item.attachmentId}`))
             : [attachment];
+        const payload = dragged.map(item => ({...item, sourceBlockId: alertBlockId}));
         event.dataTransfer.effectAllowed = "copy";
-        event.dataTransfer.setData(EMAIL_ATTACHMENT_TYPE, JSON.stringify(dragged.map(item => ({...item, sourceBlockId: alertBlockId}))));
+        event.dataTransfer.dropEffect = "copy";
+        event.dataTransfer.setData(EMAIL_ATTACHMENT_TYPE, JSON.stringify(payload));
+        event.dataTransfer.setData("text/plain", `folderrocket-email:${JSON.stringify({provider: "gmail", attachments: payload})}`);
     }
 
     return (
@@ -513,7 +544,7 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
             {!connected ? (
                 <div className="emailConnectArea">
                     <p>No Gmail access is active. Connecting authorizes read-only access.</p>
-                    <button type="button" className="emailConnectButton" onClick={() => { window.location.href = gmailAuthUrl("/start"); }}>
+                    <button type="button" className="emailConnectButton" onClick={() => void connectGmail()}>
                         Connect Gmail
                     </button>
                 </div>
@@ -573,7 +604,7 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
                             const id = `${attachment.messageId}:${attachment.attachmentId}`;
                             const alertClass = item.alertColor ? ` alertColor-${item.alertColor}` : item.alertKind === "sender" ? " senderAlertItem" : item.alertKind === "ai" ? " aiAlertItem" : "";
                             return <div key={id} className={`${selectedIds.includes(id) ? "emailAttachment selectedAttachment" : "emailAttachment"}${alertClass}`} draggable onClick={() => toggleSelection(id)} onDragStart={event => dragAttachments(event, attachment)}>
-                                <div className="emailAttachmentPrimary"><span className="emailAttachmentName"><FileKindIcon name={attachment.name} />{attachment.name}</span><span>{formatSize(attachment.size)}</span></div>
+                                <div className="emailAttachmentPrimary"><span className="emailAttachmentName"><FileKindIcon name={attachment.name} />{attachment.name}</span><span>{formatSize(attachment.size)}{formatReceivedAt(attachment.receivedAt) ? ` · ${formatReceivedAt(attachment.receivedAt)}` : ""}</span></div>
                                 <div className="emailAttachmentSecondary"><small>{attachment.sender || attachment.subject}</small><span className="emailAttachmentActions"><button type="button" className="openEmailMessage" title="Open in Gmail" onClick={event => openMessage(event, attachment.messageId)}><ExternalLink size={14} /></button><button type="button" className="openEmailMessage" title="Read email locally" onClick={event => { event.stopPropagation(); window.open(gmailUrl(`/messages/view?messageId=${encodeURIComponent(attachment.messageId)}`), "_blank", "noopener,noreferrer"); }}><MessageSquareText size={14} /></button></span></div>
                             </div>;
                         })}

@@ -1,12 +1,16 @@
-const {app, BrowserWindow, desktopCapturer, dialog, ipcMain, shell, session} = require("electron");
+const {app, BrowserWindow, desktopCapturer, dialog, ipcMain, screen, shell, session} = require("electron");
 const fs = require("node:fs");
 const http = require("node:http");
 const path = require("node:path");
 const {spawn} = require("node:child_process");
 
+const FOLDERROCKET_PROTOCOL = "folderrocket";
+
 // FolderRocket does not need GPU rendering. Software rendering avoids blank windows
 // on Windows installations where Electron's GPU cache/process cannot initialise.
 app.disableHardwareAcceleration();
+
+if (!app.requestSingleInstanceLock()) app.quit();
 
 const PORT = Number(process.env.FOLDERROCKET_PORT) || 3000;
 const APP_ORIGIN = `http://localhost:${PORT}`;
@@ -19,12 +23,45 @@ let mainWindow = null;
 let cargoWindow = null;
 let cargoShipExpanded = false;
 let cargoShipPanelSize = {...CARGO_SHIP_DEFAULT_PANEL_SIZE};
+let cargoShipLastBounds = null;
 let selectedDisplaySourceId = "";
+
+function focusFolderRocket() {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.show();
+    mainWindow.focus();
+}
+
+function handleFolderRocketProtocol(url) {
+    try {
+        const target = new URL(url);
+        if (target.protocol !== `${FOLDERROCKET_PROTOCOL}:`) return;
+        focusFolderRocket();
+        mainWindow?.webContents.send("folderrocket:oauth-complete", target.searchParams.get("provider") || "");
+    } catch { /* Ignore malformed external protocol calls. */ }
+}
+
+app.on("second-instance", (_event, commandLine) => {
+    const protocolUrl = commandLine.find(value => value.startsWith(`${FOLDERROCKET_PROTOCOL}://`));
+    if (protocolUrl) handleFolderRocketProtocol(protocolUrl);
+    else focusFolderRocket();
+});
+app.on("open-url", (event, url) => { event.preventDefault(); handleFolderRocketProtocol(url); });
+
+function cargoShipState() {
+    return {open: Boolean(cargoWindow && !cargoWindow.isDestroyed()), expanded: cargoShipExpanded};
+}
+
+function notifyCargoShipState() {
+    if (!mainWindow?.isDestroyed()) mainWindow.webContents.send("folderrocket:cargo-ship-state", cargoShipState());
+}
 
 const desktopConfigKeys = new Set([
     "OPENAI_API_KEY",
     "GMAIL_CLIENT_ID",
     "GMAIL_CLIENT_SECRET",
+    "GOOGLE_CALENDAR_API_KEY",
     "OUTLOOK_CLIENT_ID",
     "OUTLOOK_CLIENT_SECRET",
     "FOLDERROCKET_TOKEN_ENCRYPTION_KEY"
@@ -63,18 +100,42 @@ function readDesktopConfiguration(applicationData) {
     return values;
 }
 
-function backendIsReady() {
+function readBackendHealth() {
     return new Promise(resolve => {
         const request = http.get(`${APP_ORIGIN}/health`, response => {
-            response.resume();
-            resolve(response.statusCode === 200);
+            let body = "";
+            response.setEncoding("utf8");
+            response.on("data", chunk => { body += chunk; });
+            response.on("end", () => {
+                if (response.statusCode !== 200) {
+                    resolve({ready: false, desktop: false});
+                    return;
+                }
+                try {
+                    const health = JSON.parse(body);
+                    resolve({
+                        ready: health?.status === "ok",
+                        desktop: health?.runtime === "desktop"
+                    });
+                }
+                catch {
+                    // A server with the old text health check, or an unrelated
+                    // app on port 3000, must never be reused by FolderRocket.
+                    resolve({ready: false, desktop: false});
+                }
+            });
         });
         request.setTimeout(1000, () => {
             request.destroy();
-            resolve(false);
+            resolve({ready: false, desktop: false});
         });
-        request.on("error", () => resolve(false));
+        request.on("error", () => resolve({ready: false, desktop: false}));
     });
+}
+
+async function backendIsReady() {
+    const health = await readBackendHealth();
+    return health.ready && health.desktop;
 }
 
 async function waitForBackend() {
@@ -171,9 +232,17 @@ function createCargoShipWindow() {
         cargoWindow.focus();
         return cargoWindow;
     }
+    const previousBounds = cargoShipLastBounds
+        ? clampCargoShipBounds({
+            x: cargoShipLastBounds.x + (cargoShipLastBounds.width - CARGO_SHIP_DOCK_SIZE.width) / 2,
+            y: cargoShipLastBounds.y + (cargoShipLastBounds.height - CARGO_SHIP_DOCK_SIZE.height) / 2,
+            ...CARGO_SHIP_DOCK_SIZE
+        })
+        : null;
     cargoWindow = new BrowserWindow({
         width: CARGO_SHIP_DOCK_SIZE.width,
         height: CARGO_SHIP_DOCK_SIZE.height,
+        ...(previousBounds ? {x: previousBounds.x, y: previousBounds.y} : {}),
         minWidth: CARGO_SHIP_DOCK_SIZE.width,
         minHeight: CARGO_SHIP_DOCK_SIZE.height,
         show: false,
@@ -203,9 +272,26 @@ function createCargoShipWindow() {
             if (/^(https?:|mailto:)/i.test(url)) void shell.openExternal(url);
         }
     });
-    cargoWindow.once("ready-to-show", () => cargoWindow?.show());
-    cargoWindow.on("closed", () => { cargoWindow = null; cargoShipExpanded = false; });
+    cargoWindow.once("ready-to-show", () => {
+        if (!cargoWindow?.isDestroyed()) {
+            cargoShipLastBounds = clampCargoShipBounds(cargoWindow.getBounds());
+            cargoWindow.setBounds(cargoShipLastBounds);
+            cargoWindow.show();
+        }
+    });
+    cargoWindow.on("move", () => {
+        if (!cargoWindow?.isDestroyed()) cargoShipLastBounds = cargoWindow.getBounds();
+    });
+    cargoWindow.on("resize", () => {
+        if (!cargoWindow?.isDestroyed()) cargoShipLastBounds = cargoWindow.getBounds();
+    });
+    cargoWindow.on("closed", () => {
+        cargoWindow = null;
+        cargoShipExpanded = false;
+        notifyCargoShipState();
+    });
     void cargoWindow.loadURL(`${APP_ORIGIN}/?folderrocketCargoShip=1`);
+    notifyCargoShipState();
     return cargoWindow;
 }
 
@@ -219,11 +305,39 @@ function normaliseCargoShipPanelSize(size) {
     };
 }
 
+function clampCargoShipBounds(bounds) {
+    const minimum = cargoShipExpanded ? CARGO_SHIP_MINIMUM_PANEL_SIZE : CARGO_SHIP_DOCK_SIZE;
+    const display = screen.getDisplayNearestPoint({
+        x: Math.round(Number(bounds.x) + Number(bounds.width) / 2),
+        y: Math.round(Number(bounds.y) + Number(bounds.height) / 2)
+    });
+    const workArea = display.workArea;
+    const margin = 8;
+    const width = Math.min(Math.max(minimum.width, Math.round(Number(bounds.width) || minimum.width)), Math.max(minimum.width, workArea.width - margin * 2));
+    const height = Math.min(Math.max(minimum.height, Math.round(Number(bounds.height) || minimum.height)), Math.max(minimum.height, workArea.height - margin * 2));
+    const maxX = workArea.x + workArea.width - width - margin;
+    const maxY = workArea.y + workArea.height - height - margin;
+    return {
+        x: Math.max(workArea.x + margin, Math.min(maxX, Math.round(Number(bounds.x) || workArea.x + margin))),
+        y: Math.max(workArea.y + margin, Math.min(maxY, Math.round(Number(bounds.y) || workArea.y + margin))),
+        width,
+        height
+    };
+}
+
 function prepareCargoShipPanelWindow(size, position = null) {
+    const current = cargoWindow.getBounds();
+    const bounds = clampCargoShipBounds({
+        x: position?.x ?? current.x,
+        y: position?.y ?? current.y,
+        width: size.width,
+        height: size.height
+    });
     cargoWindow.setResizable(true);
     cargoWindow.setMinimumSize(CARGO_SHIP_MINIMUM_PANEL_SIZE.width, CARGO_SHIP_MINIMUM_PANEL_SIZE.height);
     cargoWindow.setMaximumSize(CARGO_SHIP_MAXIMUM_PANEL_SIZE.width, CARGO_SHIP_MAXIMUM_PANEL_SIZE.height);
-    cargoWindow.setBounds(position ? {...position, ...size} : size);
+    cargoWindow.setBounds(bounds);
+    cargoShipLastBounds = bounds;
     // Native edge-resizing is disabled: the deliberate in-panel grip is the
     // only resize control, so a click on the corner cannot resize the window.
     cargoWindow.setResizable(false);
@@ -240,19 +354,29 @@ function setCargoShipWindowExpanded(expanded) {
             y: Math.round(y + (height - cargoShipPanelSize.height) / 2)
         });
     } else {
+        const current = cargoWindow.getBounds();
+        const dockBounds = clampCargoShipBounds({
+            x: current.x + (current.width - CARGO_SHIP_DOCK_SIZE.width) / 2,
+            y: current.y + (current.height - CARGO_SHIP_DOCK_SIZE.height) / 2,
+            ...CARGO_SHIP_DOCK_SIZE
+        });
         cargoWindow.setResizable(true);
         cargoWindow.setMinimumSize(1, 1);
         cargoWindow.setMaximumSize(10000, 10000);
-        cargoWindow.setBounds(CARGO_SHIP_DOCK_SIZE);
+        cargoWindow.setBounds(dockBounds);
         cargoWindow.setMinimumSize(CARGO_SHIP_DOCK_SIZE.width, CARGO_SHIP_DOCK_SIZE.height);
         cargoWindow.setMaximumSize(CARGO_SHIP_DOCK_SIZE.width, CARGO_SHIP_DOCK_SIZE.height);
         cargoWindow.setResizable(false);
+        cargoShipLastBounds = dockBounds;
     }
     cargoWindow.show();
+    notifyCargoShipState();
     return true;
 }
 
 app.whenReady().then(async () => {
+    if (process.defaultApp) app.setAsDefaultProtocolClient(FOLDERROCKET_PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
+    else app.setAsDefaultProtocolClient(FOLDERROCKET_PROTOCOL);
     session.defaultSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin) => {
         return requestingOrigin === APP_ORIGIN && (permission === "media" || permission === "fullscreen");
     });
@@ -299,6 +423,27 @@ app.whenReady().then(async () => {
         const image = await sourceWindow.webContents.capturePage({x, y, width, height});
         return image.toDataURL();
     });
+    ipcMain.handle("folderrocket:capture-behind-cargo-ship", async (event, options) => {
+        const requestingWindow = BrowserWindow.fromWebContents(event.sender);
+        if (event.sender.getURL().startsWith(APP_ORIGIN) === false || !requestingWindow || requestingWindow !== cargoWindow || !mainWindow || mainWindow.isDestroyed() || !cargoWindow || cargoWindow.isDestroyed()) {
+            throw new Error("Cargo Ship must be open over the FolderRocket window to use Lens.");
+        }
+        const cargoBounds = cargoWindow.getBounds();
+        const mainBounds = mainWindow.getContentBounds();
+        const topInset = Math.max(0, Math.min(cargoBounds.height - 1, Math.round(Number(options?.topInset) || 39)));
+        const sourceX = cargoBounds.x - mainBounds.x;
+        const sourceY = cargoBounds.y - mainBounds.y + topInset;
+        const sourceRight = sourceX + cargoBounds.width;
+        const sourceBottom = sourceY + cargoBounds.height - topInset;
+        const left = Math.max(0, sourceX);
+        const top = Math.max(0, sourceY);
+        const right = Math.min(mainBounds.width, sourceRight);
+        const bottom = Math.min(mainBounds.height, sourceBottom);
+        if (right <= left || bottom <= top) throw new Error("Move Cargo Ship over FolderRocket before using Lens.");
+        const image = await mainWindow.webContents.capturePage({x: left, y: top, width: right - left, height: bottom - top});
+        if (image.isEmpty()) throw new Error("FolderRocket could not capture the area behind Cargo Ship.");
+        return image.toDataURL();
+    });
     ipcMain.handle("folderrocket:navigation-state", event => {
         if (event.sender.getURL().startsWith(APP_ORIGIN) === false) return {canGoBack: false, canGoForward: false};
         const history = event.sender.navigationHistory;
@@ -309,11 +454,26 @@ app.whenReady().then(async () => {
         return event.sender.getZoomFactor();
     });
     ipcMain.handle("folderrocket:set-zoom-factor", (event, factor) => {
-        if (event.sender.getURL().startsWith(APP_ORIGIN) === false) return 1;
+        // Only the main window controls the workspace zoom. A secondary
+        // Cargo Ship renderer must never alter it through the shared origin.
+        if (event.sender.getURL().startsWith(APP_ORIGIN) === false || event.sender.id !== mainWindow?.webContents.id) return 1;
         const requested = Number(factor);
         const next = Number.isFinite(requested) ? Math.max(.75, Math.min(1.5, requested)) : 1;
         event.sender.setZoomFactor(next);
         return next;
+    });
+    ipcMain.handle("folderrocket:cargo-ship-state", event => {
+        if (event.sender.getURL().startsWith(APP_ORIGIN) === false) return {open: false, expanded: false};
+        return cargoShipState();
+    });
+    ipcMain.handle("folderrocket:toggle-cargo-ship-window", event => {
+        if (event.sender.getURL().startsWith(APP_ORIGIN) === false) return {open: false, expanded: false};
+        if (cargoWindow && !cargoWindow.isDestroyed()) {
+            cargoWindow.close();
+            return {open: false, expanded: false};
+        }
+        createCargoShipWindow();
+        return cargoShipState();
     });
     ipcMain.handle("folderrocket:open-cargo-ship-window", event => {
         if (event.sender.getURL().startsWith(APP_ORIGIN) === false) return false;
@@ -334,7 +494,10 @@ app.whenReady().then(async () => {
         const x = Number(position.x);
         const y = Number(position.y);
         if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
-        cargoWindow.setPosition(Math.round(x), Math.round(y), true);
+        const current = cargoWindow.getBounds();
+        const next = clampCargoShipBounds({...current, x, y});
+        cargoWindow.setPosition(next.x, next.y, true);
+        cargoShipLastBounds = {...current, x: next.x, y: next.y};
         return true;
     });
     ipcMain.handle("folderrocket:resize-cargo-ship-window", (event, size) => {
@@ -352,7 +515,35 @@ app.whenReady().then(async () => {
         if (direction === "forward" && history.canGoForward()) { history.goForward(); return true; }
         return false;
     });
-    if (!await backendIsReady()) startBackend();
+    ipcMain.handle("folderrocket:open-external", (event, url) => {
+        if (event.sender.getURL().startsWith(APP_ORIGIN) === false || typeof url !== "string") return false;
+        try {
+            const target = new URL(url);
+            const supportedOAuthHosts = new Set([
+                "accounts.google.com",
+                "login.microsoftonline.com",
+                "login.live.com"
+            ]);
+            if (target.protocol !== "https:" || !supportedOAuthHosts.has(target.hostname)) return false;
+            void shell.openExternal(target.toString());
+            return true;
+        }
+        catch {
+            return false;
+        }
+    });
+    const existingBackend = await readBackendHealth();
+    if (existingBackend.ready && !existingBackend.desktop) {
+        await dialog.showMessageBox({
+            type: "error",
+            title: "FolderRocket needs its local backend",
+            message: "Another local server is using port 3000.",
+            detail: "Close the manual 'node server.js' process, then launch FolderRocket again with npm run desktop. The desktop app will use its own private backend and saved email connections."
+        });
+        app.quit();
+        return;
+    }
+    if (!existingBackend.ready) startBackend();
     if (!await waitForBackend()) {
         await dialog.showMessageBox({
             type: "error",
@@ -364,6 +555,8 @@ app.whenReady().then(async () => {
         return;
     }
     createWindow();
+    const initialProtocolUrl = process.argv.find(value => value.startsWith(`${FOLDERROCKET_PROTOCOL}://`));
+    if (initialProtocolUrl) handleFolderRocketProtocol(initialProtocolUrl);
 });
 
 app.on("activate", () => {

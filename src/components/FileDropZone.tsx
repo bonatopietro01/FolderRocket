@@ -18,9 +18,11 @@ import {
 } from "lucide-react";
 
 import { API_BASE_URL } from "../api";
+import {browserBridgeDropId, resolveBrowserBridgeDrop} from "../browserBridge";
 import { EMAIL_ATTACHMENT_TYPE } from "./GmailSourcePanel";
 import { OUTLOOK_ATTACHMENT_TYPE } from "./OutlookSourcePanel";
 import { SEARCH_RESULT_TYPE } from "./SearchWorkspace";
+import { CALENDAR_ATTACHMENT_TYPE } from "./GoogleCalendarSourcePanel";
 
 
 interface Props {
@@ -730,6 +732,8 @@ function FileDropZone({
 
         event.stopPropagation();
 
+        event.dataTransfer.dropEffect = "copy";
+
         setDragging(true);
 
     }
@@ -763,13 +767,48 @@ function FileDropZone({
 
         setDragging(false);
 
+        const bridgeId = browserBridgeDropId(event.dataTransfer.getData("text/plain"));
+        if (bridgeId) {
+            try {
+                const stagedFiles = await resolveBrowserBridgeDrop(bridgeId);
+                if (imaginary) {
+                    setPendingVirtualFiles(current => [...current, ...stagedFiles.filter(file => !current.some(item => item.path === file.path))]);
+                    setLastUploadedFile(`${stagedFiles.length} Gmail file(s) ready for this imaginary folder`);
+                    return;
+                }
+                const visibleFiles = await Promise.all(stagedFiles.map(async file => {
+                    const response = await fetch(`${API_BASE_URL}${file.downloadUrl}`, {credentials: "include"});
+                    if (!response.ok) throw new Error(`Unable to prepare ${file.name}.`);
+                    const content = await response.blob();
+                    return new File([content], file.name, {type: content.type, lastModified: file.createdAt ? new Date(file.createdAt).getTime() : Date.now()});
+                }));
+                setPendingMoveFiles(current => [...current, ...stagedFiles.filter(file => !current.some(item => item.path === file.path))]);
+                setFiles(current => [...current, ...visibleFiles.filter(file => !current.some(item => item.name === file.name && item.size === file.size))]);
+                setLastUploadedFile(`${stagedFiles.length} Gmail file(s) ready to send`);
+            } catch (error) {
+                alert(error instanceof Error ? error.message : "Unable to prepare the Gmail attachment.");
+            }
+            return;
+        }
 
-        const gmailAttachments =
+
+        let gmailAttachments =
             event.dataTransfer.getData(
                 EMAIL_ATTACHMENT_TYPE
             );
 
-        const outlookAttachments = event.dataTransfer.getData(OUTLOOK_ATTACHMENT_TYPE);
+        let outlookAttachments = event.dataTransfer.getData(OUTLOOK_ATTACHMENT_TYPE);
+        if (!gmailAttachments && !outlookAttachments) {
+            const fallback = event.dataTransfer.getData("text/plain");
+            if (fallback.startsWith("folderrocket-email:")) {
+                try {
+                    const parsed = JSON.parse(fallback.slice("folderrocket-email:".length)) as {provider?: string; attachments?: unknown[]};
+                    const serialized = JSON.stringify(parsed.attachments ?? []);
+                    if (parsed.provider === "gmail") gmailAttachments = serialized;
+                    if (parsed.provider === "outlook") outlookAttachments = serialized;
+                } catch { /* Ignore unrelated plain text. */ }
+            }
+        }
         const emailAttachments = gmailAttachments || outlookAttachments;
         const emailProvider = gmailAttachments ? "gmail" : "outlook";
 
@@ -792,7 +831,7 @@ function FileDropZone({
                 if (imaginary) {
                     const references = await Promise.all(remoteAttachments.map(async attachment => {
                         const sourceBlockQuery = attachment.sourceBlockId ? `?blockId=${encodeURIComponent(attachment.sourceBlockId)}` : "";
-                        const response = await fetch(`${API_BASE_URL}/email/${emailProvider}/attachments/save-reference${sourceBlockQuery}`, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(attachment)});
+                        const response = await fetch(`${API_BASE_URL}/email/${emailProvider}/attachments/save-reference${sourceBlockQuery}`, {method:"POST", headers:{"Content-Type":"application/json"}, credentials:"include", body:JSON.stringify(attachment)});
                         const data = await response.json() as {name: string; path: string; size?: number; message?: string};
                         if (!response.ok) throw new Error(data.message ?? "Unable to save Gmail attachment");
                         return data;
@@ -822,7 +861,8 @@ function FileDropZone({
 
                                 const response =
                                     await fetch(
-                                        `${API_BASE_URL}/email/${emailProvider}/attachments/download?${parameters}`
+                                        `${API_BASE_URL}/email/${emailProvider}/attachments/download?${parameters}`,
+                                        {credentials:"include"}
                                     );
 
                                 if (!response.ok) {
@@ -890,6 +930,33 @@ function FileDropZone({
 
             return;
 
+        }
+
+        let calendarAttachments = event.dataTransfer.getData(CALENDAR_ATTACHMENT_TYPE);
+        if (!calendarAttachments) {
+            const fallback = event.dataTransfer.getData("text/plain");
+            if (fallback.startsWith("folderrocket-calendar:")) calendarAttachments = fallback.slice("folderrocket-calendar:".length);
+        }
+        if (calendarAttachments) {
+            try {
+                const attachments = JSON.parse(calendarAttachments) as Array<{fileId: string; name: string; mimeType?: string}>;
+                if (!attachments.length) return;
+                const downloadedFiles = await Promise.all(attachments.map(async attachment => {
+                    const parameters = new URLSearchParams({fileId: attachment.fileId, name: attachment.name, mimeType: attachment.mimeType ?? ""});
+                    const response = await fetch(`${API_BASE_URL}/calendar/google/attachments/download?${parameters}`, {credentials: "include"});
+                    if (!response.ok) {
+                        const data = await readJsonResponse<{message?: string}>(response);
+                        throw new Error(data.message ?? `Unable to download ${attachment.name}.`);
+                    }
+                    const content = await response.blob();
+                    return new File([content], attachment.name, {type: attachment.mimeType || content.type});
+                }));
+                setFiles(current => [...current, ...downloadedFiles.filter(file => !current.some(item => item.name === file.name && item.size === file.size))]);
+                setLastUploadedFile(`${downloadedFiles.length} calendar file(s) ready to send`);
+            } catch (error) {
+                alert(error instanceof Error ? error.message : "Unable to download the calendar attachment.");
+            }
+            return;
         }
 
         const searchResults = event.dataTransfer.getData(SEARCH_RESULT_TYPE);

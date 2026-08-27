@@ -1,4 +1,4 @@
-import {Check, CircleAlert, Eye, EyeOff, KeyRound, Mail, Save, Sparkles, X} from "lucide-react";
+import {CalendarDays, Check, CircleAlert, Eye, EyeOff, KeyRound, Mail, Save, Sparkles, X} from "lucide-react";
 import {useEffect, useRef, useState} from "react";
 import {API_BASE_URL} from "../api";
 
@@ -6,6 +6,7 @@ interface IntegrationStatus {
     desktopConfigurationAvailable: boolean;
     aiConfigured: boolean;
     gmailConfigured: boolean;
+    googleCalendarConfigured: boolean;
     outlookConfigured: boolean;
 }
 
@@ -13,6 +14,7 @@ type IntegrationFields = {
     openAiKey: string;
     gmailClientId: string;
     gmailClientSecret: string;
+    googleCalendarApiKey: string;
     outlookClientId: string;
     outlookClientSecret: string;
 };
@@ -21,6 +23,7 @@ const EMPTY_FIELDS: IntegrationFields = {
     openAiKey: "",
     gmailClientId: "",
     gmailClientSecret: "",
+    googleCalendarApiKey: "",
     outlookClientId: "",
     outlookClientSecret: ""
 };
@@ -38,6 +41,7 @@ export default function IntegrationSetup({isAdmin, onAIStatusChange, aiMode, onA
     const [loading, setLoading] = useState(false);
     const [saving, setSaving] = useState(false);
     const [message, setMessage] = useState("");
+    const [browserBridgeCode, setBrowserBridgeCode] = useState("");
 
     async function loadStatus() {
         if (!isAdmin) return;
@@ -82,6 +86,7 @@ export default function IntegrationSetup({isAdmin, onAIStatusChange, aiMode, onA
             ...(fields.openAiKey.trim() ? {OPENAI_API_KEY: fields.openAiKey.trim()} : {}),
             ...(fields.gmailClientId.trim() ? {GMAIL_CLIENT_ID: fields.gmailClientId.trim()} : {}),
             ...(fields.gmailClientSecret.trim() ? {GMAIL_CLIENT_SECRET: fields.gmailClientSecret.trim()} : {}),
+            ...(fields.googleCalendarApiKey.trim() ? {GOOGLE_CALENDAR_API_KEY: fields.googleCalendarApiKey.trim()} : {}),
             ...(fields.outlookClientId.trim() ? {OUTLOOK_CLIENT_ID: fields.outlookClientId.trim()} : {}),
             ...(fields.outlookClientSecret.trim() ? {OUTLOOK_CLIENT_SECRET: fields.outlookClientSecret.trim()} : {})
         };
@@ -108,6 +113,25 @@ export default function IntegrationSetup({isAdmin, onAIStatusChange, aiMode, onA
         }
     }
 
+    async function generateBrowserBridgeCode() {
+        if (!isAdmin) return;
+        try {
+            const response = await fetch(`${API_BASE_URL}/browser-bridge/token`, {method: "POST", credentials: "include"});
+            const data = await response.json().catch(() => ({})) as {token?: string; message?: string};
+            if (!response.ok || !data.token) throw new Error(data.message || "Unable to generate the Browser bridge code.");
+            setBrowserBridgeCode(data.token);
+            setMessage("Browser bridge code generated. Paste it in the Chrome or Edge extension options.");
+        } catch (error) {
+            setMessage(error instanceof Error ? error.message : "Unable to generate the Browser bridge code.");
+        }
+    }
+
+    async function copyBrowserBridgeCode() {
+        if (!browserBridgeCode) return;
+        try { await navigator.clipboard.writeText(browserBridgeCode); setMessage("Browser bridge code copied."); }
+        catch { setMessage("Copy the Browser bridge code manually."); }
+    }
+
     const aiReady = Boolean(status?.aiConfigured);
     return <div className="integrationSetup" ref={wrapperRef}>
         <button type="button" className={aiReady && aiMode ? "integrationLauncher ready" : "integrationLauncher"} onClick={togglePanel} aria-expanded={open} title="AI and connected services"><Sparkles size={14} />AI {aiMode ? "ON" : "OFF"}</button>
@@ -125,6 +149,15 @@ export default function IntegrationSetup({isAdmin, onAIStatusChange, aiMode, onA
                         <div><Mail size={16} /><strong>Gmail</strong><small>{savedValue(Boolean(status?.gmailConfigured), "Gmail app credentials")}</small></div>
                         <input type="text" value={fields.gmailClientId} onChange={event => updateField("gmailClientId", event.target.value)} placeholder={status?.gmailConfigured ? "New Gmail client ID (optional)" : "Gmail client ID"} autoComplete="off" />
                         <input type={showSecrets ? "text" : "password"} value={fields.gmailClientSecret} onChange={event => updateField("gmailClientSecret", event.target.value)} placeholder={status?.gmailConfigured ? "New Gmail client secret (optional)" : "Gmail client secret"} autoComplete="off" />
+                    </article>
+                    <article className={status?.googleCalendarConfigured ? "integrationCard ready" : "integrationCard"}>
+                        <div><CalendarDays size={16} /><strong>Public Calendar key (optional)</strong><small>Private calendars connect directly inside their Calendar block.</small></div>
+                        <input type={showSecrets ? "text" : "password"} value={fields.googleCalendarApiKey} onChange={event => updateField("googleCalendarApiKey", event.target.value)} placeholder={status?.googleCalendarConfigured ? "New public-calendar API key (optional)" : "Public-calendar API key (optional)"} autoComplete="off" />
+                    </article>
+                    <article className="integrationCard browserBridgeCard">
+                        <div><KeyRound size={16} /><strong>Gmail browser bridge</strong><small>Drag attachments from Gmail in Chrome or Edge into FolderRocket.</small></div>
+                        <button type="button" onClick={() => void generateBrowserBridgeCode()}>Generate browser code</button>
+                        {browserBridgeCode && <div className="browserBridgeCode"><code>{browserBridgeCode}</code><button type="button" onClick={() => void copyBrowserBridgeCode()}>Copy</button></div>}
                     </article>
                     <article className={status?.outlookConfigured ? "integrationCard ready" : "integrationCard"}>
                         <div><Mail size={16} /><strong>Outlook</strong><small>{savedValue(Boolean(status?.outlookConfigured), "Outlook app credentials")}</small></div>

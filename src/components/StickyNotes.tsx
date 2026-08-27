@@ -1,10 +1,10 @@
 import {useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent} from "react";
-import {PanelLeftClose, Trash2} from "lucide-react";
+import {LoaderCircle, PanelLeftClose, Sparkles, Trash2} from "lucide-react";
 import {API_BASE_URL} from "../api";
 import type {ManagedFolder} from "./FolderManagement";
 
-type NoteColor = "yellow" | "purple" | "blue" | "green";
-interface StickyNote {id: string; color: NoteColor; text: string; relatedFiles?: string[]; x: number; y: number; width: number; height: number; hidden?: boolean; autoHeight?: boolean;}
+type NoteColor = "yellow" | "red" | "purple" | "blue" | "green";
+interface StickyNote {id: string; color: NoteColor; text: string; relatedFiles?: string[]; x: number; y: number; width: number; height: number; hidden?: boolean; autoHeight?: boolean; ai?: boolean; aiPrompt?: string; aiResponse?: string; aiWorking?: boolean;}
 const colors: NoteColor[] = ["yellow", "purple", "blue", "green"];
 
 function storageKey(scope: string) { return `folderrocket-sticky-notes-${scope}`; }
@@ -21,7 +21,7 @@ function createNote(index: number, color: NoteColor, text = "", relatedFiles: st
     return {id: crypto.randomUUID(), color, text, relatedFiles, autoHeight: true, ...defaultNoteLayout(index)};
 }
 
-function FloatingStickyNote({note, deleteArmed, floatingScale, onChange, onDelete, onHide}: {note: StickyNote; deleteArmed: boolean; floatingScale: number; onChange: (change: Partial<StickyNote>) => void; onDelete: () => void; onHide: () => void}) {
+function FloatingStickyNote({note, deleteArmed, floatingScale, displayPosition, onChange, onDelete, onHide, onAskAI}: {note: StickyNote; deleteArmed: boolean; floatingScale: number; displayPosition?: {x: number; y: number}; onChange: (change: Partial<StickyNote>) => void; onDelete: () => void; onHide: () => void; onAskAI: () => void}) {
     const noteRef = useRef<HTMLElement>(null);
     const textAreaRef = useRef<HTMLTextAreaElement>(null);
     const displayScale = Math.max(.8, Math.min(1.3, floatingScale));
@@ -56,22 +56,27 @@ function FloatingStickyNote({note, deleteArmed, floatingScale, onChange, onDelet
         const nextHeight = Math.max(66, Math.min(Math.max(66, window.innerHeight - note.y - 8), 66 + (lineCount - 1) * 18 + (note.relatedFiles?.length ? 17 : 0)));
         onChange({text, height: nextHeight});
     }
-    return <article ref={noteRef} className={`floatingStickyNote ${note.color}`} style={{left: note.x, top: note.y, width: note.width, height: note.height, transform: `scale(${displayScale})`, transformOrigin: "top left"}}>
-        <div className="stickyNoteTop" onPointerDown={beginMove} title="Drag this post-it"><button type="button" className="stickyNoteHide" onClick={onHide} title="Hide as a bookmark"><PanelLeftClose size={18}/></button><div className="stickyNoteColors">{colors.map(color => <button key={color} type="button" className={color === note.color ? "active" : ""} onClick={() => onChange({color})} aria-label={`Use ${color} note`} />)}</div><button type="button" className={`stickyNoteDelete${deleteArmed ? " confirm" : ""}`} onClick={onDelete} title={deleteArmed ? "Press again to delete" : "Delete note"}><Trash2 size={18}/></button></div><textarea ref={textAreaRef} value={note.text} onChange={event => updateText(event.target.value)} placeholder="Write a note…" />{note.relatedFiles?.length ? <small>{note.relatedFiles.join(" · ")}</small> : null}<button type="button" className="stickyNoteResize" onPointerDown={beginResize} title="Drag to resize this post-it" aria-label="Resize this post-it" />
+    const aiMessage = note.aiWorking ? "AI is reading your request…" : note.aiResponse || "";
+    const aiComment = note.aiWorking || note.aiResponse?.startsWith("Unable") === true;
+    return <article ref={noteRef} className={`floatingStickyNote ${note.color}${note.ai ? " aiStickyNote" : ""}`} style={{left: displayPosition?.x ?? note.x, top: displayPosition?.y ?? note.y, width: note.width, height: note.height, transform: `scale(${displayScale})`, transformOrigin: "top left"}}>
+        <div className="stickyNoteTop" onPointerDown={beginMove} title="Drag this post-it"><button type="button" className="stickyNoteHide" onClick={onHide} title="Hide as a bookmark"><PanelLeftClose size={18}/></button>{note.ai ? <span /> : <div className="stickyNoteColors">{colors.map(color => <button key={color} type="button" className={color === note.color ? "active" : ""} onClick={() => onChange({color})} aria-label={`Use ${color} note`} />)}</div>}<button type="button" className={`stickyNoteDelete${deleteArmed ? " confirm" : ""}`} onClick={onDelete} title={deleteArmed ? "Press again to delete" : "Delete note"}><Trash2 size={18}/></button></div>
+        {note.ai ? <><textarea ref={textAreaRef} value={note.aiPrompt ?? ""} maxLength={400} onChange={event => onChange({aiPrompt: event.target.value, aiResponse: ""})} onKeyDown={event => { if ((event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); onAskAI(); } }} placeholder="Quick request (one sentence)…" /><button type="button" className="stickyAiAsk" onClick={onAskAI} disabled={note.aiWorking || !(note.aiPrompt ?? "").trim()}>{note.aiWorking ? <LoaderCircle className="spinning" size={13}/> : <Sparkles size={13}/>} {note.aiWorking ? "Reading…" : "Quick AI"}</button>{aiMessage && <div className={`stickyAiResponse${aiComment ? " comment" : ""}${note.aiResponse?.startsWith("Unable") ? " error" : ""}`}>{aiMessage}</div>}</> : <textarea ref={textAreaRef} value={note.text} onChange={event => updateText(event.target.value)} placeholder="Write a note…" />}
+        {note.relatedFiles?.length ? <small>{note.relatedFiles.join(" · ")}</small> : null}<button type="button" className="stickyNoteResize" onPointerDown={beginResize} title="Drag to resize this post-it" aria-label="Resize this post-it" />
     </article>;
 }
 
-function StickyBookmark({note, index, onOpen}: {note: StickyNote; index: number; onOpen: () => void}) {
+function StickyBookmark({note, index, scale, onOpen}: {note: StickyNote; index: number; scale: number; onOpen: () => void}) {
     const trimmed = note.text.trim();
     const title = trimmed.includes("\n\n") ? trimmed.split("\n\n", 1)[0].trim() : "";
     const label = title || trimmed.split(/\s+/).slice(0, 3).join(" ") || "Empty";
-    return <button type="button" className={`floatingStickyBookmark ${note.color}`} style={{top: 132 + index * 35}} onClick={onOpen} title={`Show post-it: ${label}`} aria-label={`Show hidden post-it: ${label}`}><span>{label}</span></button>;
+    return <button type="button" className={`floatingStickyBookmark ${note.color}`} style={{left: 0, top: 132 + index * 35 * scale, transform: `scale(${scale})`, transformOrigin: "left top"}} onClick={onOpen} title={`Show post-it: ${label}`} aria-label={`Show hidden post-it: ${label}`}><span>{label}</span></button>;
 }
 
-export default function StickyNotes({storageScope, folders, aiEnabled, floatingScale, addRequest}: {storageScope: string; folders: ManagedFolder[]; aiEnabled: boolean; floatingScale: number; addRequest: number}) {
+export default function StickyNotes({storageScope, folders, aiEnabled, floatingScale, bookmarkScale, addRequest, aiAddRequest}: {storageScope: string; folders: ManagedFolder[]; aiEnabled: boolean; floatingScale: number; bookmarkScale: number; addRequest: number; aiAddRequest: number}) {
     const [notes, setNotes] = useState<StickyNote[]>(() => readNotes(storageScope));
     const [deleteId, setDeleteId] = useState<string | null>(null);
     const handledAddRequest = useRef(addRequest);
+    const handledAiAddRequest = useRef(aiAddRequest);
 
     useEffect(() => { localStorage.setItem(storageKey(storageScope), JSON.stringify(notes)); }, [notes, storageScope]);
     useEffect(() => {
@@ -83,15 +88,39 @@ export default function StickyNotes({storageScope, folders, aiEnabled, floatingS
     const addNote = useCallback((color: NoteColor = "yellow", text = "", relatedFiles: string[] = []) => {
         setNotes(current => [createNote(current.length, color, text, relatedFiles), ...current]);
     }, []);
+    const addAiNote = useCallback((prompt = "") => {
+        setNotes(current => [{...createNote(current.length, "red"), ai: true, aiPrompt: prompt, aiResponse: "", aiWorking: false, autoHeight: false, width: 188, height: 132}, ...current]);
+    }, []);
     function update(id: string, change: Partial<StickyNote>) { setNotes(current => current.map(note => note.id === id ? {...note, ...change} : note)); }
     function remove(id: string) { if (deleteId === id) { setNotes(current => current.filter(note => note.id !== id)); setDeleteId(null); } else setDeleteId(id); }
     function reveal(id: string, bookmarkIndex: number) { update(id, {hidden: false, x: 16, y: Math.max(88, 124 + bookmarkIndex * 35)}); }
+
+    async function askAi(note: StickyNote) {
+        const prompt = (note.aiPrompt ?? "").trim();
+        if (!aiEnabled || !prompt || note.aiWorking) return;
+        update(note.id, {aiWorking: true, aiResponse: ""});
+        try {
+            const physicalFolders = folders.filter(folder => folder.storage !== "imaginary" && folder.path).map(folder => folder.path);
+            const response = await fetch(`${API_BASE_URL}/sticky-notes/ai`, {method: "POST", credentials: "include", headers: {"Content-Type": "application/json"}, body: JSON.stringify({prompt, folders: physicalFolders})});
+            const data = await response.json().catch(() => ({})) as {text?: string; relatedFiles?: {name: string}[]; message?: string};
+            if (!response.ok || !data.text) throw new Error(data.message || "Unable to create the AI note.");
+            update(note.id, {aiWorking: false, aiResponse: data.text, relatedFiles: (data.relatedFiles || []).map(file => file.name)});
+        } catch (error) {
+            update(note.id, {aiWorking: false, aiResponse: `Unable to read this request: ${error instanceof Error ? error.message : "Unknown error."}`});
+        }
+    }
 
     useEffect(() => {
         if (addRequest === handledAddRequest.current) return;
         handledAddRequest.current = addRequest;
         addNote();
     }, [addRequest, addNote]);
+
+    useEffect(() => {
+        if (aiAddRequest === handledAiAddRequest.current || !aiEnabled) return;
+        handledAiAddRequest.current = aiAddRequest;
+        addAiNote();
+    }, [addAiNote, aiAddRequest, aiEnabled]);
 
     useEffect(() => {
         const createCargoNote = (event: Event) => {
@@ -107,24 +136,15 @@ export default function StickyNotes({storageScope, folders, aiEnabled, floatingS
     }, [addNote, storageScope]);
 
     useEffect(() => {
-        const createAiNote = async (event: Event) => {
+        const createAiNote = (event: Event) => {
             if (!aiEnabled) return;
-            const prompt = String((event as CustomEvent<{prompt?: string}>).detail?.prompt || "").trim();
-            if (!prompt) return;
-            if (!window.confirm("FolderRocket will send this request and a compact list of local file names to OpenAI. This may use AI credit. Continue?")) return;
-            try {
-                const physicalFolders = folders.filter(folder => folder.storage !== "imaginary" && folder.path).map(folder => folder.path);
-                const response = await fetch(`${API_BASE_URL}/sticky-notes/ai`, {method: "POST", credentials: "include", headers: {"Content-Type": "application/json"}, body: JSON.stringify({prompt, folders: physicalFolders})});
-                const data = await response.json().catch(() => ({})) as {text?: string; relatedFiles?: {name: string}[]; message?: string};
-                if (!response.ok || !data.text) throw new Error(data.message || "Unable to create the AI note.");
-                addNote("purple", data.text, (data.relatedFiles || []).map(file => file.name));
-            } catch (error) { window.alert(error instanceof Error ? error.message : "Unable to create the AI note."); }
+            addAiNote(String((event as CustomEvent<{prompt?: string}>).detail?.prompt || "").trim());
         };
         window.addEventListener("folderrocket:create-ai-sticky-note", createAiNote);
         return () => window.removeEventListener("folderrocket:create-ai-sticky-note", createAiNote);
-    }, [addNote, aiEnabled, folders]);
+    }, [addAiNote, aiEnabled]);
 
     const visibleNotes = notes.filter(note => !note.hidden);
     const hiddenNotes = notes.filter(note => note.hidden);
-    return <>{hiddenNotes.map((note, index) => <StickyBookmark key={`bookmark-${note.id}`} note={note} index={index} onOpen={() => reveal(note.id, index)} />)}{visibleNotes.map(note => <FloatingStickyNote key={note.id} note={note} deleteArmed={deleteId === note.id} floatingScale={floatingScale} onChange={change => update(note.id, change)} onDelete={() => remove(note.id)} onHide={() => update(note.id, {hidden: true})} />)}</>;
+    return <>{hiddenNotes.map((note, index) => <StickyBookmark key={`bookmark-${note.id}`} note={note} index={index} scale={bookmarkScale} onOpen={() => reveal(note.id, index)} />)}{visibleNotes.map(note => <FloatingStickyNote key={note.id} note={note} deleteArmed={deleteId === note.id} floatingScale={floatingScale} onChange={change => update(note.id, change)} onDelete={() => remove(note.id)} onHide={() => update(note.id, {hidden: true})} onAskAI={() => void askAi(note)} />)}</>;
 }

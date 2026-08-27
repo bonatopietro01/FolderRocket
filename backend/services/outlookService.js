@@ -3,8 +3,19 @@ const {getConnection, migrateLegacyConnectionToBlock, removeConnection, saveConn
 
 const GRAPH_API_BASE = "https://graph.microsoft.com/v1.0";
 const AUTHORITY = "https://login.microsoftonline.com/common/oauth2/v2.0";
-function getRedirectUri() {
-    return `${(process.env.APP_ORIGIN || "http://localhost:3000").replace(/\/$/, "")}/auth/outlook/callback`;
+function getRedirectUri(origin = process.env.APP_ORIGIN || "http://localhost:3000") {
+    const normalizedOrigin = String(origin || "").trim().replace(/\/$/, "");
+    let parsedOrigin;
+    try {
+        parsedOrigin = new URL(normalizedOrigin);
+    }
+    catch {
+        throw new Error("Outlook callback URL is invalid. Check APP_ORIGIN.");
+    }
+    if (!/^https?:$/.test(parsedOrigin.protocol)) {
+        throw new Error("Outlook callback URL must use http or https.");
+    }
+    return `${parsedOrigin.origin}/auth/outlook/callback`;
 }
 
 const connections = new Map();
@@ -31,21 +42,27 @@ function saveUserConnection(userId, blockId, connection) {
 }
 
 function getConfiguration() {
-    const clientId = process.env.OUTLOOK_CLIENT_ID;
-    const clientSecret = process.env.OUTLOOK_CLIENT_SECRET;
+    const clientId = String(process.env.OUTLOOK_CLIENT_ID || "").trim();
+    const clientSecret = String(process.env.OUTLOOK_CLIENT_SECRET || "").trim();
     if (!clientId || !clientSecret) {
         throw new Error("Configure OUTLOOK_CLIENT_ID and OUTLOOK_CLIENT_SECRET in backend/.env");
     }
     return {clientId, clientSecret};
 }
 
-function getAuthorizationUrl(userId, blockId = "") {
+function getAuthorizationUrl(userId, blockId = "", options = {}) {
     const {clientId} = getConfiguration();
     const state = crypto.randomBytes(24).toString("hex");
-    authorizationStates.set(state, {userId, blockId});
+    const redirectUri = getRedirectUri(options.origin);
+    authorizationStates.set(state, {
+        userId,
+        blockId,
+        redirectUri,
+        frontendOrigin: options.frontendOrigin || ""
+    });
     const parameters = new URLSearchParams({
         client_id: clientId,
-        redirect_uri: getRedirectUri(),
+        redirect_uri: redirectUri,
         response_type: "code",
         response_mode: "query",
         prompt: "select_account",
@@ -64,7 +81,9 @@ async function readTokenResponse(response, fallbackMessage) {
 async function exchangeAuthorizationCode(code, state, expectedUserId) {
     const authorization = authorizationStates.get(state);
     authorizationStates.delete(state);
-    if (!authorization || authorization.userId !== expectedUserId) throw new Error("Outlook authorisation is invalid or expired");
+    // The provider callback can arrive in the system browser, which does not
+    // share Electron's cookie. The single-use OAuth state binds it to the user.
+    if (!authorization || (expectedUserId && authorization.userId !== expectedUserId)) throw new Error("Outlook authorisation is invalid or expired");
     const {clientId, clientSecret} = getConfiguration();
     const response = await fetch(`${AUTHORITY}/token`, {
         method: "POST",
@@ -73,19 +92,25 @@ async function exchangeAuthorizationCode(code, state, expectedUserId) {
             client_id: clientId,
             client_secret: clientSecret,
             code,
-            redirect_uri: getRedirectUri(),
+            redirect_uri: authorization.redirectUri || getRedirectUri(),
             grant_type: "authorization_code",
             scope: OUTLOOK_SCOPES
         })
     });
     const data = await readTokenResponse(response, "Microsoft rejected the Outlook authorisation");
+    // Microsoft can omit a refresh token on a repeat consent. Keep the
+    // existing renewable connection for this same source block.
+    const previousConnection = getUserConnection(authorization.userId, authorization.blockId);
     const connection = {
         accessToken: data.access_token,
-        refreshToken: data.refresh_token,
+        refreshToken: data.refresh_token || previousConnection?.refreshToken || "",
         expiresAt: Date.now() + Number(data.expires_in || 3600) * 1000
     };
     saveUserConnection(authorization.userId, authorization.blockId, connection);
-    return authorization.blockId;
+    return {
+        blockId: authorization.blockId,
+        frontendOrigin: authorization.frontendOrigin
+    };
 }
 
 async function refreshAccessToken(userId, blockId = "") {

@@ -5,6 +5,7 @@ const INTEGRATION_KEYS = [
     "OPENAI_API_KEY",
     "GMAIL_CLIENT_ID",
     "GMAIL_CLIENT_SECRET",
+    "GOOGLE_CALENDAR_API_KEY",
     "OUTLOOK_CLIENT_ID",
     "OUTLOOK_CLIENT_SECRET",
     "FOLDERROCKET_TOKEN_ENCRYPTION_KEY"
@@ -40,6 +41,7 @@ function integrationStatus() {
         desktopConfigurationAvailable: Boolean(configurationPath()),
         aiConfigured: configured(process.env.OPENAI_API_KEY),
         gmailConfigured: configured(process.env.GMAIL_CLIENT_ID) && configured(process.env.GMAIL_CLIENT_SECRET),
+        googleCalendarConfigured: configured(process.env.GOOGLE_CALENDAR_API_KEY),
         outlookConfigured: configured(process.env.OUTLOOK_CLIENT_ID) && configured(process.env.OUTLOOK_CLIENT_SECRET),
         tokenEncryptionConfigured: configured(process.env.FOLDERROCKET_TOKEN_ENCRYPTION_KEY)
     };

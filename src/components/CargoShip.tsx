@@ -1,6 +1,7 @@
 import {useEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type RefObject} from "react";
 import {FilePlus2, FileText, MailPlus, Minus, Rocket, RotateCw, ScanSearch, Send, SlidersHorizontal, Trash2, X, Zap} from "lucide-react";
 import {API_BASE_URL} from "../api";
+import {browserBridgeDropId, resolveBrowserBridgeDrop} from "../browserBridge";
 import {EMAIL_ATTACHMENT_TYPE} from "./GmailSourcePanel";
 import {OUTLOOK_ATTACHMENT_TYPE} from "./OutlookSourcePanel";
 import {SEARCH_RESULT_TYPE} from "./SearchWorkspace";
@@ -54,14 +55,13 @@ function readCargoLayout(scope: string): CargoLayout {
 interface CargoShipProps {
     onOpenFileStudio: () => void;
     aiEnabled: boolean;
-    cargoScale: number;
     storageScope: string;
     standalone?: boolean;
     folders: ManagedFolder[];
     onVirtualFilesAdd: (folderId: string, files: VirtualFile[]) => void;
 }
 
-export default function CargoShip({onOpenFileStudio, aiEnabled, cargoScale, storageScope, standalone = false, folders, onVirtualFilesAdd}: CargoShipProps) {
+export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, standalone = false, folders, onVirtualFilesAdd}: CargoShipProps) {
     const initialLayoutRef = useRef<CargoLayout>(readCargoLayout(storageScope));
     const [mode, setMode] = useState<CargoMode>("transport");
     const [items, setItems] = useState<CargoItem[]>([]);
@@ -96,14 +96,20 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, cargoScale, stor
     const dockMovedRef = useRef(false);
     const [targetFolderId, setTargetFolderId] = useState("");
     const [instantDelivery, setInstantDelivery] = useState(false);
-    const shipScale = Math.max(.8, Math.min(1.3, cargoScale));
+    const [desktopShipOpen, setDesktopShipOpen] = useState(false);
+    const shipScale = 1;
 
-    // Cargo Ship is a separate Electron window. Its zoom belongs to that
-    // window, avoiding the clipped border created by a CSS-scale transform.
+    // The Cargo Ship must never set Electron's page zoom: Cargo Ship and the
+    // main workspace share the same local origin, so doing so could resize the
+    // whole application. The desktop process reports its own window state.
     useEffect(() => {
-        if (!standalone || !window.folderRocketDesktop) return;
-        void window.folderRocketDesktop.setZoomFactor(shipScale);
-    }, [shipScale, standalone]);
+        if (standalone || !window.folderRocketDesktop?.cargoShipState) return;
+        let active = true;
+        const syncState = (state: {open: boolean}) => { if (active) setDesktopShipOpen(Boolean(state.open)); };
+        void window.folderRocketDesktop.cargoShipState().then(syncState);
+        const unsubscribe = window.folderRocketDesktop.onCargoShipStateChanged(syncState);
+        return () => { active = false; unsubscribe(); };
+    }, [standalone]);
 
     useEffect(() => {
         localStorage.setItem(layoutKey(storageScope), JSON.stringify({x: position.x, y: position.y, ...shipSize}));
@@ -140,12 +146,33 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, cargoScale, stor
         if (instantDelivery && targetFolderId) void sendToFolder(incoming);
     }
 
-    function handleDrop(event: DragEvent<HTMLDivElement>) {
+    async function handleDrop(event: DragEvent<HTMLDivElement>) {
         event.preventDefault();
         event.stopPropagation();
         setDropActive(false);
-        const gmail = event.dataTransfer.getData(EMAIL_ATTACHMENT_TYPE);
-        const outlook = event.dataTransfer.getData(OUTLOOK_ATTACHMENT_TYPE);
+        const bridgeId = browserBridgeDropId(event.dataTransfer.getData("text/plain"));
+        if (bridgeId) {
+            try {
+                const files = await resolveBrowserBridgeDrop(bridgeId);
+                addOrAutoSend(files.map(file => ({...file, id: cargoId(), kind: "path" as const})));
+            } catch (error) {
+                setMessage(error instanceof Error ? error.message : "Unable to prepare the Gmail attachment.");
+            }
+            return;
+        }
+        let gmail = event.dataTransfer.getData(EMAIL_ATTACHMENT_TYPE);
+        let outlook = event.dataTransfer.getData(OUTLOOK_ATTACHMENT_TYPE);
+        const droppedText = event.dataTransfer.getData("text/plain").trim();
+        // A custom drag type can be stripped when the Cargo Ship is in its own
+        // Electron window. The plain-text payload keeps Gmail/Outlook attachments draggable.
+        if (!gmail && !outlook && droppedText.startsWith("folderrocket-email:")) {
+            try {
+                const payload = JSON.parse(droppedText.slice("folderrocket-email:".length)) as {provider?: string; attachments?: RemoteAttachment[]};
+                const attachments = JSON.stringify(payload.attachments ?? []);
+                if (payload.provider === "gmail") gmail = attachments;
+                if (payload.provider === "outlook") outlook = attachments;
+            } catch { /* Ignore unrelated text drops. */ }
+        }
         const search = event.dataTransfer.getData(SEARCH_RESULT_TYPE);
         if (gmail || outlook) {
             const provider = gmail ? "gmail" : "outlook";
@@ -163,7 +190,6 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, cargoScale, stor
             addOrAutoSend(files.map(file => ({id: cargoId(), kind: "file" as const, file, name: file.name, size: file.size})));
             return;
         }
-        const droppedText = event.dataTransfer.getData("text/plain").trim();
         if (droppedText) {
             setMode("text");
             setText(current => current ? `${current}\n${droppedText}` : droppedText);
@@ -180,7 +206,9 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, cargoScale, stor
             event.dataTransfer.setData("text/plain", `folderrocket-search:${value}`);
             return;
         }
-        event.dataTransfer.setData(item.provider === "gmail" ? EMAIL_ATTACHMENT_TYPE : OUTLOOK_ATTACHMENT_TYPE, JSON.stringify([{attachmentId: item.attachmentId, messageId: item.messageId, mimeType: item.mimeType, name: item.name, size: item.size, sourceBlockId: item.sourceBlockId}]));
+        const attachment = {attachmentId: item.attachmentId, messageId: item.messageId, mimeType: item.mimeType, name: item.name, size: item.size, sourceBlockId: item.sourceBlockId};
+        event.dataTransfer.setData(item.provider === "gmail" ? EMAIL_ATTACHMENT_TYPE : OUTLOOK_ATTACHMENT_TYPE, JSON.stringify([attachment]));
+        event.dataTransfer.setData("text/plain", `folderrocket-email:${JSON.stringify({provider: item.provider, attachments: [attachment]})}`);
     }
 
     async function createTextFile() {
@@ -379,11 +407,11 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, cargoScale, stor
     }
 
     async function captureBehindShip() {
-        if (!window.folderRocketDesktop?.capturePageRegion) { setLensError("Lens is available in the local FolderRocket desktop app."); return; }
+        if (!window.folderRocketDesktop?.captureBehindCargoShip) { setLensError("Lens is available in the local FolderRocket desktop app."); return; }
         setLensError(""); setLensCapturing(true);
         try {
             await new Promise<void>(resolve => window.requestAnimationFrame(() => window.requestAnimationFrame(() => resolve())));
-            const imageDataUrl = await window.folderRocketDesktop.capturePageRegion({x: Math.round(position.x), y: Math.round(position.y + 39 * shipScale), width: Math.round(shipSize.width * shipScale), height: Math.max(80, Math.round((shipSize.height - 39) * shipScale))});
+            const imageDataUrl = await window.folderRocketDesktop.captureBehindCargoShip({topInset: 39});
             setLensImage(imageDataUrl);
             return imageDataUrl;
         } catch (error) { setLensError(error instanceof Error ? error.message : "Lens capture failed."); return ""; }
@@ -462,7 +490,7 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, cargoScale, stor
     const shipPanel = <section ref={shipRef} className={`${dragging ? "cargoShip moving" : "cargoShip"}${standalone ? " cargoShipStandalone" : ""}${lensCapturing ? " lensCapturing" : ""}`} style={shipPanelStyle}>
         <header className="cargoShipHeader" onPointerDown={standalone ? undefined : startDrag}><span><Rocket size={15} />Cargo Ship <small>{items.length} on board</small></span><span className="cargoShipHeaderActions"><button type="button" title="Minimize to a movable bubble" onClick={minimizeShip}><Minus size={14} /></button><button type="button" className="cargoShipClose" title="Close Cargo Ship" onClick={closeShip}><X size={14} /></button></span></header>
         <div className="cargoShipModes" role="tablist"><button type="button" className={mode === "transport" ? "active" : ""} onClick={() => setMode("transport")}>Files</button><button type="button" className={mode === "text" ? "active" : ""} onClick={() => setMode("text")}><FilePlus2 size={11} />Text</button><button type="button" className={mode === "email" ? "active" : ""} onClick={() => setMode("email")}><MailPlus size={11} />Email</button><button type="button" className={mode === "convert" ? "active" : ""} onClick={() => setMode("convert")}><RotateCw size={11} />Convert</button>{aiEnabled && <button type="button" className={mode === "lens" ? "active" : ""} onClick={() => setMode("lens")}><ScanSearch size={11} />Lens</button>}</div>
-        {mode === "transport" && <div className={dropActive ? "cargoDropArea active" : "cargoDropArea"} onDragOver={event => { event.preventDefault(); setDropActive(true); }} onDragLeave={() => setDropActive(false)} onDrop={handleDrop}><p>{targetFolderId ? (instantDelivery ? `Instant delivery: ${folders.find(folder => folder.id === targetFolderId)?.name ?? "selected folder"}.` : "Delivery is manual.") : "Choose a FolderRocket folder."}</p><div className="cargoItemList">{items.length ? items.map(item => <div className="cargoItem" draggable key={item.id} onDragStart={event => handleItemDrag(event, item)}><FileText size={14} /><span title={item.name}>{item.name}</span><small>{formatSize(item.size)}</small><button type="button" title="Remove from Cargo Ship" onClick={() => setItems(current => current.filter(currentItem => currentItem.id !== item.id))}><Trash2 size={13} /></button></div>) : <em>Drop files here.</em>}</div><div className="cargoFolderSend"><select value={targetFolderId} onChange={event => setTargetFolderId(event.target.value)}><option value="">Choose FolderRocket folder…</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folder.storage === "imaginary" ? "◇ " : ""}{folder.name}</option>)}</select><button type="button" className={instantDelivery ? "cargoInstantToggle active" : "cargoInstantToggle"} onClick={() => setInstantDelivery(current => !current)} disabled={!targetFolderId} aria-pressed={instantDelivery} title="Toggle instant delivery"><Zap size={13}/>{instantDelivery ? "Instant ON" : "Instant"}</button><button type="button" onClick={() => void sendToFolder()} disabled={!targetFolderId || !items.length || working}>Organise</button></div><button type="button" className="cargoClear" onClick={() => setItems([])}>Clear cargo</button></div>}
+        {mode === "transport" && <div className={dropActive ? "cargoDropArea active" : "cargoDropArea"} onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setDropActive(true); }} onDragLeave={() => setDropActive(false)} onDrop={handleDrop}><p>{targetFolderId ? (instantDelivery ? `Instant delivery: ${folders.find(folder => folder.id === targetFolderId)?.name ?? "selected folder"}.` : "Delivery is manual.") : "Choose a FolderRocket folder."}</p><div className="cargoItemList">{items.length ? items.map(item => <div className="cargoItem" draggable key={item.id} onDragStart={event => handleItemDrag(event, item)}><FileText size={14} /><span title={item.name}>{item.name}</span><small>{formatSize(item.size)}</small><button type="button" title="Remove from Cargo Ship" onClick={() => setItems(current => current.filter(currentItem => currentItem.id !== item.id))}><Trash2 size={13} /></button></div>) : <em>Drop files here.</em>}</div><div className="cargoFolderSend"><select value={targetFolderId} onChange={event => setTargetFolderId(event.target.value)}><option value="">Choose FolderRocket folder…</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folder.storage === "imaginary" ? "◇ " : ""}{folder.name}</option>)}</select><button type="button" className={instantDelivery ? "cargoInstantToggle active" : "cargoInstantToggle"} onClick={() => setInstantDelivery(current => !current)} disabled={!targetFolderId} aria-pressed={instantDelivery} title="Toggle instant delivery"><Zap size={13}/>{instantDelivery ? "Instant ON" : "Instant"}</button><button type="button" onClick={() => void sendToFolder()} disabled={!targetFolderId || !items.length || working}>Organise</button></div><button type="button" className="cargoClear" onClick={() => setItems([])}>Clear cargo</button></div>}
         {mode === "text" && <div className="cargoForm"><input value={fileName} onChange={event => setFileName(event.target.value)} placeholder="File name or note title" /><textarea value={text} onChange={event => setText(event.target.value)} placeholder="Paste or write text here…" /><div><select value={textFormat} onChange={event => setTextFormat(event.target.value as "note" | "txt" | "pdf" | "docx")}><option value="note">Post-it note</option><option value="txt">TXT file</option><option value="pdf">PDF file</option><option value="docx">Word document</option></select><button type="button" onClick={() => void createTextFile()} disabled={!text.trim() || working}><FilePlus2 size={14} />{textFormat === "note" ? "Create note" : "Create"}</button></div></div>}
         {mode === "email" && <div className="cargoForm"><select value={emailSourceKey} onChange={event => setEmailSourceKey(event.target.value)} disabled={!emailSources.length}><option value="">{emailSources.length ? "Choose connected mailbox" : "No connected mailbox"}</option>{emailSources.map(source => <option key={`${source.provider}:${source.blockId}`} value={`${source.provider}:${source.blockId}`}>{source.label}</option>)}</select><input value={recipient} onChange={event => setRecipient(event.target.value)} placeholder="To: name@example.com" /><input value={emailSubject} onChange={event => setEmailSubject(event.target.value)} placeholder="Email subject" /><textarea value={text} onChange={event => setText(event.target.value)} placeholder="Write the email text here…" /><button type="button" onClick={() => void createEmailDraft()} disabled={!emailSources.length || !text.trim() || working}><Send size={14} />{working ? "Saving draft…" : "Save draft in mailbox"}</button></div>}
         {mode === "convert" && <div className="cargoConvert"><p>Convert files on this PC.</p><select value={convertFormat} onChange={event => setConvertFormat(event.target.value)}><option value="pdf">PDF</option><option value="txt">TXT</option><option value="xlsx">XLSX</option><option value="csv">CSV</option></select><button type="button" onClick={() => void convertItems()} disabled={working}><RotateCw className={working ? "cargoSpin" : ""} size={15} />{working ? "Converting…" : "Convert cargo"}</button><button type="button" className="cargoStudioLink" onClick={onOpenFileStudio}><SlidersHorizontal size={14} />Open File Studio</button></div>}
@@ -471,7 +499,7 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, cargoScale, stor
         <button type="button" className="cargoShipResize" onPointerDown={startResize} title="Drag to resize Cargo Ship" aria-label="Resize Cargo Ship" />
     </section>;
     if (standalone) return <main className="cargoShipStandaloneWindow">{minimized && <button ref={dockRef} type="button" className="cargoShipDock cargoShipDockStandalone" onPointerDown={startStandaloneDockDrag} onClick={() => { if (!dockMovedRef.current) openShip(); }} title="Open or move Cargo Ship"><Rocket size={25}/>{items.length > 0 && <small>{items.length}</small>}</button>}{open && shipPanel}</main>;
-    if (window.folderRocketDesktop?.openCargoShipWindow) return <div className="cargoShipRoot"><div className="cargoShipLauncherWrap"><button type="button" className="cargoShipLauncher" onClick={() => void window.folderRocketDesktop?.openCargoShipWindow()} title="Open Cargo Ship on the desktop"><Rocket size={17} />Cargo Ship</button></div></div>;
+    if (window.folderRocketDesktop?.toggleCargoShipWindow) return <div className="cargoShipRoot"><div className="cargoShipLauncherWrap"><button type="button" className={desktopShipOpen ? "cargoShipLauncher active" : "cargoShipLauncher"} onClick={() => void window.folderRocketDesktop?.toggleCargoShipWindow().then(state => setDesktopShipOpen(Boolean(state.open)))} title={desktopShipOpen ? "Close Cargo Ship" : "Open Cargo Ship on the desktop"} aria-pressed={desktopShipOpen}><Rocket size={17} />Cargo Ship</button></div></div>;
     return <div className="cargoShipRoot">
         <div className="cargoShipLauncherWrap"><button type="button" className={open ? "cargoShipLauncher active" : "cargoShipLauncher"} onClick={() => { if (open) minimizeShip(); else openShip(); }} title={open ? "Minimize Cargo Ship" : "Open movable Cargo Ship"}><Rocket size={17} />Cargo Ship {items.length > 0 && <small>{items.length}</small>}</button></div>
         {minimized && <button ref={dockRef} type="button" className={dragging ? "cargoShipDock moving" : "cargoShipDock"} style={{left: position.x, top: position.y, transform: `scale(${shipScale})`, transformOrigin: "top left"}} onPointerDown={event => startDrag(event, dockRef, true)} onClick={() => { if (!dockMovedRef.current) openShip(); }} title="Open or move Cargo Ship"><Rocket size={25}/>{items.length > 0 && <small>{items.length}</small>}</button>}

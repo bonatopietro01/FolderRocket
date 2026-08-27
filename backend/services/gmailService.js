@@ -10,8 +10,19 @@ const TOKEN_URL =
 const AUTH_URL =
     "https://accounts.google.com/o/oauth2/v2/auth";
 
-function getRedirectUri() {
-    return `${(process.env.APP_ORIGIN || "http://localhost:3000").replace(/\/$/, "")}/auth/gmail/callback`;
+function getRedirectUri(origin = process.env.APP_ORIGIN || "http://localhost:3000") {
+    const normalizedOrigin = String(origin || "").trim().replace(/\/$/, "");
+    let parsedOrigin;
+    try {
+        parsedOrigin = new URL(normalizedOrigin);
+    }
+    catch {
+        throw new Error("Gmail callback URL is invalid. Check APP_ORIGIN.");
+    }
+    if (!/^https?:$/.test(parsedOrigin.protocol)) {
+        throw new Error("Gmail callback URL must use http or https.");
+    }
+    return `${parsedOrigin.origin}/auth/gmail/callback`;
 }
 
 const connections = new Map();
@@ -78,11 +89,9 @@ function cacheInboxMessage(userId, blockId, message, hasText) {
 
 function getConfiguration() {
 
-    const clientId =
-        process.env.GMAIL_CLIENT_ID;
+    const clientId = String(process.env.GMAIL_CLIENT_ID || "").trim();
 
-    const clientSecret =
-        process.env.GMAIL_CLIENT_SECRET;
+    const clientSecret = String(process.env.GMAIL_CLIENT_SECRET || "").trim();
 
     if (!clientId || !clientSecret) {
 
@@ -90,6 +99,10 @@ function getConfiguration() {
             "Configura GMAIL_CLIENT_ID e GMAIL_CLIENT_SECRET in backend/.env"
         );
 
+    }
+
+    if (!/^\d+-[A-Za-z0-9_-]+\.apps\.googleusercontent\.com$/.test(clientId)) {
+        throw new Error("GMAIL_CLIENT_ID is not a valid Google OAuth client ID.");
     }
 
 
@@ -101,7 +114,7 @@ function getConfiguration() {
 }
 
 
-function getAuthorizationUrl(userId, blockId = "") {
+function getAuthorizationUrl(userId, blockId = "", options = {}) {
 
     const {
         clientId
@@ -111,15 +124,25 @@ function getAuthorizationUrl(userId, blockId = "") {
         crypto.randomBytes(24)
             .toString("hex");
 
-    authorizationStates.set(state, {userId, blockId});
+    const redirectUri = getRedirectUri(options.origin);
+    authorizationStates.set(state, {
+        userId,
+        blockId,
+        redirectUri,
+        frontendOrigin: options.frontendOrigin || ""
+    });
 
     const parameters =
         new URLSearchParams({
             client_id: clientId,
-            redirect_uri: getRedirectUri(),
+            redirect_uri: redirectUri,
             response_type: "code",
             access_type: "offline",
-            prompt: "select_account consent",
+            // Let Google request consent only when it is really required.
+            // Forcing legacy consent on every reconnect can fail in browsers
+            // that already have a Google account session open.
+            prompt: "select_account",
+            include_granted_scopes: "true",
             scope: GMAIL_SCOPES
         });
 
@@ -140,7 +163,10 @@ async function exchangeAuthorizationCode(
 ) {
     const authorization = authorizationStates.get(state);
     authorizationStates.delete(state);
-    if (!authorization || authorization.userId !== expectedUserId) {
+    // The desktop app opens the provider consent page in the system browser.
+    // That browser does not share Electron's session cookie, so the one-time,
+    // high-entropy OAuth state is the authority for the callback user there.
+    if (!authorization || (expectedUserId && authorization.userId !== expectedUserId)) {
 
         throw new Error(
             "Autorizzazione Gmail non valida o scaduta"
@@ -167,7 +193,7 @@ async function exchangeAuthorizationCode(
                     code,
                     client_id: clientId,
                     client_secret: clientSecret,
-                    redirect_uri: getRedirectUri(),
+                    redirect_uri: authorization.redirectUri || getRedirectUri(),
                     grant_type: "authorization_code"
                 })
             }
@@ -186,11 +212,15 @@ async function exchangeAuthorizationCode(
 
     }
 
+    // Google may omit refresh_token when this mailbox already approved the
+    // application. Never replace a working long-lived connection with a
+    // one-hour access token in that case.
+    const previousConnection = getUserConnection(authorization.userId, authorization.blockId);
     const connection = {
         accessToken:
             data.access_token,
         refreshToken:
-            data.refresh_token,
+            data.refresh_token || previousConnection?.refreshToken || "",
         expiresAt:
             Date.now()
             +
@@ -198,7 +228,10 @@ async function exchangeAuthorizationCode(
     };
 
     saveUserConnection(authorization.userId, authorization.blockId, connection);
-    return authorization.blockId;
+    return {
+        blockId: authorization.blockId,
+        frontendOrigin: authorization.frontendOrigin
+    };
 
 }
 

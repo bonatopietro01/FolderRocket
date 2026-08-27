@@ -1,5 +1,5 @@
 import {useEffect, useState, type FormEvent, type ReactNode} from "react";
-import {Copy, Eye, EyeOff, History, KeyRound, LogOut, Plus, RefreshCw, Settings2, ShieldCheck, Sparkles, UserRound} from "lucide-react";
+import {Copy, Eye, EyeOff, History, KeyRound, LogOut, Plus, RefreshCw, Settings2, ShieldCheck, UserRound} from "lucide-react";
 import {API_BASE_URL} from "../api";
 import folderRocketLoginLogo from "../assets/folderrocket-login-logo.png";
 
@@ -69,10 +69,9 @@ function PasswordField({
     </label>;
 }
 
-function AccountMenu({user, onLogout, aiEnabled, appZoom, onAppZoomChange, floatingToolsScale, onFloatingToolsScaleChange, cargoShipScale, onCargoShipScaleChange}: {user: FolderRocketUser; onLogout: () => Promise<void>; aiEnabled: boolean; appZoom: number; onAppZoomChange: (value: number) => void; floatingToolsScale: number; onFloatingToolsScaleChange: (value: number) => void; cargoShipScale: number; onCargoShipScaleChange: (value: number) => void}) {
+function AccountMenu({user, onLogout, appZoom, onAppZoomChange, floatingToolsScale, onFloatingToolsScaleChange, bookmarkScale, onBookmarkScaleChange}: {user: FolderRocketUser; onLogout: () => Promise<void>; appZoom: number; onAppZoomChange: (value: number) => void; floatingToolsScale: number; onFloatingToolsScaleChange: (value: number) => void; bookmarkScale: number; onBookmarkScaleChange: (value: number) => void}) {
     const [open, setOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
-    const [aiNotePrompt, setAiNotePrompt] = useState("");
     const [inviteEmail, setInviteEmail] = useState("");
     const [inviteResult, setInviteResult] = useState<{email: string; code: string} | null>(null);
     const [resetEmail, setResetEmail] = useState("");
@@ -160,13 +159,7 @@ function AccountMenu({user, onLogout, aiEnabled, appZoom, onAppZoomChange, float
 
     function adjustAppZoom(amount: number) { onAppZoomChange(Math.round(Math.max(.75, Math.min(1.5, appZoom + amount)) * 100) / 100); }
     function adjustFloatingToolsScale(amount: number) { onFloatingToolsScaleChange(Math.round(Math.max(.8, Math.min(1.3, floatingToolsScale + amount)) * 100) / 100); }
-    function adjustCargoShipScale(amount: number) { onCargoShipScaleChange(Math.round(Math.max(.8, Math.min(1.3, cargoShipScale + amount)) * 100) / 100); }
-    function createAiNote() {
-        const prompt = aiNotePrompt.trim();
-        if (!prompt) return;
-        window.dispatchEvent(new CustomEvent("folderrocket:create-ai-sticky-note", {detail: {prompt}}));
-        setAiNotePrompt("");
-    }
+    function adjustBookmarkScale(amount: number) { onBookmarkScaleChange(Math.round(Math.max(.8, Math.min(1.3, bookmarkScale + amount)) * 100) / 100); }
 
     return <div className="accountMenuWrap">
         <button type="button" className="accountMenuButton" onClick={toggleMenu} aria-expanded={open}>
@@ -174,7 +167,7 @@ function AccountMenu({user, onLogout, aiEnabled, appZoom, onAppZoomChange, float
         </button>
         {open && <div className="accountMenu">
             <div className="accountMenuHeading"><div><strong><ShieldCheck size={14} />{user.role === "admin" ? "Administrator" : "Personal account"}</strong><small>Private workspace active</small></div><button type="button" className={settingsOpen ? "accountSettingsButton active" : "accountSettingsButton"} onClick={() => setSettingsOpen(current => !current)} title="Display settings" aria-label="Display settings"><Settings2 size={15} /></button></div>
-            {settingsOpen && <section className="accountDisplaySettings"><strong><Settings2 size={14} />Display settings</strong><div className="accountScaleControl"><span>App {Math.round(appZoom * 100)}%</span><button type="button" onClick={() => adjustAppZoom(-.1)} disabled={appZoom <= .75} aria-label="Zoom out">−</button><button type="button" onClick={() => adjustAppZoom(.1)} disabled={appZoom >= 1.5} aria-label="Zoom in">+</button></div><div className="accountScaleControl"><span>Notes {Math.round(floatingToolsScale * 100)}%</span><button type="button" onClick={() => adjustFloatingToolsScale(-.1)} disabled={floatingToolsScale <= .8} aria-label="Make notes smaller">−</button><button type="button" onClick={() => adjustFloatingToolsScale(.1)} disabled={floatingToolsScale >= 1.3} aria-label="Make notes larger">+</button></div><div className="accountScaleControl"><span>Cargo Ship {Math.round(cargoShipScale * 100)}%</span><button type="button" onClick={() => adjustCargoShipScale(-.1)} disabled={cargoShipScale <= .8} aria-label="Make Cargo Ship smaller">−</button><button type="button" onClick={() => adjustCargoShipScale(.1)} disabled={cargoShipScale >= 1.3} aria-label="Make Cargo Ship larger">+</button></div>{aiEnabled && <div className="accountAiNote"><textarea value={aiNotePrompt} onChange={event => setAiNotePrompt(event.target.value)} placeholder="Ask AI to create a post-it…" /><button type="button" onClick={createAiNote} disabled={!aiNotePrompt.trim()}><Sparkles size={13} />AI note</button></div>}</section>}
+            {settingsOpen && <section className="accountDisplaySettings"><strong><Settings2 size={14} />Display settings</strong><div className="accountScaleControl"><span>Electron zoom {Math.round(appZoom * 100)}%</span><button type="button" onClick={() => adjustAppZoom(-.05)} disabled={appZoom <= .75} aria-label="Zoom out">−</button><button type="button" onClick={() => adjustAppZoom(.05)} disabled={appZoom >= 1.5} aria-label="Zoom in">+</button></div><div className="accountScaleControl"><span>Post-its {Math.round(floatingToolsScale * 100)}%</span><button type="button" onClick={() => adjustFloatingToolsScale(-.05)} disabled={floatingToolsScale <= .8} aria-label="Make notes smaller">−</button><button type="button" onClick={() => adjustFloatingToolsScale(.05)} disabled={floatingToolsScale >= 1.3} aria-label="Make notes larger">+</button></div><div className="accountScaleControl"><span>Bookmarks {Math.round(bookmarkScale * 100)}%</span><button type="button" onClick={() => adjustBookmarkScale(-.05)} disabled={bookmarkScale <= .8} aria-label="Make bookmarks smaller">−</button><button type="button" onClick={() => adjustBookmarkScale(.05)} disabled={bookmarkScale >= 1.3} aria-label="Make bookmarks larger">+</button></div></section>}
             <div className="recoveryBox">
                 <label>Personal password recovery</label>
                 <p>Generate one code and save it somewhere safe. It is shown once and can be used once within one year.</p>

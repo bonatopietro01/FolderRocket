@@ -44,6 +44,7 @@ const {addAuditEvent, listAuditEvents} = require("./services/auditLogService");
 const {analyzeDomainPage, analyzeProjection} = require("./services/projectionAnalysisService");
 const {createStickyNote} = require("./services/stickyNoteAiService");
 const {integrationStatus, saveIntegrationConfiguration} = require("./services/desktopIntegrationConfigService");
+const {createBrowserBridgeToken, resolveBrowserDrop, stageBrowserDrop} = require("./services/browserBridgeService");
 const {
     authenticateRequest,
     createEmergencyRecoveryCode,
@@ -76,6 +77,15 @@ const {
 } = require("./services/gmailWarningService");
 
 const {
+    disconnect: disconnectGoogleCalendar,
+    exchangeAuthorizationCode: exchangeGoogleCalendarAuthorizationCode,
+    getAuthorizationUrl: getGoogleCalendarAuthorizationUrl,
+    getStatus: getGoogleCalendarStatus,
+    hasPendingAuthorization: hasPendingGoogleCalendarAuthorization,
+    listEvents: listGoogleCalendarEvents
+} = require("./services/googleCalendarService");
+
+const {
     createDraft: createOutlookDraft,
     downloadAttachment: downloadOutlookAttachment,
     disconnect: disconnectOutlook,
@@ -93,11 +103,32 @@ const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || "127.0.0.1";
 const APP_ORIGIN = (process.env.APP_ORIGIN || `http://localhost:${PORT}`).replace(/\/$/, "");
 const FRONTEND_ORIGIN = (process.env.FRONTEND_ORIGIN || APP_ORIGIN).replace(/\/$/, "");
+const RUNTIME_MODE = process.env.FOLDERROCKET_DESKTOP === "1" ? "desktop" : "manual";
 const AUTH_ATTEMPT_WINDOW_MS = 1000 * 60 * 15;
 const AUTH_MAX_FAILURES = 8;
 const authFailures = new Map();
 
 app.set("trust proxy", 1);
+
+function oauthOriginForRequest(request) {
+    const requestHost = String(request.get("host") || "").trim().toLowerCase();
+    // The installed app and the local development server always use this
+    // canonical callback. It prevents an old public APP_ORIGIN in .env from
+    // sending any local mailbox connection to a stale Tailscale address.
+    if (/^(localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/.test(requestHost)) {
+        return `http://localhost:${PORT}`;
+    }
+    return APP_ORIGIN;
+}
+
+function oauthCompletionUrl(provider, blockId, fallbackOrigin) {
+    if (RUNTIME_MODE === "desktop") {
+        const parameters = new URLSearchParams({provider});
+        if (blockId) parameters.set("blockId", blockId);
+        return `folderrocket://oauth/connected?${parameters}`;
+    }
+    return `${fallbackOrigin}?${provider}=connected${blockId ? `&blockId=${encodeURIComponent(blockId)}` : ""}`;
+}
 
 function authAttemptKey(request, action) {
     return `${action}:${request.ip || request.socket.remoteAddress || "unknown"}`;
@@ -171,6 +202,11 @@ function requireAdministrator(req, res, next) {
     next();
 }
 
+function isLoopbackRequest(req) {
+    const address = String(req.ip || req.socket?.remoteAddress || "").toLowerCase();
+    return address === "::1" || address === "127.0.0.1" || address === "::ffff:127.0.0.1";
+}
+
 function userWorkspace(user) {
     return path.resolve(user.workspacePath);
 }
@@ -233,6 +269,35 @@ function chooseParentFolderOnHost() {
             resolve(selectedPath || null);
         });
     });
+}
+
+async function listRemovableDrives() {
+    if (process.platform !== "win32") return [];
+    const script = "Get-CimInstance Win32_LogicalDisk -Filter 'DriveType = 2' | Select-Object DeviceID,VolumeName,Size,FreeSpace | ConvertTo-Json -Compress";
+    const output = await new Promise((resolve, reject) => {
+        execFile("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {windowsHide: true, maxBuffer: 1024 * 1024}, (error, stdout, stderr) => {
+            if (error) return reject(new Error(stderr?.trim() || "Unable to check removable drives."));
+            resolve(stdout.trim());
+        });
+    });
+    if (!output) return [];
+    let parsed;
+    try { parsed = JSON.parse(output); }
+    catch { throw new Error("Windows did not return removable-drive data."); }
+    return (Array.isArray(parsed) ? parsed : [parsed])
+        .filter(item => item && typeof item.DeviceID === "string" && /^[A-Za-z]:$/.test(item.DeviceID))
+        .map(item => ({
+            id: item.DeviceID.toUpperCase(),
+            path: `${item.DeviceID.toUpperCase()}\\`,
+            label: typeof item.VolumeName === "string" && item.VolumeName.trim() ? item.VolumeName.trim() : "USB drive",
+            size: Number(item.Size) || 0,
+            freeSpace: Number(item.FreeSpace) || 0
+        }));
+}
+
+function normalizeRemovableDrivePath(value) {
+    const trimmed = String(value ?? "").trim().replace(/[\\/]+$/, "").toUpperCase();
+    return /^[A-Z]:$/.test(trimmed) ? `${trimmed}\\` : "";
 }
 
 function convertWordToPdf(sourcePath, targetPath) {
@@ -532,6 +597,18 @@ app.put("/desktop/integrations/config", requireAuthenticated, requireAdministrat
     }
 });
 
+// The code is shown once to the local administrator, then stored only as a hash.
+// A browser extension uses it solely to send an attachment to this local backend.
+app.post("/browser-bridge/token", requireAuthenticated, requireAdministrator, (req, res) => {
+    try {
+        const token = createBrowserBridgeToken(req.user.id);
+        addAuditEvent({user: req.user, action: "browser_bridge_code_generated"});
+        res.status(201).json({token});
+    } catch (error) {
+        res.status(400).json({message: error instanceof Error ? error.message : "Unable to generate the browser bridge code."});
+    }
+});
+
 app.use((req, res, next) => {
     const pathIsPublic = req.path === "/health"
         || req.path === "/auth/bootstrap"
@@ -541,6 +618,7 @@ app.use((req, res, next) => {
         || req.path === "/auth/password-reset"
         || req.path === "/auth/gmail/callback"
         || req.path === "/auth/outlook/callback"
+        || req.path === "/browser-bridge/stage"
         || req.path === "/"
         || req.path.startsWith("/assets/")
         || req.path === "/favicon.ico";
@@ -651,6 +729,135 @@ app.post("/domain/analyze", requireAuthenticated, async (req, res) => {
     }
 });
 
+// Google Calendar API keys intentionally support public calendars only. Private
+// calendars will use a separate OAuth consent flow rather than exposing a key.
+app.get("/calendar/google/events", requireAuthenticated, async (req, res) => {
+    try {
+        const blockId = readAlertBlockId(req);
+        if (getGoogleCalendarStatus(req.user.id, blockId).connected) {
+            const days = Math.max(1, Math.min(90, Math.floor(Number(req.query?.days) || 14)));
+            const view = req.query?.view === "upcoming" ? "upcoming" : "week";
+            const weekStart = typeof req.query?.weekStart === "string" ? req.query.weekStart : "";
+            const events = await listGoogleCalendarEvents(req.user.id, blockId, {days, view, weekStart});
+            addAuditEvent({user: req.user, action: "google_calendar_read", details: {view, count: events.length}});
+            return res.json({events, days, view, weekStart});
+        }
+        const apiKey = String(process.env.GOOGLE_CALENDAR_API_KEY ?? "").trim();
+        if (!apiKey) throw new Error("Connect Google Calendar in this block first.");
+        const calendarId = typeof req.query?.calendarId === "string" ? req.query.calendarId.trim() : "";
+        if (!calendarId || calendarId.length > 320) throw new Error("Enter a public Google Calendar ID.");
+        const days = Math.max(1, Math.min(90, Math.floor(Number(req.query?.days) || 14)));
+        const view = req.query?.view === "upcoming" ? "upcoming" : "week";
+        const now = new Date();
+        const startOfCurrentWeek = new Date(now);
+        const day = startOfCurrentWeek.getDay();
+        startOfCurrentWeek.setDate(startOfCurrentWeek.getDate() - (day === 0 ? 6 : day - 1));
+        startOfCurrentWeek.setHours(0, 0, 0, 0);
+        const requestedWeek = typeof req.query?.weekStart === "string" ? req.query.weekStart : "";
+        const weekMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(requestedWeek);
+        if (view === "week" && weekMatch) {
+            const requestedDate = new Date(Number(weekMatch[1]), Number(weekMatch[2]) - 1, Number(weekMatch[3]));
+            if (requestedDate.getFullYear() === Number(weekMatch[1]) && requestedDate.getMonth() === Number(weekMatch[2]) - 1 && requestedDate.getDate() === Number(weekMatch[3])) {
+                const requestedDay = requestedDate.getDay();
+                requestedDate.setDate(requestedDate.getDate() - (requestedDay === 0 ? 6 : requestedDay - 1));
+                requestedDate.setHours(0, 0, 0, 0);
+                startOfCurrentWeek.setTime(requestedDate.getTime());
+            }
+        }
+        const endOfCurrentWeek = new Date(startOfCurrentWeek);
+        endOfCurrentWeek.setDate(endOfCurrentWeek.getDate() + 7);
+        const timeMin = view === "week" ? startOfCurrentWeek : now;
+        const timeMax = view === "week" ? endOfCurrentWeek : new Date(now.getTime() + days * 24 * 60 * 60 * 1000);
+        const parameters = new URLSearchParams({
+            key: apiKey,
+            singleEvents: "true",
+            orderBy: "startTime",
+            timeMin: timeMin.toISOString(),
+            timeMax: timeMax.toISOString(),
+            maxResults: "60",
+            fields: "items(id,summary,start,end,location,htmlLink,attachments(fileId,fileUrl,title,mimeType,iconLink))"
+        });
+        const response = await fetch(`https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events?${parameters}`);
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data?.error?.message || "Google Calendar could not read this calendar.");
+        const events = Array.isArray(data.items) ? data.items.map(item => ({
+            id: String(item.id ?? ""),
+            title: typeof item.summary === "string" && item.summary.trim() ? item.summary.trim() : "Untitled event",
+            start: item.start?.dateTime || item.start?.date || "",
+            end: item.end?.dateTime || item.end?.date || "",
+            location: typeof item.location === "string" ? item.location : "",
+            link: typeof item.htmlLink === "string" ? item.htmlLink : "",
+            attachments: Array.isArray(item.attachments) ? item.attachments
+                .filter(attachment => typeof attachment?.fileId === "string" && typeof attachment?.fileUrl === "string")
+                .map(attachment => ({
+                    fileId: attachment.fileId,
+                    url: attachment.fileUrl,
+                    name: typeof attachment.title === "string" && attachment.title.trim() ? attachment.title.trim() : "Calendar attachment",
+                    mimeType: typeof attachment.mimeType === "string" ? attachment.mimeType : ""
+                })) : []
+        })) : [];
+        const weekStart = `${startOfCurrentWeek.getFullYear()}-${String(startOfCurrentWeek.getMonth() + 1).padStart(2, "0")}-${String(startOfCurrentWeek.getDate()).padStart(2, "0")}`;
+        addAuditEvent({user: req.user, action: "google_calendar_read", details: {calendarId, view, weekStart, count: events.length}});
+        res.json({events, days, view, weekStart});
+    } catch (error) {
+        res.status(400).json({message: error instanceof Error ? error.message : "Unable to read Google Calendar."});
+    }
+});
+
+// Calendar attachments are downloaded only from Google Drive's public download
+// endpoint. Private Drive files need a future Google Drive OAuth connection.
+app.get("/calendar/google/attachments/download", requireAuthenticated, requireAdministrator, async (req, res) => {
+    try {
+        if (!String(process.env.GOOGLE_CALENDAR_API_KEY ?? "").trim()) {
+            throw new Error("Add a Google Calendar API key in Settings first.");
+        }
+        const fileId = typeof req.query?.fileId === "string" ? req.query.fileId.trim() : "";
+        if (!/^[A-Za-z0-9_-]{10,200}$/.test(fileId)) throw new Error("Invalid Google Drive attachment.");
+        const requestedName = typeof req.query?.name === "string" ? path.basename(req.query.name).trim() : "";
+        const fileName = requestedName || "calendar-attachment";
+        const requestedMimeType = typeof req.query?.mimeType === "string" ? req.query.mimeType.trim() : "";
+        const driveResponse = await fetch(`https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`, {redirect: "follow"});
+        if (!driveResponse.ok) throw new Error("Google Drive could not download this attachment.");
+        const contentLength = Number(driveResponse.headers.get("content-length") || 0);
+        if (contentLength > 75 * 1024 * 1024) throw new Error("This attachment is larger than 75 MB. Open it from Google Drive instead.");
+        const content = Buffer.from(await driveResponse.arrayBuffer());
+        const contentType = String(driveResponse.headers.get("content-type") || "").toLowerCase();
+        const probablyHtml = contentType.includes("text/html") || /^\s*<(?:!doctype|html)/i.test(content.subarray(0, 256).toString("utf8"));
+        if (probablyHtml) throw new Error("This Google Drive file is private or needs a Google Drive connection. Use Open file for now.");
+        res.setHeader("Content-Disposition", `attachment; filename="${fileName.replaceAll('"', "")}"`);
+        res.type(requestedMimeType || contentType || "application/octet-stream").send(content);
+    } catch (error) {
+        res.status(400).json({message: error instanceof Error ? error.message : "Unable to download the calendar attachment."});
+    }
+});
+
+app.get("/devices/removable", requireAuthenticated, requireAdministrator, async (req, res) => {
+    try {
+        res.json({drives: await listRemovableDrives()});
+    } catch (error) {
+        res.status(400).json({message: error instanceof Error ? error.message : "Unable to check USB drives."});
+    }
+});
+
+app.post("/devices/removable/files", requireAuthenticated, requireAdministrator, async (req, res) => {
+    try {
+        const requestedPath = normalizeRemovableDrivePath(req.body?.drive);
+        if (!requestedPath) throw new Error("Choose a valid removable drive.");
+        const drive = (await listRemovableDrives()).find(item => item.path.toLowerCase() === requestedPath.toLowerCase());
+        if (!drive || !fs.existsSync(drive.path)) throw new Error("That USB drive is no longer connected.");
+        const entries = fs.readdirSync(drive.path, {withFileTypes: true}).slice(0, 120);
+        const files = entries.filter(entry => entry.isFile()).map(entry => {
+            const filePath = path.join(drive.path, entry.name);
+            const stats = fs.statSync(filePath);
+            return {name: entry.name, path: filePath, size: stats.size, createdAt: stats.birthtime.toISOString()};
+        }).sort((left, right) => right.createdAt.localeCompare(left.createdAt));
+        const folders = entries.filter(entry => entry.isDirectory()).map(entry => ({name: entry.name, path: path.join(drive.path, entry.name)}));
+        res.json({drive, files, folders, truncated: entries.length >= 120});
+    } catch (error) {
+        res.status(400).json({message: error instanceof Error ? error.message : "Unable to read the USB drive."});
+    }
+});
+
 
 // Cartella temporanea dove multer salva
 // i file appena ricevuti
@@ -658,6 +865,41 @@ const upload = multer({
 
     dest: getRuntimeUploadsDirectory()
 
+});
+
+app.post("/browser-bridge/stage", upload.array("files", 8), (req, res) => {
+    const temporaryFiles = Array.isArray(req.files) ? req.files : [];
+    const removeTemporaryFiles = () => temporaryFiles.forEach(file => { try { fs.rmSync(file.path, {force: true}); } catch { /* Best effort cleanup. */ } });
+    try {
+        if (!isLoopbackRequest(req)) throw new Error("Browser bridge requests are accepted only from this computer.");
+        const staged = stageBrowserDrop({token: req.body?.bridgeToken, bridgeId: req.body?.bridgeId, files: temporaryFiles});
+        res.status(201).json({message: `${staged.files.length} Gmail attachment(s) ready to drop.`});
+    } catch (error) {
+        removeTemporaryFiles();
+        res.status(400).json({message: error instanceof Error ? error.message : "Unable to stage the Gmail attachment."});
+    }
+});
+
+app.get("/browser-bridge/resolve/:bridgeId", requireAuthenticated, requireAdministrator, (req, res) => {
+    try {
+        const files = resolveBrowserDrop(req.user.id, req.params.bridgeId);
+        res.json({files: files.map((file, index) => ({...file, downloadUrl: `/browser-bridge/download/${encodeURIComponent(req.params.bridgeId)}/${index}`}))});
+    } catch (error) {
+        res.status(404).json({message: error instanceof Error ? error.message : "The Gmail attachment is not ready."});
+    }
+});
+
+app.get("/browser-bridge/download/:bridgeId/:index", requireAuthenticated, requireAdministrator, (req, res) => {
+    try {
+        const files = resolveBrowserDrop(req.user.id, req.params.bridgeId);
+        const index = Number(req.params.index);
+        const file = Number.isInteger(index) ? files[index] : null;
+        if (!file || !fs.existsSync(file.path)) throw new Error("The staged Gmail attachment is no longer available.");
+        res.set("Cache-Control", "no-store");
+        res.sendFile(file.path);
+    } catch (error) {
+        res.status(404).json({message: error instanceof Error ? error.message : "Unable to read the staged Gmail attachment."});
+    }
 });
 
 
@@ -668,11 +910,10 @@ const upload = multer({
 app.get(
     "/health",
     (req, res) => {
-
-        res.send(
-            "Backend funzionante"
-        );
-
+        res.json({
+            status: "ok",
+            runtime: RUNTIME_MODE
+        });
     }
 );
 
@@ -1198,7 +1439,9 @@ app.post("/files/locate-configured", (req, res) => {
 app.post("/search-files", async (req, res) => {
     try {
         const folders = Array.isArray(req.body?.folders) ? req.body.folders.map(folder => assertUserPath(req.user, folder)) : [];
-        res.json({results: await searchFiles(folders, req.body?.query)});
+        const ai = Boolean(req.body?.ai);
+        if (ai && !integrationStatus().aiConfigured) throw new Error("Enable the OpenAI AI integration before using AI Search Assistant.");
+        res.json({results: await searchFiles(folders, req.body?.query, {ai})});
     }
     catch (error) {
         res.status(400).json({message: error instanceof Error ? error.message : "Ricerca non riuscita"});
@@ -1247,6 +1490,43 @@ app.post("/list-folder-files", (req, res) => {
     }
     catch (error) {
         res.status(400).json({message: error instanceof Error ? error.message : "Impossibile leggere la cartella"});
+    }
+});
+
+// File Studio uses this deliberately small local preview. Text-based documents
+// are extracted locally; images and PDFs are shown inline without uploading
+// anything to an external service.
+app.post("/files/preview", async (req, res) => {
+    try {
+        const targetPath = assertUserPath(req.user, req.body?.path);
+        if (!fs.statSync(targetPath).isFile()) throw new Error("The selected item is not a file.");
+        const extension = path.extname(targetPath).toLowerCase();
+        const assetUrl = `/files/preview/asset?path=${encodeURIComponent(targetPath)}`;
+        if ([".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"].includes(extension)) {
+            return res.json({kind: "image", url: assetUrl});
+        }
+        if (extension === ".pdf") return res.json({kind: "pdf", url: assetUrl});
+        const text = [".csv", ".md", ".log"].includes(extension)
+            ? fs.readFileSync(targetPath, "utf8")
+            : await readFileContent(targetPath);
+        if (!text || text === "Formato non supportato") {
+            return res.json({kind: "unavailable", message: "A text preview is not available for this file type."});
+        }
+        return res.json({kind: "text", text: String(text).slice(0, 12000)});
+    } catch (error) {
+        return res.status(400).json({message: error instanceof Error ? error.message : "Unable to preview this file."});
+    }
+});
+
+app.get("/files/preview/asset", (req, res) => {
+    try {
+        const targetPath = assertUserPath(req.user, req.query?.path);
+        if (!fs.statSync(targetPath).isFile()) throw new Error("The selected item is not a file.");
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("Content-Disposition", `inline; filename="${path.basename(targetPath).replaceAll('"', "")}"`);
+        return res.sendFile(targetPath);
+    } catch (error) {
+        return res.status(404).json({message: error instanceof Error ? error.message : "Preview file not found."});
     }
 });
 
@@ -1581,7 +1861,13 @@ async function checkEmailWarningsByRule(provider, rules, fallbackFilter, seenByR
 // Gmail: autorizzazione OAuth e allegati in sola lettura.
 app.get("/auth/gmail/start", (req, res) => {
     try {
-        res.redirect(getAuthorizationUrl(req.user.id, readAlertBlockId(req)));
+        const origin = oauthOriginForRequest(req);
+        const authorizationUrl = getAuthorizationUrl(req.user.id, readAlertBlockId(req), {
+            origin,
+            frontendOrigin: origin
+        });
+        if (req.query?.format === "json") return res.json({authorizationUrl});
+        res.redirect(authorizationUrl);
     }
     catch (error) {
         res.status(500).json({
@@ -1595,8 +1881,16 @@ app.get("/auth/gmail/callback", async (req, res) => {
         if (typeof req.query.code !== "string" || typeof req.query.state !== "string") {
             throw new Error("Google non ha restituito un'autorizzazione valida");
         }
-        const blockId = await exchangeAuthorizationCode(req.query.code, req.query.state, req.user?.id);
-        res.redirect(`${FRONTEND_ORIGIN}?gmail=connected${blockId ? `&blockId=${encodeURIComponent(blockId)}` : ""}`);
+        if (hasPendingGoogleCalendarAuthorization(req.query.state)) {
+            const authorisation = await exchangeGoogleCalendarAuthorizationCode(req.query.code, req.query.state);
+            const callbackOrigin = authorisation.frontendOrigin || FRONTEND_ORIGIN;
+            const blockId = authorisation.blockId;
+            return res.redirect(oauthCompletionUrl("calendar", blockId, callbackOrigin));
+        }
+        const authorisation = await exchangeAuthorizationCode(req.query.code, req.query.state, req.user?.id);
+        const callbackOrigin = authorisation.frontendOrigin || FRONTEND_ORIGIN;
+        const blockId = authorisation.blockId;
+        res.redirect(oauthCompletionUrl("gmail", blockId, callbackOrigin));
     }
     catch (error) {
         res.status(400).json({
@@ -1604,6 +1898,18 @@ app.get("/auth/gmail/callback", async (req, res) => {
         });
     }
 });
+
+app.get("/auth/calendar/start", (req, res) => {
+    try {
+        const origin = oauthOriginForRequest(req);
+        const authorizationUrl = getGoogleCalendarAuthorizationUrl(req.user.id, readAlertBlockId(req), {origin, frontendOrigin: origin});
+        if (req.query?.format === "json") return res.json({authorizationUrl});
+        res.redirect(authorizationUrl);
+    } catch (error) { res.status(500).json({message: error instanceof Error ? error.message : "Unable to start Google Calendar"}); }
+});
+
+app.get("/calendar/google/status", (req, res) => res.json(getGoogleCalendarStatus(req.user.id, readAlertBlockId(req))));
+app.post("/auth/calendar/disconnect", (req, res) => { disconnectGoogleCalendar(req.user.id, readAlertBlockId(req)); res.json({message: "Google Calendar disconnected"}); });
 
 app.get("/email/gmail/status", (req, res) => {
     res.json(getGmailStatus(req.user.id, readAlertBlockId(req)));
@@ -1699,15 +2005,25 @@ app.post("/email/gmail/attachments/save-reference", async (req, res) => {
 
 // Outlook: authorisation OAuth Microsoft Graph and read-only attachments.
 app.get("/auth/outlook/start", (req, res) => {
-    try { res.redirect(getOutlookAuthorizationUrl(req.user.id, readAlertBlockId(req))); }
+    try {
+        const origin = oauthOriginForRequest(req);
+        const authorizationUrl = getOutlookAuthorizationUrl(req.user.id, readAlertBlockId(req), {
+            origin,
+            frontendOrigin: origin
+        });
+        if (req.query?.format === "json") return res.json({authorizationUrl});
+        res.redirect(authorizationUrl);
+    }
     catch (error) { res.status(500).json({message: error instanceof Error ? error.message : "Unable to start Outlook"}); }
 });
 
 app.get("/auth/outlook/callback", async (req, res) => {
     try {
         if (typeof req.query.code !== "string" || typeof req.query.state !== "string") throw new Error("Microsoft did not return a valid authorisation");
-        const blockId = await exchangeOutlookAuthorizationCode(req.query.code, req.query.state, req.user?.id);
-        res.redirect(`${FRONTEND_ORIGIN}?outlook=connected${blockId ? `&blockId=${encodeURIComponent(blockId)}` : ""}`);
+        const authorisation = await exchangeOutlookAuthorizationCode(req.query.code, req.query.state, req.user?.id);
+        const callbackOrigin = authorisation.frontendOrigin || FRONTEND_ORIGIN;
+        const blockId = authorisation.blockId;
+        res.redirect(oauthCompletionUrl("outlook", blockId, callbackOrigin));
     } catch (error) { res.status(400).json({message: error instanceof Error ? error.message : "Unable to complete Outlook"}); }
 });
 
