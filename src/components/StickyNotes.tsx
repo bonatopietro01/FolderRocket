@@ -5,6 +5,7 @@ import type {ManagedFolder} from "./FolderManagement";
 
 type NoteColor = "yellow" | "red" | "purple" | "blue" | "green";
 interface StickyNote {id: string; color: NoteColor; text: string; relatedFiles?: string[]; x: number; y: number; width: number; height: number; hidden?: boolean; autoHeight?: boolean; ai?: boolean; aiPrompt?: string; aiResponse?: string; aiWorking?: boolean;}
+interface CalendarContextEvent {title?: string; start?: string; end?: string; location?: string; attachments?: string[];}
 const colors: NoteColor[] = ["yellow", "purple", "blue", "green"];
 
 function storageKey(scope: string) { return `folderrocket-sticky-notes-${scope}`; }
@@ -77,12 +78,26 @@ export default function StickyNotes({storageScope, folders, aiEnabled, floatingS
     const [deleteId, setDeleteId] = useState<string | null>(null);
     const handledAddRequest = useRef(addRequest);
     const handledAiAddRequest = useRef(aiAddRequest);
+    const calendarContext = useRef<CalendarContextEvent[]>([]);
 
     useEffect(() => { localStorage.setItem(storageKey(storageScope), JSON.stringify(notes)); }, [notes, storageScope]);
     useEffect(() => {
         const reset = (event: PointerEvent) => { if (!(event.target as Element).closest(".floatingStickyNote")) setDeleteId(null); };
         window.addEventListener("pointerdown", reset);
         return () => window.removeEventListener("pointerdown", reset);
+    }, []);
+
+    useEffect(() => {
+        const updateCalendarContext = (event: Event) => {
+            const values = (event as CustomEvent<{events?: CalendarContextEvent[]}>).detail?.events;
+            if (!Array.isArray(values)) return;
+            calendarContext.current = values
+                .filter(item => item && typeof item.title === "string")
+                .slice(0, 20)
+                .map(item => ({title: item.title?.slice(0, 180), start: item.start?.slice(0, 60), end: item.end?.slice(0, 60), location: item.location?.slice(0, 140), attachments: Array.isArray(item.attachments) ? item.attachments.filter(name => typeof name === "string").slice(0, 5).map(name => name.slice(0, 120)) : []}));
+        };
+        window.addEventListener("folderrocket-calendar-context", updateCalendarContext);
+        return () => window.removeEventListener("folderrocket-calendar-context", updateCalendarContext);
     }, []);
 
     const addNote = useCallback((color: NoteColor = "yellow", text = "", relatedFiles: string[] = []) => {
@@ -101,7 +116,7 @@ export default function StickyNotes({storageScope, folders, aiEnabled, floatingS
         update(note.id, {aiWorking: true, aiResponse: ""});
         try {
             const physicalFolders = folders.filter(folder => folder.storage !== "imaginary" && folder.path).map(folder => folder.path);
-            const response = await fetch(`${API_BASE_URL}/sticky-notes/ai`, {method: "POST", credentials: "include", headers: {"Content-Type": "application/json"}, body: JSON.stringify({prompt, folders: physicalFolders})});
+            const response = await fetch(`${API_BASE_URL}/sticky-notes/ai`, {method: "POST", credentials: "include", headers: {"Content-Type": "application/json"}, body: JSON.stringify({prompt, folders: physicalFolders, calendarEvents: calendarContext.current})});
             const data = await response.json().catch(() => ({})) as {text?: string; relatedFiles?: {name: string}[]; message?: string};
             if (!response.ok || !data.text) throw new Error(data.message || "Unable to create the AI note.");
             update(note.id, {aiWorking: false, aiResponse: data.text, relatedFiles: (data.relatedFiles || []).map(file => file.name)});

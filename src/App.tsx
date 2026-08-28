@@ -12,7 +12,7 @@ import DashboardSourceColumn from "./components/DashboardSourceColumn";
 import DomainSourcePanel from "./components/DomainSourcePanel";
 import ScreenCaptureSourcePanel from "./components/ScreenCaptureSourcePanel";
 import GoogleCalendarSourcePanel from "./components/GoogleCalendarSourcePanel";
-import UsbSourcePanel from "./components/UsbSourcePanel";
+import UsbSourcePanel, {type UsbDrive} from "./components/UsbSourcePanel";
 import SearchSourcePanel from "./components/SearchSourcePanel";
 import ProcessingWorkspace from "./components/ProcessingWorkspace";
 import CargoShip from "./components/CargoShip";
@@ -49,7 +49,7 @@ function createDefaultSourceBlocks(): DashboardSourceBlockData[] {
 }
 
 function createDefaultRightSourceBlocks(): DashboardSourceBlockData[] {
-    return [{id: crypto.randomUUID(), type: "search", height: 210}];
+    return [{id: crypto.randomUUID(), type: "search", height: 108}];
 }
 
 function normalizeSourceBlocks(value: unknown): DashboardSourceBlockData[] | null {
@@ -61,8 +61,9 @@ function normalizeSourceBlocks(value: unknown): DashboardSourceBlockData[] | nul
     return blocks.map(block => {
         // Earlier Search + Fire defaults were intentionally tall. Migrate only
         // those old defaults; a user-resized height remains untouched.
-        const legacySearchDefault = block.type === "search" && (block.height === 280 || block.height === 640);
-        return {...block, height: legacySearchDefault ? 210 : Math.min(1100, Math.max(210, block.height))};
+        const legacySearchDefault = block.type === "search" && (block.height === 210 || block.height === 280 || block.height === 640);
+        const minimumHeight = block.type === "search" ? 108 : 210;
+        return {...block, height: legacySearchDefault ? 108 : Math.min(1100, Math.max(minimumHeight, block.height))};
     });
 }
 
@@ -263,6 +264,20 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     }, [dashboardHeight, dashboardWidths, folders, preferencesReady, rightSourceBlocks, searchFolderIds, sourceBlocks]);
 
     function addFolder() { setFolders(current => [...current, {id: crypto.randomUUID(), name: `Folder ${current.length + 1}`, path: "", description: ""}]); }
+    function useUsbDriveAsFolder(drive: UsbDrive) {
+        const normalizedPath = drive.path.trim().toLowerCase();
+        setFolders(current => {
+            if (current.some(folder => folder.path.trim().toLowerCase() === normalizedPath)) return current;
+            const label = drive.label?.trim() || drive.id;
+            return [...current, {
+                id: crypto.randomUUID(),
+                name: `USB · ${label}`,
+                path: drive.path,
+                description: "Connected removable USB drive",
+                storage: "physical"
+            }];
+        });
+    }
     function updateFolder(id: string, change: Partial<Folder>) { setFolders(current => current.map(folder => folder.id === id ? {...folder, ...change} : folder)); }
     function deleteFolder(id: string) { setFolders(current => current.filter(folder => folder.id !== id)); }
     function moveFolder(sourceId: string, targetId: string, placement: "before" | "after" = "before") {
@@ -323,7 +338,7 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
         else setRightSourceBlocks(update);
     }
     function addSourceBlock(column: "left" | "right", type: DashboardSourceType) {
-        updateColumnBlocks(column, current => [...current, {id: crypto.randomUUID(), type, height: 210}]);
+        updateColumnBlocks(column, current => [...current, {id: crypto.randomUUID(), type, height: type === "search" ? 108 : 210}]);
     }
     function deleteSourceBlock(column: "left" | "right", id: string) { updateColumnBlocks(column, current => current.filter(block => block.id !== id)); }
     function moveSourceBlock(column: "left" | "right", id: string, direction: "up" | "down") {
@@ -345,11 +360,11 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     function renderSourceBlock(column: "left" | "right", block: DashboardSourceBlockData) {
         if (block.type === "gmail") return <GmailSourcePanel storageScope={`${user.id}-${block.id}`} alertBlockId={block.id} aiEnabled={aiEnabled} />;
         if (block.type === "outlook") return <OutlookSourcePanel storageScope={`${user.id}-${block.id}`} alertBlockId={block.id} aiEnabled={aiEnabled} />;
-        if (block.type === "calendar") return <GoogleCalendarSourcePanel alertBlockId={block.id} days={block.calendarDays} view={block.calendarView} weekStart={block.calendarWeekStart} onDaysChange={calendarDays => updateSourceBlock(column, block.id, {calendarDays})} onViewChange={calendarView => updateSourceBlock(column, block.id, {calendarView})} onWeekStartChange={calendarWeekStart => updateSourceBlock(column, block.id, {calendarWeekStart})} />;
-        if (block.type === "usb") return <UsbSourcePanel />;
+        if (block.type === "calendar") return <GoogleCalendarSourcePanel alertBlockId={block.id} weekStart={block.calendarWeekStart} onWeekStartChange={calendarWeekStart => updateSourceBlock(column, block.id, {calendarWeekStart})} />;
+        if (block.type === "usb") return <UsbSourcePanel onUseDrive={useUsbDriveAsFolder} />;
         if (block.type === "domain") return <DomainSourcePanel url={block.url} onUrlChange={url => updateSourceBlock(column, block.id, {url})} aiEnabled={aiEnabled} />;
         if (block.type === "screen") return <ScreenCaptureSourcePanel crop={block.crop} onCropChange={crop => updateSourceBlock(column, block.id, {crop})} aiEnabled={aiEnabled} />;
-        return <SearchSourcePanel aiEnabled={aiEnabled} folders={folders.filter(folder => Boolean(folder.path) && searchFolderIds.includes(folder.id)).map(folder => ({name: folder.name, path: folder.path}))} selectedFolderCount={folders.filter(folder => Boolean(folder.path) && searchFolderIds.includes(folder.id)).length} onToggleFolders={toggleAllSearchFolders} />;
+        return <SearchSourcePanel aiEnabled={aiEnabled} folders={folders.filter(folder => Boolean(folder.path) && searchFolderIds.includes(folder.id)).map(folder => ({name: folder.name, path: folder.path}))} selectedFolderCount={folders.filter(folder => Boolean(folder.path) && searchFolderIds.includes(folder.id)).length} onToggleFolders={toggleAllSearchFolders} onResultsChange={hasResults => { if (!hasResults) updateColumnBlocks(column, current => current.map(item => item.id === block.id && item.height !== 108 ? {...item, height: 108} : item)); }} />;
     }
     const dashboardStyle = (dashboardWidths || dashboardHeight) ? {
         ...(dashboardWidths ? {"--dashboard-left": `${dashboardWidths.left}px`, "--dashboard-center": `${dashboardWidths.center}px`, "--dashboard-right": `${dashboardWidths.right}px`} : {}),

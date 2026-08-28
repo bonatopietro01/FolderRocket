@@ -2,11 +2,11 @@ import FireMountain from "./FireMountain";
 import SearchWorkspace from "./SearchWorkspace";
 
 interface FolderSource { name: string; path: string; }
-interface Props { folders: FolderSource[]; selectedFolderCount: number; onToggleFolders: () => void; aiEnabled: boolean; }
+interface Props { folders: FolderSource[]; selectedFolderCount: number; onToggleFolders: () => void; aiEnabled: boolean; onResultsChange?: (hasResults: boolean) => void; }
 
-export default function SearchSourcePanel({folders, selectedFolderCount, onToggleFolders, aiEnabled}: Props) {
+export default function SearchSourcePanel({folders, selectedFolderCount, onToggleFolders, aiEnabled, onResultsChange}: Props) {
     return <section className="sourceCard searchSourceCard">
-        <SearchWorkspace folders={folders} selectedFolderCount={selectedFolderCount} onToggleFolders={onToggleFolders} aiEnabled={aiEnabled} compact />
+        <SearchWorkspace folders={folders} selectedFolderCount={selectedFolderCount} onToggleFolders={onToggleFolders} aiEnabled={aiEnabled} compact onResultsChange={onResultsChange} />
         <FireMountain />
     </section>;
 }

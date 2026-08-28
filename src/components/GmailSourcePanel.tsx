@@ -14,7 +14,6 @@ import {
     Mail,
     ExternalLink,
     MessageSquareText,
-    Unplug,
     RefreshCw,
     Settings2,
     BellRing
@@ -57,7 +56,7 @@ interface GmailAlertMessage {
 }
 
 type GmailInboxItem =
-    | {type: "attachment"; attachment: EmailAttachment; alertKind?: WarningKind; alertColor?: string}
+    | {type: "attachment"; attachment: EmailAttachment; alertKind?: WarningKind; alertColor?: string; messageGroup?: "start" | "middle" | "end"}
     | {type: "alert"; alert: GmailAlertMessage; alertKind: WarningKind; alertColor?: string};
 
 const DISMISSED_KEY = "folderrocket-dismissed-gmail";
@@ -185,9 +184,10 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
     const [visibleWarningKind, setVisibleWarningKind] = useState<WarningKind | null>(null);
     const [warningLoading, setWarningLoading] = useState(false);
     const [warningError, setWarningError] = useState("");
-    const [analysisCompletedAt, setAnalysisCompletedAt] = useState<Date | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
+    const [showDisconnect, setShowDisconnect] = useState(false);
+    const [disconnectArmed, setDisconnectArmed] = useState(false);
     const visibleWarnings = useMemo(() => warnings.filter(rule => aiEnabled || rule.kind !== "ai"), [aiEnabled, warnings]);
 
     const visibleAttachments = useMemo(
@@ -212,10 +212,21 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
             ...visibleAttachments.map(attachment => ({type: "attachment" as const, attachment, alertKind: alertsByMessage.get(attachment.messageId)?.alertKind, alertColor: alertsByMessage.get(attachment.messageId)?.alertColor})),
             ...[...alertsByMessage.values()].filter(({alert}) => !attachedMessageIds.has(alert.id)).map(({alert, alertKind, alertColor}) => ({type: "alert" as const, alert, alertKind, alertColor}))
         ];
-        return items.sort((first, second) => {
+        const ordered = items.sort((first, second) => {
             const firstDate = first.type === "attachment" ? first.attachment.receivedAt : first.alert.receivedAt;
             const secondDate = second.type === "attachment" ? second.attachment.receivedAt : second.alert.receivedAt;
             return new Date(secondDate).getTime() - new Date(firstDate).getTime();
+        });
+        const totalByMessage = new Map<string, number>();
+        for (const item of ordered) if (item.type === "attachment") totalByMessage.set(item.attachment.messageId, (totalByMessage.get(item.attachment.messageId) ?? 0) + 1);
+        const seenByMessage = new Map<string, number>();
+        return ordered.map(item => {
+            if (item.type !== "attachment") return item;
+            const total = totalByMessage.get(item.attachment.messageId) ?? 1;
+            if (total < 2) return item;
+            const seen = (seenByMessage.get(item.attachment.messageId) ?? 0) + 1;
+            seenByMessage.set(item.attachment.messageId, seen);
+            return {...item, messageGroup: seen === 1 ? "start" as const : seen === total ? "end" as const : "middle" as const};
         });
     }, [visibleAttachments, visibleWarnings, warningResults]);
 
@@ -257,7 +268,6 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
             if (Array.isArray(data.attachments) && data.attachments.length) setAttachments(current => mergeAttachments(current, data.attachments ?? []));
             const aiError = aiEnabled ? results.find(result => warnings.find(rule => rule.id === result.ruleId)?.kind === "ai" && result.error)?.error : undefined;
             if (aiError) setWarningError(aiError);
-            else setAnalysisCompletedAt(new Date());
             const nextSeen = {...seenByRule};
             const nextAlerts = {...readWarningAlerts(storageScope)};
             for (const result of results) {
@@ -397,6 +407,7 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
             const target = event.target as Element;
             if (!target.closest(".emailSourceCard")) setSelectedIds([]);
             if (!target.closest(".gmailWarningsMenu") && !target.closest(".gmailWarningToggle")) setShowWarnings(false);
+            if (!target.closest(".emailConnectionControls")) { setShowDisconnect(false); setDisconnectArmed(false); }
         };
         document.addEventListener("pointerdown", dismissWhenOutside);
         return () => document.removeEventListener("pointerdown", dismissWhenOutside);
@@ -464,7 +475,6 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
     }
 
     async function disconnect() {
-        if (!window.confirm("Disconnect Gmail and stop all FolderRocket email checks? This removes the saved access token from this computer.")) return;
         try {
             const response = await fetch(gmailAuthUrl("/disconnect"), {method: "POST", credentials: "include"});
             if (!response.ok) throw new Error("Gmail could not be disconnected. Access may still be active.");
@@ -474,6 +484,8 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
             setSelectedIds([]);
             setWarningResults([]);
             setError("");
+            setShowDisconnect(false);
+            setDisconnectArmed(false);
         }
         catch (disconnectError) {
             setError(disconnectError instanceof Error ? disconnectError.message : "Gmail could not be disconnected. Access may still be active.");
@@ -524,21 +536,11 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
         <section className={`${inboxItems.length ? "sourceCard emailSourceCard" : "sourceCard emailSourceCard isEmptySource"}${showWarnings || visibleWarningKind ? " warningsOpen" : ""}`}>
             <div className="sourceHeader">
                 <Mail className="gmailPanelIcon" size={29} />
-                <span className="sourceTitle">Gmail</span>
+                {connected ? <span className="emailConnectionControls"><button type="button" className="sourceTitle emailConnectionTitle" onClick={() => { setShowDisconnect(current => !current); setDisconnectArmed(false); }} title="Gmail connection options">Gmail</button>{showDisconnect && <button type="button" className={disconnectArmed ? "emailDisconnectButton armed" : "emailDisconnectButton"} onClick={() => { if (disconnectArmed) void disconnect(); else setDisconnectArmed(true); }} title={disconnectArmed ? "Press again to disconnect Gmail" : "Disconnect Gmail"}>{disconnectArmed ? "Confirm" : "Disconnect"}</button>}</span> : <span className="sourceTitle">Gmail</span>}
                 {connected && <button type="button" className="gmailWarningToggle" onClick={toggleWarnings} title="Gmail alerts"><BellRing size={15} /></button>}
-                {connected && visibleWarnings.length > 0 && <span className={warningLoading ? "gmailAnalysisStatus analyzing" : "gmailAnalysisStatus"}>{warningLoading ? "Analyzing…" : analysisCompletedAt ? `Completed ${analysisCompletedAt.toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})}` : "Ready to analyze"}</span>}
-                {connected && visibleWarnings.filter(rule => rule.enabled).map(rule => {
-                    const result = warningResults.find(item => item.ruleId === rule.id);
-                    return result ? <button key={`ready-${rule.id}`} type="button" className={`gmailAlertCount alertColor-${rule.color}`} title={`Show ${rule.label} emails`} onClick={() => toggleWarningPreview(rule.kind)}>{result.total}</button> : <span key={`ready-${rule.id}`} className={`emailAlertReadyDot alertColor-${rule.color}`} title={`${rule.label} is active`} />;
-                })}
-            </div>
-
-            <div className={`emailConnectionSummary ${connected ? "connected" : "disconnected"}`}>
-                <span className="emailConnectionPrimary"><i />{connected ? "CONNECTED" : "DISCONNECTED"}</span>
-                <span>{connected ? "FolderRocket can read Gmail" : "FolderRocket cannot read Gmail"}</span>
-                {connected && <span className={`emailPollingState ${liveReading ? "live" : "manual"}`}>{liveReading ? "Virtual reading: ON (every minute)" : "Virtual reading: OFF"}</span>}
-                {connected && aiEnabled && warnings.some(rule => rule.kind === "ai") && <span className="emailCostState">AI alerts enabled</span>}
-                {connected && <button type="button" className="emailDisconnectButton" title="Remove Gmail access and stop every check" onClick={() => void disconnect()}><Unplug size={13} />Disconnect</button>}
+                {connected && <span className={warningLoading ? "emailAlertSlots analyzing" : "emailAlertSlots"}>{warningLoading ? "Analyzing…" : visibleWarnings.filter(rule => rule.enabled).slice(0, 5).map(rule => { const result = warningResults.find(item => item.ruleId === rule.id); return result ? <button key={`ready-${rule.id}`} type="button" className={`gmailAlertCount alertColor-${rule.color}`} title={`Show ${rule.label} emails`} onClick={() => toggleWarningPreview(rule.kind)}>{result.total}</button> : <span key={`ready-${rule.id}`} className={`emailAlertReadyDot alertColor-${rule.color}`} title={`${rule.label} is active`} />; })}</span>}
+                {connected && <span className="emailHeaderStatus">Connected</span>}
+                {connected && <span className="emailHeaderReading">Virtual: <button type="button" className={liveReading ? "emailVirtualReadingToggle active" : "emailVirtualReadingToggle"} onClick={() => setLiveReading(current => !current)} aria-pressed={liveReading} title={liveReading ? "Turn Virtual Reading off" : "Turn Virtual Reading on"}>{liveReading ? "ON" : "OFF"}</button></span>}
             </div>
 
             {!connected ? (
@@ -575,7 +577,7 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
                         <button type="button" onClick={() => setShowSettings(current => !current)} title="Attachment period"><Settings2 size={16} /></button>
                         <button type="button" className={`emailReadAttachmentsButton${attachmentReader.enabled ? " active" : ""}`} onClick={() => { const enabled = !attachmentReader.enabled; setAttachmentReader(current => ({...current, enabled})); if (!enabled) { setShowSettings(false); setAttachments([]); } }}>Read attachments</button>
                         {attachmentReader.enabled && <button type="button" onClick={() => void refresh()} disabled={loading} title="Refresh attachments"><RefreshCw className={loading ? "spin" : ""} size={16} /></button>}
-                        <label className="liveReadingLabel"><input type="checkbox" checked={liveReading} onChange={event => setLiveReading(event.target.checked)} /> Virtual reading</label>
+                        {visibleAttachments.length > 0 && <div className="gmailSelectionActions emailInlineSelectionActions"><button type="button" disabled={!selectedIds.length} onClick={() => setSelectedIds([])}>Deselect all</button><button type="button" disabled={!selectedIds.length} onClick={dismissSelected}>Hide selected</button><button type="button" disabled={!selectedIds.length} onClick={() => void openSelected()}>Open files</button><button type="button" onClick={() => { setAttachments([]); setSelectedIds([]); }}>Clear all</button></div>}
                     </div>
 
                     {showSettings && attachmentReader.enabled && (
@@ -589,8 +591,6 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
                         </div>
                     )}
 
-                    {visibleAttachments.length > 0 && <div className="gmailSelectionActions"><button type="button" disabled={!selectedIds.length} onClick={() => setSelectedIds([])}>Deselect all</button><button type="button" disabled={!selectedIds.length} onClick={dismissSelected}>Hide selected</button><button type="button" disabled={!selectedIds.length} onClick={() => void openSelected()}>Open files</button><button type="button" onClick={() => { setAttachments([]); setSelectedIds([]); }}>Clear all</button></div>}
-
                     {error && <p className="emailError">{error}</p>}
                     <div className="emailAttachmentList">
                         {inboxItems.length === 0 ? <p className="sourcePlaceholder">No attachments or alerts found. Press refresh.</p> : inboxItems.map(item => {
@@ -603,8 +603,8 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
                             const attachment = item.attachment;
                             const id = `${attachment.messageId}:${attachment.attachmentId}`;
                             const alertClass = item.alertColor ? ` alertColor-${item.alertColor}` : item.alertKind === "sender" ? " senderAlertItem" : item.alertKind === "ai" ? " aiAlertItem" : "";
-                            return <div key={id} className={`${selectedIds.includes(id) ? "emailAttachment selectedAttachment" : "emailAttachment"}${alertClass}`} draggable onClick={() => toggleSelection(id)} onDragStart={event => dragAttachments(event, attachment)}>
-                                <div className="emailAttachmentPrimary"><span className="emailAttachmentName"><FileKindIcon name={attachment.name} />{attachment.name}</span><span>{formatSize(attachment.size)}{formatReceivedAt(attachment.receivedAt) ? ` · ${formatReceivedAt(attachment.receivedAt)}` : ""}</span></div>
+                            return <div key={id} className={`${selectedIds.includes(id) ? "emailAttachment selectedAttachment" : "emailAttachment"}${alertClass}${item.messageGroup ? ` emailMessageGroup messageGroup-${item.messageGroup}` : ""}`} draggable onClick={() => toggleSelection(id)} onDragStart={event => dragAttachments(event, attachment)}>
+                                <div className="emailAttachmentPrimary"><span className="emailAttachmentName">{item.messageGroup === "start" && <span className="emailMessageGroupMarker" title="More attachments from this email"><Mail size={10}/></span>}<FileKindIcon name={attachment.name} />{attachment.name}</span><span>{formatSize(attachment.size)}{formatReceivedAt(attachment.receivedAt) ? ` · ${formatReceivedAt(attachment.receivedAt)}` : ""}</span></div>
                                 <div className="emailAttachmentSecondary"><small>{attachment.sender || attachment.subject}</small><span className="emailAttachmentActions"><button type="button" className="openEmailMessage" title="Open in Gmail" onClick={event => openMessage(event, attachment.messageId)}><ExternalLink size={14} /></button><button type="button" className="openEmailMessage" title="Read email locally" onClick={event => { event.stopPropagation(); window.open(gmailUrl(`/messages/view?messageId=${encodeURIComponent(attachment.messageId)}`), "_blank", "noopener,noreferrer"); }}><MessageSquareText size={14} /></button></span></div>
                             </div>;
                         })}

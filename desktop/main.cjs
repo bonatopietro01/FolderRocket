@@ -579,6 +579,29 @@ app.whenReady().then(async () => {
             return false;
         }
     });
+    ipcMain.handle("folderrocket:save-download", async (event, payload) => {
+        if (event.sender.getURL().startsWith(APP_ORIGIN) === false) return {saved: false, message: "Unavailable outside FolderRocket."};
+        const rawBytes = payload?.bytes;
+        if (!(rawBytes instanceof Uint8Array) && !(rawBytes instanceof ArrayBuffer)) {
+            return {saved: false, message: "The downloaded file is invalid."};
+        }
+        const bytes = Buffer.from(rawBytes);
+        if (!bytes.length || bytes.length > 75 * 1024 * 1024) {
+            return {saved: false, message: "FolderRocket can save files up to 75 MB from a Domain block."};
+        }
+        const requestedName = typeof payload?.suggestedName === "string" ? payload.suggestedName : "download";
+        const safeName = path.basename(requestedName).replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").slice(0, 180) || "download";
+        const owner = BrowserWindow.fromWebContents(event.sender) || mainWindow;
+        const selection = await dialog.showSaveDialog(owner, {
+            title: "Save file from Domain",
+            defaultPath: safeName,
+            buttonLabel: "Save",
+            properties: ["createDirectory"]
+        });
+        if (selection.canceled || !selection.filePath) return {saved: false, canceled: true};
+        fs.writeFileSync(selection.filePath, bytes);
+        return {saved: true, path: selection.filePath};
+    });
     let existingBackend;
     try {
         existingBackend = await prepareBackendEndpoint();

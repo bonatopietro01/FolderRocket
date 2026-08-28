@@ -2,6 +2,7 @@ const {contextBridge, ipcRenderer} = require("electron");
 
 contextBridge.exposeInMainWorld("folderRocketDesktop", {
     openExternal: url => ipcRenderer.invoke("folderrocket:open-external", url),
+    saveDownload: payload => ipcRenderer.invoke("folderrocket:save-download", payload),
     listDisplaySources: () => ipcRenderer.invoke("folderrocket:list-display-sources"),
     selectDisplaySource: sourceId => ipcRenderer.invoke("folderrocket:select-display-source", sourceId),
     capturePageRegion: region => ipcRenderer.invoke("folderrocket:capture-page-region", region),

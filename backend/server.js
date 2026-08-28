@@ -41,7 +41,7 @@ const {getEmailAlertSettings, normalizeProviderBlock, saveEmailAlertSettings} = 
 const {startEmailAlertScheduler} = require("./services/emailAlertScheduler");
 const {migrateLegacyConnections} = require("./services/emailTokenStore");
 const {addAuditEvent, listAuditEvents} = require("./services/auditLogService");
-const {analyzeDomainPage, analyzeProjection} = require("./services/projectionAnalysisService");
+const {analyzeDomainPage, analyzeProjection, downloadDomainFile, listDomainDownloads} = require("./services/projectionAnalysisService");
 const {createStickyNote} = require("./services/stickyNoteAiService");
 const {integrationStatus, saveIntegrationConfiguration} = require("./services/desktopIntegrationConfigService");
 const {createBrowserBridgeToken, resolveBrowserDrop, stageBrowserDrop} = require("./services/browserBridgeService");
@@ -729,6 +729,34 @@ app.post("/domain/analyze", requireAuthenticated, async (req, res) => {
     }
 });
 
+// The file picker reads only links declared by the loaded public page.  The
+// download route repeats that check, so a client cannot use this as a generic
+// network fetcher for arbitrary URLs.
+app.post("/domain/downloads", requireAuthenticated, async (req, res) => {
+    try {
+        const result = await listDomainDownloads(req.body?.url);
+        addAuditEvent({user: req.user, action: "domain_downloads_listed", details: {count: result.downloads.length}});
+        res.json(result);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to inspect downloadable files.";
+        res.status(/valid page address|public http|private network|HTML page|too large/i.test(message) ? 400 : 502).json({message});
+    }
+});
+
+app.post("/domain/download", requireAuthenticated, async (req, res) => {
+    try {
+        const result = await downloadDomainFile(req.body?.pageUrl, req.body?.fileUrl);
+        addAuditEvent({user: req.user, action: "domain_file_downloaded", details: {name: result.fileName}});
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("X-FolderRocket-Filename", encodeURIComponent(result.fileName));
+        res.setHeader("Content-Disposition", `attachment; filename="${result.fileName.replaceAll('"', "")}"`);
+        res.type(result.contentType).send(result.content);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to download this file.";
+        res.status(/Select a downloadable|no longer available|valid page address|public http|private network|larger than|web page|empty/i.test(message) ? 400 : 502).json({message});
+    }
+});
+
 // Google Calendar API keys intentionally support public calendars only. Private
 // calendars will use a separate OAuth consent flow rather than exposing a key.
 app.get("/calendar/google/events", requireAuthenticated, async (req, res) => {
@@ -846,10 +874,17 @@ app.post("/devices/removable/files", requireAuthenticated, requireAdministrator,
         const drive = (await listRemovableDrives()).find(item => item.path.toLowerCase() === requestedPath.toLowerCase());
         if (!drive || !fs.existsSync(drive.path)) throw new Error("That USB drive is no longer connected.");
         const entries = fs.readdirSync(drive.path, {withFileTypes: true}).slice(0, 120);
-        const files = entries.filter(entry => entry.isFile()).map(entry => {
+        const files = entries.filter(entry => entry.isFile()).flatMap(entry => {
             const filePath = path.join(drive.path, entry.name);
-            const stats = fs.statSync(filePath);
-            return {name: entry.name, path: filePath, size: stats.size, createdAt: stats.birthtime.toISOString()};
+            try {
+                // USB media can be removed or locked while Windows is reading
+                // its metadata. We only list metadata here; one unreadable MKV
+                // must not prevent the rest of the drive from appearing.
+                const stats = fs.statSync(filePath);
+                return [{name: entry.name, path: filePath, size: stats.size, createdAt: stats.birthtime.toISOString()}];
+            } catch {
+                return [];
+            }
         }).sort((left, right) => right.createdAt.localeCompare(left.createdAt));
         const folders = entries.filter(entry => entry.isDirectory()).map(entry => ({name: entry.name, path: path.join(drive.path, entry.name)}));
         res.json({drive, files, folders, truncated: entries.length >= 120});
@@ -1454,7 +1489,10 @@ app.post("/sticky-notes/ai", async (req, res) => {
         const folders = Array.isArray(req.body?.folders)
             ? req.body.folders.filter(folder => typeof folder === "string").map(folder => assertUserPath(req.user, folder))
             : [];
-        res.json(await createStickyNote(req.body?.prompt, folders));
+        const calendarEvents = Array.isArray(req.body?.calendarEvents)
+            ? req.body.calendarEvents.slice(0, 20).filter(event => event && typeof event === "object")
+            : [];
+        res.json(await createStickyNote(req.body?.prompt, folders, calendarEvents));
     } catch (error) {
         res.status(400).json({message: error instanceof Error ? error.message : "Unable to create the AI note."});
     }
@@ -1469,10 +1507,16 @@ app.post("/list-folder-files", (req, res) => {
         const files = fs.readdirSync(folder, {withFileTypes: true})
             .filter(entry => entry.isFile())
             .filter(entry => !["archivio.xlsx", "scadenze.xlsx"].includes(entry.name.toLowerCase()))
-            .map(entry => {
+            .flatMap(entry => {
                 const filePath = path.join(folder, entry.name);
-                const stats = fs.statSync(filePath);
-                return {name: entry.name, path: filePath, createdAt: stats.birthtime.toISOString(), size: stats.size};
+                try {
+                    const stats = fs.statSync(filePath);
+                    return [{name: entry.name, path: filePath, createdAt: stats.birthtime.toISOString(), size: stats.size}];
+                } catch {
+                    // Some removable-media files can be briefly locked while
+                    // Windows indexes them. Ignore only that item.
+                    return [];
+                }
             })
             .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
         // Directory entries are returned separately. The frontend requests their
@@ -1480,10 +1524,14 @@ app.post("/list-folder-files", (req, res) => {
         // blocks the initial folder view.
         const folders = fs.readdirSync(folder, {withFileTypes: true})
             .filter(entry => entry.isDirectory())
-            .map(entry => {
+            .flatMap(entry => {
                 const folderPath = path.join(folder, entry.name);
-                const stats = fs.statSync(folderPath);
-                return {name: entry.name, path: folderPath, createdAt: stats.birthtime.toISOString()};
+                try {
+                    const stats = fs.statSync(folderPath);
+                    return [{name: entry.name, path: folderPath, createdAt: stats.birthtime.toISOString()}];
+                } catch {
+                    return [];
+                }
             })
             .sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: "base"}));
         res.json({files, folders});

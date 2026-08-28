@@ -7,6 +7,7 @@ interface FolderRocketDisplaySource {
 interface Window {
     folderRocketDesktop?: {
         openExternal: (url: string) => Promise<boolean>;
+        saveDownload: (payload: {suggestedName: string; bytes: Uint8Array}) => Promise<{saved: boolean; canceled?: boolean; path?: string; message?: string}>;
         listDisplaySources: () => Promise<FolderRocketDisplaySource[]>;
         selectDisplaySource: (sourceId: string) => Promise<boolean>;
         capturePageRegion: (region: {x: number; y: number; width: number; height: number}) => Promise<string>;

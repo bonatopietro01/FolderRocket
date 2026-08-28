@@ -2118,7 +2118,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
     z-index: 1;
     overflow: hidden;
 }
-.folderManagementLeft { min-width: 0; height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 14px; }
+.folderManagementLeft { min-width: 0; height: 100%; min-height: 0; display: flex; flex-direction: column; gap: 6px; }
 .folderManagementLeft .folderTablePanel { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
 .folderManagementLeft .fireMountainCard { margin-top: auto; }
 
@@ -2384,6 +2384,10 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .pathInput { gap:3px; }
 .folderTablePanel .pathInput input { direction: rtl; text-align: left; }
 .folderRowActions { display:flex; align-items:center; gap:3px; }
+.folderTableTopActions { display:flex; align-items:center; justify-content:flex-start; gap:3px; }
+.folderTableTopActions .orderFoldersButton,
+.folderTableTopActions .addFolder { width:25px; height:30px; min-width:25px; padding:0; border-radius:7px; }
+.folderTableTopActions .addFolder { border-width:1px; font-size:23px; line-height:1; }
 .toggleFolderViewButton { width:25px; height:30px; min-width:25px; padding:0; border:1px solid #6eaee4; border-radius:7px; background:#e9f5ff; color:#1475c5; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
 .toggleFolderViewButton.active { background:#278ad9; border-color:#1975bd; color:#fff; box-shadow:inset 0 1px 0 rgba(255,255,255,.28); }
 .folderRowActions .openFolderButton { width:30px; height:30px; min-width:30px; }
@@ -2532,6 +2536,14 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .compactSearchWorkspace .searchComposer { grid-area:composer; gap:3px; min-width:0; }
 .compactSearchWorkspace .searchComposer input { min-width:0; height:27px; box-sizing:border-box; font-size:11px; padding:4px 6px; }
 .compactSearchWorkspace .searchComposer button { width:27px; height:27px; display:inline-flex; align-items:center; justify-content:center; padding:0; border-radius:5px; }
+.compactSearchWorkspace .searchComposer { display:grid; grid-template-columns:minmax(0,1fr) 27px; align-items:stretch; }
+.compactSearchWorkspace .searchInputWrap { display:flex; min-width:0; overflow:hidden; border:1px solid #bac9d8; border-radius:5px; background:#fff; }
+.compactSearchWorkspace .searchInputWrap:focus-within { border-color:#3988d2; box-shadow:0 0 0 2px rgba(57,136,210,.13); }
+.compactSearchWorkspace .searchInputWrap input { width:100%; flex:1 1 auto; border:0; border-radius:0; background:transparent; }
+.compactSearchWorkspace .searchInputWrap input:focus { outline:0; }
+.compactSearchWorkspace .searchComposer .searchClearButton { width:27px; height:27px; flex:0 0 auto; border-radius:0; border-left:1px solid #bfd0df; background:#f2f8fe; color:#5b7790; }
+.compactSearchWorkspace .searchComposer .searchClearButton:hover { background:#e1f0fc; color:#176fc8; }
+.compactSearchWorkspace .searchComposer .searchSubmitButton { width:27px; height:27px; }
 .searchSourceCard .fireMountainCard { display:grid; grid-template-columns:minmax(0, 1fr) auto; grid-template-rows:minmax(30px, auto) auto; column-gap:6px; row-gap:2px; align-items:center; min-height:62px; margin:0 36px 0 7px; padding:5px; box-sizing:border-box; }
 .searchSourceCard .fireMountainFiles { min-height:30px; max-height:62px; padding:4px; }
 .searchSourceCard .fireMountainIdentity { justify-content:flex-start; padding-bottom:0; font-size:11px; }
@@ -2734,3 +2746,276 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .calendarSourceCard,.usbSourceCard { display:flex; flex-direction:column; overflow:hidden; background:#fbfdff; }.sourceHeader .sourceTitle { font-size:14px; }.calendarPanelIcon { color:#c47d18; }.calendarToolbar,.usbToolbar { display:flex; align-items:center; gap:4px; padding:5px 7px; border-bottom:1px solid #dbe5ee; background:#f6faff; }.calendarToolbar input,.usbToolbar select { min-width:0; flex:1; border:1px solid #c4d2df; border-radius:5px; background:#fff; color:#324b64; font:inherit; font-size:10px; padding:5px 6px; }.calendarToolbar select { width:64px; flex:0 0 64px; border:1px solid #c4d2df; border-radius:5px; background:#fff; color:#324b64; font-size:9px; padding:5px 3px; }.calendarToolbar select + select { width:40px; flex-basis:40px; }.calendarToolbar button,.usbRefresh { display:inline-grid; flex:0 0 auto; width:27px; height:27px; place-items:center; padding:0; border:0; border-radius:6px; background:#176fc8; color:#fff; cursor:pointer; }.calendarToolbar button:disabled,.usbRefresh:disabled { cursor:wait; opacity:.65; }.calendarError,.usbError { margin:0; padding:5px 7px 0; color:#af4138; font-size:10px; }.calendarEventList,.usbFileList { min-height:0; flex:1; overflow:auto; padding:4px 6px; }.calendarEventList > p,.usbFileList > p { margin:7px 2px; color:#75879a; font-size:10px; }.calendarEventList .calendarEvent { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:4px; padding:5px 2px; border-bottom:1px solid #ebf0f4; }.calendarEventList .calendarEvent:last-child { border-bottom:0; }.calendarEventSummary { display:grid; flex:1 1 110px; min-width:0; gap:1px; }.calendarEventList strong { overflow:hidden; color:#39566f; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }.calendarEventList small { overflow:hidden; color:#7a8ea0; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }.calendarEventList button { display:inline-grid; flex:0 0 auto; width:22px; height:22px; place-items:center; padding:0; border:1px solid #c5d7e7; border-radius:5px; background:#fff; color:#2f75ae; cursor:pointer; }.calendarAttachment { display:flex; width:100%; min-width:0; align-items:center; gap:4px; padding:4px 5px; border:1px solid #d7e3ed; border-radius:5px; background:#fff; color:#4a6278; cursor:grab; }.calendarAttachment:active { cursor:grabbing; }.calendarAttachment > .fileKindIcon { flex:0 0 auto; }.calendarAttachment span { min-width:0; flex:1; overflow:hidden; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }.calendarAttachment button { width:20px; height:20px; }.calendarAttachment > svg { flex:0 0 auto; color:#7f95a8; }.calendarNote,.usbNote { display:block; padding:4px 7px 6px; border-top:1px solid #e1e9f0; color:#788a9b; font-size:9px; line-height:1.22; }.usbPanelIcon { color:#188a70; }.usbSourceCard .sourceHeader .usbRefresh { margin-left:0; background:#f0fbf7; color:#188a70; border:1px solid #bce3d6; }.usbFolder,.usbFile { display:flex; min-width:0; align-items:center; gap:5px; padding:5px 2px; border-bottom:1px solid #ebf0f4; color:#4a6278; font-size:10px; }.usbFolder svg { flex:0 0 auto; color:#c58b17; }.usbFile { cursor:grab; }.usbFile:active { cursor:grabbing; }.usbFile svg { flex:0 0 auto; color:#50738e; }.usbFile span,.usbFolder span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.usbFile small { margin-left:auto; color:#8595a5; font-size:9px; white-space:nowrap; }
 .calendarWeekNavigation { display:flex; align-items:center; justify-content:space-between; gap:4px; padding:3px 7px; border-bottom:1px solid #dbe5ee; background:#fff; }.calendarWeekNavigation strong { min-width:0; overflow:hidden; color:#34516b; font-size:10px; text-align:center; text-overflow:ellipsis; white-space:nowrap; }.calendarWeekNavigation button { display:grid; width:22px; height:22px; flex:0 0 auto; place-items:center; padding:0; border:1px solid #bfd2e4; border-radius:5px; background:#edf6ff; color:#216eae; cursor:pointer; }.calendarWeekNavigation button:hover:not(:disabled) { background:#dcefff; }.calendarWeekNavigation button:disabled { cursor:wait; opacity:.6; }
 .calendarToolbar .calendarSetupButton { background:#fff; color:#52728d; border:1px solid #c4d2df; }.calendarToolbar .calendarSetupButton.active { background:#e7f2ff; color:#176fc8; border-color:#8ebfe8; }.calendarSettings { display:flex; padding:5px 7px; border-bottom:1px solid #dbe5ee; background:#fbfdff; }.calendarSettings label { display:grid; width:100%; gap:3px; color:#5f788e; font-size:9px; font-weight:700; }.calendarSettings input { width:100%; min-width:0; box-sizing:border-box; border:1px solid #c4d2df; border-radius:5px; background:#fff; color:#324b64; font:inherit; font-size:10px; padding:5px 6px; }
+
+/* Compact source controls: every essential command is visible without a
+   separate status strip taking up vertical room. */
+.emailSourceCard .sourceHeader { gap:4px; min-width:0; }
+.emailHeaderStatus { margin-left:auto; color:#197446; font-size:9px; font-weight:900; letter-spacing:.02em; white-space:nowrap; }
+.emailSourceCard .emailDisconnectButton { flex:0 0 auto; margin:0; padding:3px 5px; border-radius:5px; font-size:9px; line-height:1.1; }
+.emailToolbar { min-height:32px; box-sizing:border-box; flex-wrap:nowrap; gap:4px; padding:4px 7px; overflow-x:auto; scrollbar-width:none; }
+.emailToolbar::-webkit-scrollbar { display:none; }
+.emailToolbar > * { flex:0 0 auto; }
+.liveReadingLabel { display:inline-flex; align-items:center; gap:3px; margin-left:0; color:#53687d; font-size:10px; font-weight:800; white-space:nowrap; }
+.liveReadingLabel input { margin:0; accent-color:#176fc8; }
+.gmailSelectionActions.emailInlineSelectionActions { display:flex; align-items:center; gap:6px; margin-left:auto; padding:0; background:transparent; white-space:nowrap; }
+.gmailSelectionActions.emailInlineSelectionActions button { font-size:10px; }
+
+/* The domain address belongs to the coloured title row, leaving the rest of
+   the block for the embedded page and its analysis. */
+.domainSourceCard .sourceHeader { gap:4px; min-width:0; }
+.domainSourceCard .sourceTitle { flex:0 0 auto; }
+.domainHeaderControls { display:flex; flex:1 1 auto; min-width:0; align-items:center; gap:3px; }
+.domainHeaderControls input { min-width:0; width:100%; border:1px solid #bac9d8; border-radius:5px; background:#fff; color:#263548; font:inherit; font-size:10px; padding:4px 5px; }
+.domainHeaderControls button { display:inline-grid; flex:0 0 auto; width:23px; height:23px; place-items:center; padding:0; border:0; border-radius:5px; background:#176fc8; color:#fff; cursor:pointer; }
+.domainSourceCard .domainOpenButton { flex:0 0 auto; margin-left:0; }
+
+/* Google Calendar now always shows one selected week. Its navigation and
+   refresh controls stay in the header instead of using a second toolbar. */
+.calendarSourceHeader { gap:4px; min-width:0; }
+.calendarSourceHeader .sourceTitle { flex:0 0 auto; }
+.calendarHeaderNavigation { display:flex; min-width:0; flex:1 1 auto; align-items:center; justify-content:flex-end; gap:2px; }
+.calendarHeaderNavigation strong { min-width:0; max-width:84px; overflow:hidden; color:#34516b; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+.calendarHeaderNavigation button { display:grid; width:21px; height:21px; flex:0 0 auto; place-items:center; padding:0; border:1px solid #bfd2e4; border-radius:5px; background:#edf6ff; color:#216eae; cursor:pointer; }
+.calendarHeaderNavigation .calendarHeaderRefresh { border:0; background:#176fc8; color:#fff; }
+.calendarHeaderNavigation button:disabled { cursor:wait; opacity:.6; }
+
+/* A connected USB can be selected from its title row and is then added as a
+   normal usable folder in FolderRocket. */
+.usbSourceHeader { gap:4px; min-width:0; }
+.usbSourceHeader .sourceTitle { flex:0 0 auto; }
+.usbHeaderSelect { min-width:0; flex:1 1 auto; border:1px solid #c4d2df; border-radius:5px; background:#fff; color:#324b64; font:inherit; font-size:10px; padding:4px 5px; }
+.usbSourceCard .sourceHeader .usbRefresh { flex:0 0 auto; margin-left:0; }
+
+/* Keep the source-block menu button clear of the compact Search clear X. */
+.sourceBlock-search .sourceBlockMenuToggle { top:3px; right:4px; z-index:82; }
+.sourceBlock-search .sourceBlockMenu { top:31px; right:4px; z-index:83; }
+.sourceBlock-search .searchCompactHeader { padding-right:32px; }
+.sourceBlock-search .searchCompactHeader .searchComposer { min-width:0; }
+.sourceBlock-search .searchCompactHeader .searchComposer button:last-child { margin-right:0; }
+
+/* Header refinements: alerts, connectivity and Virtual Reading share the
+   coloured header while the block menu retains its own clear corner. */
+.sourceBlock-gmail .sourceHeader,.sourceBlock-outlook .sourceHeader { padding-right:35px; overflow:hidden; }
+.emailSourceCard .gmailWarningToggle { order:0; flex:0 0 auto; width:23px; height:23px; }
+.emailSourceCard .emailHeaderStatus { margin-left:auto; }
+.emailHeaderReading { flex:0 0 auto; color:#53687d; font-size:9px; }
+.emailSourceCard .gmailAnalysisStatus { max-width:74px; overflow:hidden; text-overflow:ellipsis; }
+
+/* The connection title is also its compact settings trigger.  Alert counters
+   always retain five reserved positions between the bell and connection state,
+   so the header never jumps when a new alert fires. */
+.emailConnectionControls { display:inline-flex; flex:0 0 auto; min-width:0; align-items:center; gap:3px; }
+.emailConnectionTitle { margin:0; padding:0; border:0; background:transparent; color:#1f2937; cursor:pointer; font:inherit; font-size:12px; font-weight:800; line-height:1.1; white-space:nowrap; }
+.emailConnectionTitle:hover { color:#176fc8; }
+.emailDisconnectButton.armed { border-color:#b9342d; background:#c9443a; color:#fff; }
+.emailAlertSlots { display:flex; width:82px; min-width:82px; height:23px; align-items:center; gap:2px; padding:0 2px; box-sizing:border-box; }
+.emailAlertSlots .gmailAlertCount,.emailAlertSlots .emailAlertReadyDot { flex:0 0 auto; }
+.emailSourceCard .emailHeaderStatus { margin-left:0; }
+.calendarConnectionControls { position:relative; z-index:4; }
+
+/* An empty Search source is intentionally only a title row plus Fire Mountain.
+   As soon as a search returns files, the normal scrollable results area grows
+   back into the available block height. */
+.searchSourceCard:has(.resultsCard.isEmptyResults) { grid-template-rows:auto auto; gap:0; align-content:start; }
+.searchSourceCard:has(.resultsCard.isEmptyResults) .searchResultsCard { height:auto; }
+.searchSourceCard:has(.resultsCard.isEmptyResults) .resultsCard.isEmptyResults { display:none; }
+.searchSourceCard:has(.resultsCard.isEmptyResults) .searchCompactHeader { margin-bottom:0; }
+
+/* Search and Domain use the same compact text size. The refresh belongs inside
+   the address field; ↗ is the single external-opening action. */
+.domainSourceCard .sourceHeader { padding-right:35px; }
+.domainHeaderControls { gap:4px; }
+.domainAddressInput { display:flex; min-width:0; flex:1 1 auto; align-items:stretch; overflow:hidden; border:1px solid #bac9d8; border-radius:5px; background:#fff; }
+.domainHeaderControls input { min-width:0; border:0; border-radius:0; font-size:11px; padding:4px 6px; }
+.domainHeaderControls input:focus { outline:0; }
+.domainAddressInput:focus-within { border-color:#3988d2; box-shadow:0 0 0 2px rgba(57,136,210,.13); }
+.domainAddressInput button { width:23px; height:auto; min-height:23px; border-radius:0; border-left:1px solid #bfd0df; background:#f2f8fe; color:#176fc8; }
+.domainHeaderControls > .domainOpenButton { width:23px; height:23px; padding:0; border-radius:6px; background:#fff; color:#306fae; }
+
+/* Week navigation stays visually centred; refresh remains immediately beside
+   the Calendar title. */
+.calendarSourceHeader { position:relative; padding-right:35px; }
+.calendarSourceHeader .calendarHeaderRefresh { display:grid; width:21px; height:21px; flex:0 0 auto; place-items:center; padding:0; border:0; border-radius:5px; background:#176fc8; color:#fff; cursor:pointer; }
+.calendarSourceHeader .calendarHeaderRefresh:disabled { cursor:wait; opacity:.6; }
+.calendarHeaderNavigation { position:absolute; left:50%; transform:translateX(-50%); width:max-content; max-width:calc(100% - 150px); justify-content:center; }
+.calendarHeaderNavigation strong { max-width:88px; }
+
+/* USB refresh is grouped with its title, then the selected drive uses the
+   remaining width. */
+.usbSourceHeader { padding-right:35px; }
+.usbSourceHeader .usbRefresh { order:0; }
+.usbHeaderSelect { order:1; }
+
+/* Email attachments preserve the two-line layout but use less vertical space. */
+.emailAttachment { margin-bottom:4px; padding:5px 6px; line-height:1.15; }
+.emailAttachmentPrimary { gap:6px; }
+.emailAttachmentSecondary { gap:4px; margin-top:1px; }
+.emailAttachmentSecondary small { font-size:10px; }
+.emailAttachmentActions { gap:2px; }
+
+/* Folder Management: a folder icon/name toggles a transfer destination, while
+   the chevron still only opens or closes its contents. */
+.folderTreeDirectory.selectedDestination { background:linear-gradient(90deg,#e6f4ff,#f8fcff); box-shadow:inset 3px 0 0 #2d8bd4; }
+.directoryDestinationToggle { display:inline-grid; width:20px; min-width:20px; height:20px; place-items:center; padding:0; border:0; border-radius:4px; background:transparent; color:#c79019; cursor:pointer; }
+.directoryDestinationToggle.active { background:#d7edff; color:#176fc8; }
+.directoryDestinationName { min-width:0; overflow:hidden; border:0; background:transparent; color:#4a627c; cursor:pointer; font:inherit; font-size:14px; font-weight:700; text-align:left; text-overflow:ellipsis; white-space:nowrap; }
+.folderTreeDirectory.selectedDestination .directoryDestinationName { color:#1766a8; }
+
+/* A subtle shared rail identifies multiple attachments from one email, while
+   every attachment card remains independently selectable and draggable. */
+.emailAttachment.emailMessageGroup { border-left:3px solid #9cb6ca; }
+.emailAttachment.messageGroup-start { margin-bottom:0; border-bottom-left-radius:2px; }
+.emailAttachment.messageGroup-middle { margin-top:-1px; margin-bottom:0; border-top-left-radius:2px; border-bottom-left-radius:2px; }
+.emailAttachment.messageGroup-end { margin-top:-1px; border-top-left-radius:2px; }
+.emailMessageGroupMarker { display:inline-grid; width:14px; height:14px; flex:0 0 auto; place-items:center; border-radius:50%; background:#e7f1f9; color:#5c7b95; }
+
+/* Folder roots remain clearly distinguishable while their list scrolls. The
+   search panel no longer reserves a blank area before the first search. */
+.folderInspector { gap:6px; }
+.folderInspector .foundFilesPanel { margin-bottom:-3px; }
+.folderInspector .inspectorListsResizer { margin:-3px 0; }
+.folderTreeRoot + .folderTreeRoot { margin-top:8px; padding-top:7px; border-top:2px solid #cfdce8; }
+.folderTreeRoot h4 { margin-bottom:4px; padding:4px 6px; border:1px solid #d9e5ef; border-radius:6px; background:#f4f9fd; }
+
+/* Keep the connected mailbox controls in one predictable order: status,
+   disconnect action, then a compact clickable Virtual Reading state. */
+.emailSourceCard .emailHeaderStatus { margin-left:0; flex:0 0 auto; }
+.emailHeaderReading { display:inline-flex; flex:0 0 auto; align-items:center; gap:3px; color:#53687d; font-size:9px; font-weight:800; white-space:nowrap; }
+.emailVirtualReadingToggle { min-width:24px; min-height:19px; padding:2px 4px; border:1px solid #b9c8d6; border-radius:5px; background:#fff; color:#667788; cursor:pointer; font:inherit; font-size:8px; font-weight:900; line-height:1; }
+.emailVirtualReadingToggle.active { border-color:#4a9ade; background:#e4f3ff; color:#1766af; }
+.emailVirtualReadingToggle:hover { border-color:#3988d2; }
+
+/* The Domain field follows Search's compact header and the − menu uses the
+   reserved right-side header area instead of sitting on top of ↗. */
+.domainSourceCard .sourceHeader { gap:3px; }
+.domainSourceCard .sourceTitle { margin-right:0; }
+.domainHeaderControls { min-width:0; gap:3px; margin-left:0; }
+.domainAddressInput { min-width:0; }
+.sourceBlock-domain:has(.domainOpenButton) .sourceBlockMenuToggle { top:3px; right:4px; }
+.sourceBlock-domain:has(.domainOpenButton) .sourceBlockMenu { top:31px; right:4px; }
+
+/* Domain deliberately has the same two-column header geometry as Search:
+   title on the left, address/search control on the right, with no filler gap. */
+.domainSourceCard .domainCompactHeader { display:grid; grid-template-columns:auto minmax(0,1fr); grid-template-areas:"title controls"; min-height:36px; box-sizing:border-box; align-items:center; gap:5px; padding:5px 34px 5px 7px; }
+.domainCompactHeader .domainHeading { grid-area:title; display:inline-flex; align-items:center; gap:4px; min-width:0; white-space:nowrap; }
+.domainCompactHeader .domainPanelIcon { width:15px; height:15px; flex:0 0 auto; }
+.domainCompactHeader .sourceTitle { font-size:13px; }
+.domainCompactHeader .domainHeaderControls { grid-area:controls; display:grid; grid-template-columns:minmax(0,1fr) 27px; min-width:0; gap:3px; }
+.domainCompactHeader .domainAddressInput { min-width:0; width:100%; height:27px; box-sizing:border-box; }
+.domainCompactHeader .domainAddressInput input { height:25px; box-sizing:border-box; }
+.domainCompactHeader .domainAddressInput button,.domainCompactHeader .domainOpenButton { width:27px; min-width:27px; height:27px; min-height:27px; }
+
+/* Domain links are inspected locally by the backend: the compact file button
+   opens a contained list over the page, while the AI prompt keeps its own row
+   and never pays for the link scan. */
+.domainUtilityPanel { position:relative; z-index:5; }
+.domainDownloadsWrap { position:relative; display:inline-flex; flex:0 0 auto; }
+.domainAiControls .domainDownloadsToggle { width:28px; height:28px; padding:0; background:#f1f7fe; color:#176fc8; border:1px solid #b7cee3; }
+.domainAiControls .domainDownloadsToggle:hover:not(:disabled),.domainAiControls .domainDownloadsToggle.active { background:#dceeff; border-color:#70addc; }
+.domainDownloadsMenu { position:absolute; z-index:125; bottom:calc(100% + 5px); left:0; display:grid; width:min(320px, calc(100vw - 34px)); max-height:190px; overflow:auto; border:1px solid #bdd1e3; border-radius:8px; background:#fff; box-shadow:0 10px 24px rgba(26,57,84,.25); color:#39536b; }
+.domainDownloadsMenu header { display:flex; min-width:0; align-items:center; justify-content:space-between; gap:7px; padding:6px 7px; border-bottom:1px solid #dce7ef; background:#f3f8fd; }
+.domainDownloadsMenu header strong { overflow:hidden; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+.domainAiControls .domainDownloadsMenu header button { width:20px; height:20px; padding:0; border:0; background:transparent; color:#637689; }
+.domainAiControls .domainDownloadsMenu > p { margin:0; padding:9px 8px; color:#6e8193; font-size:10px; line-height:1.3; }
+.domainAiControls .domainDownloadsMenu > p.error { color:#af4237; }
+.domainDownloadsMenu > div { display:grid; padding:3px; }
+.domainAiControls .domainDownloadsMenu .domainDownloadItem { display:grid; width:100%; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:5px; padding:6px; border:0; border-radius:5px; background:transparent; color:#3b546c; text-align:left; }
+.domainAiControls .domainDownloadsMenu .domainDownloadItem:hover:not(:disabled) { background:#eaf4fd; }
+.domainDownloadItem > svg { color:#2482c6; }
+.domainDownloadItem > span { display:grid; min-width:0; gap:1px; }
+.domainDownloadItem strong,.domainDownloadItem small { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.domainDownloadItem strong { font-size:10px; }
+.domainDownloadItem small { color:#75899b; font-size:9px; font-weight:500; }
+
+/* Previews are image-first: their selected-file caption remains on the image,
+   so the old generic heading does not spend any vertical space. */
+.folderQuickPreview { grid-template-rows:minmax(0,1fr); gap:0; padding:5px; }
+.processingQuickPreview { grid-template-rows:minmax(0,1fr); gap:0; margin-top:6px; padding:5px; }
+.processingQuickPreview > .processingPreviewContent { height:100%; }
+.processingQuickPreview > p { align-self:center; margin:0; padding:6px; }
+
+/* Converted files have three stable actions: open, keep in the source folder,
+   or open a multi-folder copy picker. */
+.convertedFileWrap { border-bottom:1px solid #e8edf3; }
+.convertedFileWrap:last-child { border-bottom:0; }
+.convertedFileWrap .convertedFile { border-bottom:0; }
+.convertedFileActions { flex:0 0 auto; }
+.convertedFile .convertedFileActions .convertedKeepButton { background:#edf9f1; color:#23834b; }
+.convertedFile .convertedFileActions .convertedKeepButton.active { background:#288850; color:#fff; }
+.convertedFile .convertedFileActions .convertedSendButton { background:#eff1ff; color:#5d54bb; }
+.convertedFile .convertedFileActions .convertedSendButton.active { background:#665bd1; color:#fff; }
+.convertedDeliveryMenu { display:grid; gap:5px; margin:0 6px 7px 38px; padding:6px; border:1px solid #d3d5f3; border-radius:6px; background:#f8f8ff; }
+.convertedDeliveryMenu > strong { color:#554b9d; font-size:10px; }
+.convertedDeliveryMenu > div { display:grid; max-height:110px; overflow:auto; gap:2px; }
+.convertedDeliveryMenu label { display:flex; min-width:0; align-items:center; gap:5px; padding:3px 2px; color:#455a70; font-size:10px; cursor:pointer; }
+.convertedDeliveryMenu label input { margin:0; accent-color:#665bd1; }
+.convertedDeliveryMenu label span { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.convertedDeliveryMenu label svg { flex:0 0 auto; color:#c38b19; }
+.convertedDeliveryMenu label em { margin-left:auto; color:#7b63ad; font-size:8px; font-style:normal; }
+.convertedDeliveryMenu footer { display:flex; justify-content:flex-end; gap:4px; }
+.convertedDeliveryMenu footer button { border:0; border-radius:5px; background:#e5e8ef; color:#52667b; cursor:pointer; font-size:9px; font-weight:800; padding:4px 6px; }
+.convertedDeliveryMenu footer button:last-child { background:#665bd1; color:#fff; }
+.convertedDeliveryMenu footer button:disabled { cursor:not-allowed; opacity:.55; }
+
+/* Mail headers reserve an alert lane after the bell. During a check that lane
+   temporarily becomes the only progress message; the five alert markers come
+   back as soon as the check finishes. Connection controls stay against the
+   block-menu side instead of crowding the bell. */
+.emailSourceCard .emailAlertSlots { width:104px; min-width:104px; margin-left:8px; padding:0 4px; }
+.emailSourceCard .emailAlertSlots.analyzing { justify-content:center; color:#1676d2; font-size:10px; font-weight:800; white-space:nowrap; animation:gmailAnalysisPulse 1s ease-in-out infinite; }
+.emailSourceCard .emailHeaderStatus { margin-left:auto; }
+.emailSourceCard .emailHeaderReading { margin-left:2px; }
+
+/* An idle Search + Fire block is genuinely compact: one title row and the
+   full-width Fire Mountain. Results still grow into a scrollable list once a
+   search is made. */
+.dashboardSourceBlock.sourceBlock-search { min-height:108px; }
+.searchSourceCard .fireMountainCard { margin-right:7px; }
+.searchSourceCard:has(.resultsCard.isEmptyResults) { min-height:108px; padding-bottom:4px; }
+.searchSourceCard:has(.resultsCard.isEmptyResults) .fireMountainCard { width:calc(100% - 14px); min-width:0; }
+.domainCompactHeader .domainOpenButton { width:27px; height:27px; margin:0; }
+
+/* Folder groups have a dark divider and a centred dot, so their boundaries
+   remain obvious inside the independently scrolling file list. */
+.folderTreeRoot + .folderTreeRoot { position:relative; margin-top:9px; padding-top:9px; border-top:2px solid #1f2937; }
+.folderTreeRoot + .folderTreeRoot::before { content:""; position:absolute; z-index:1; top:-5px; left:50%; width:8px; height:8px; border:1px solid #fff; border-radius:50%; background:#111827; transform:translateX(-50%); }
+
+/* Calendar refresh follows the warm yellow action treatment used by the USB
+   source instead of looking like another blue navigation control. */
+.calendarSourceHeader .calendarHeaderRefresh { background:#f5c84b; color:#5e4300; box-shadow:inset 0 0 0 1px rgba(132,91,0,.18); }
+.calendarSourceHeader .calendarHeaderRefresh:hover:not(:disabled) { background:#ffd96b; }
+
+/* A Calendar block is a real weekly planner: each day remains visible in a
+   seven-day grid, while clicking a day reveals only that day's events and
+   draggable/openable attachments underneath. */
+.calendarEventList { display:flex; flex-direction:column; padding:0; }
+.calendarWeekGridScroll { flex:0 0 auto; overflow-x:auto; padding:5px 6px; border-bottom:1px solid #dbe5ee; scrollbar-width:thin; scrollbar-color:#b8c7d6 transparent; }
+.calendarWeekGridScroll::-webkit-scrollbar { height:4px; }
+.calendarWeekGridScroll::-webkit-scrollbar-thumb { border-radius:6px; background:#b8c7d6; }
+.calendarWeekGrid { display:grid; min-width:448px; grid-template-columns:repeat(7, minmax(0,1fr)); gap:3px; }
+.calendarDayCell { position:relative; display:grid; min-width:0; min-height:70px; align-content:start; gap:2px; padding:4px; overflow:hidden; border:1px solid #d2dfeb; border-radius:6px; background:#fff; color:#405c75; cursor:pointer; text-align:left; }
+.calendarDayCell:hover { border-color:#99bfdc; background:#f5faff; }
+.calendarDayCell.selected { border-color:#c47d18; background:linear-gradient(180deg,#fff5dc,#fff); box-shadow:inset 0 2px 0 #f5c84b; }
+.calendarDayLabel { color:#72889c; font-size:8px; font-weight:800; line-height:1; text-transform:uppercase; }
+.calendarDayCell > strong { color:#31506c; font-size:13px; line-height:1; }
+.calendarDayCell > em { position:absolute; top:4px; right:4px; display:grid; min-width:13px; height:13px; place-items:center; padding:0 2px; border-radius:8px; background:#c47d18; color:#fff; font-size:8px; font-style:normal; font-weight:900; }
+.calendarDayEvents { display:grid; min-width:0; gap:1px; }
+.calendarDayEvents small { min-width:0; overflow:hidden; border-radius:3px; background:#e8f3ff; color:#28689c; font-size:8px; line-height:1.2; text-overflow:ellipsis; white-space:nowrap; }
+.calendarDayFiles { display:inline-flex; align-items:center; gap:1px; margin-top:auto; color:#9a6912; font-size:8px; font-weight:800; }
+.calendarDayDetails { min-height:0; flex:1 1 auto; overflow:auto; padding:0 6px 4px; }
+.calendarDayDetails > header { position:sticky; z-index:1; top:0; display:flex; align-items:center; justify-content:space-between; gap:7px; padding:5px 0 4px; border-bottom:1px solid #e3ebf2; background:#fbfdff; }
+.calendarDayDetails > header strong { min-width:0; overflow:hidden; color:#38536c; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+.calendarDayDetails > header span { flex:0 0 auto; color:#72869a; font-size:9px; font-weight:700; }
+.calendarDayDetails > p { margin:9px 1px; color:#75879a; font-size:10px; }
+.calendarDayDetails .calendarEvent { display:flex; flex-wrap:wrap; align-items:center; justify-content:flex-end; gap:4px; padding:5px 2px; border-bottom:1px solid #ebf0f4; }
+.calendarDayDetails .calendarEvent:last-child { border-bottom:0; }
+.calendarDayDetails .calendarEventSummary { display:grid; flex:1 1 110px; min-width:0; gap:1px; }
+.calendarDayDetails .calendarEventSummary strong { overflow:hidden; color:#39566f; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+.calendarDayDetails .calendarEventSummary small { overflow:hidden; color:#7a8ea0; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+.calendarDayDetails .calendarEvent > button { display:inline-grid; flex:0 0 auto; width:22px; height:22px; place-items:center; padding:0; border:1px solid #c5d7e7; border-radius:5px; background:#fff; color:#2f75ae; cursor:pointer; }
+.calendarDayDetails .calendarAttachment { display:flex; width:100%; min-width:0; align-items:center; gap:4px; padding:4px 5px; border:1px solid #d7e3ed; border-radius:5px; background:#fff; color:#4a6278; cursor:grab; }
+.calendarDayDetails .calendarAttachment:active { cursor:grabbing; }
+.calendarDayDetails .calendarAttachment > .fileKindIcon { flex:0 0 auto; }
+.calendarDayDetails .calendarAttachment span { min-width:0; flex:1; overflow:hidden; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+.calendarDayDetails .calendarAttachment button { width:20px; height:20px; }
+.calendarDayDetails .calendarAttachment > svg { flex:0 0 auto; color:#7f95a8; }

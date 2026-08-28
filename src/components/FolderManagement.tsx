@@ -8,6 +8,7 @@ export interface ManagedFolder { id: string; name: string; path: string; descrip
 interface FileEntry extends VirtualFile { matches?: string[]; }
 interface DirectoryEntry { name: string; path: string; createdAt?: string; }
 interface DirectoryContents { files: FileEntry[]; folders: DirectoryEntry[]; }
+interface TransferDestination { folderId: string; name: string; path: string; storage: "physical" | "imaginary"; }
 interface Props { folders: ManagedFolder[]; onAdd: () => void; onUpdate: (id: string, change: Partial<ManagedFolder>) => void; onDelete: (id: string) => void; onReorder: (sourceId: string, targetId: string, placement: "before" | "after") => void; aiEnabled: boolean; }
 interface CompactPreview { kind: "loading" | "text" | "image" | "pdf" | "unavailable"; text?: string; url?: string; message?: string; }
 
@@ -21,6 +22,14 @@ function FileKindIcon({name}: {name: string}) {
     if (["zip", "rar", "7z", "tar", "gz", "bz2"].includes(extension)) return <span className="fileKindIcon archive" title="Archive"><Archive size={17} /></span>;
     return <span className="fileKindIcon generic" title="File"><File size={17} /></span>;
 }
+
+function comparablePath(value: string) { return value.trim().replace(/\//g, "\\").replace(/[\\/]+$/, "").toLowerCase(); }
+function isChildOfFolder(folderPath: string, candidatePath: string) {
+    const root = comparablePath(folderPath);
+    const candidate = comparablePath(candidatePath);
+    return Boolean(root) && candidate !== root && candidate.startsWith(`${root}\\`);
+}
+function parentFolderPath(filePath: string) { return filePath.replace(/[\\/][^\\/]+$/, ""); }
 
 function FolderQuickPreview({file, slot}: {file: FileEntry | null; slot: number}) {
     const [preview, setPreview] = useState<CompactPreview | null>(null);
@@ -46,8 +55,10 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
     const [primaryOpenedId, setPrimaryOpenedId] = useState<string | null>(null);
     const [folderContents, setFolderContents] = useState<Record<string, DirectoryContents>>({});
     const [expandedDirectories, setExpandedDirectories] = useState<Set<string>>(() => new Set());
+    const [selectedDirectoryPaths, setSelectedDirectoryPaths] = useState<string[]>([]);
     const [loadingDirectories, setLoadingDirectories] = useState<Set<string>>(() => new Set());
     const [results, setResults] = useState<FileEntry[]>([]);
+    const [hasSearched, setHasSearched] = useState(false);
     const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
     const [selectedFiles, setSelectedFiles] = useState<FileEntry[]>([]);
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -67,6 +78,23 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
     const primaryOpened = folders.find(folder => folder.id === primaryOpenedId) ?? openedFolders[0];
     const openedFolderKey = openedFolderIds.join("|");
     const openedFolderSignature = openedFolders.map(folder => `${folder.id}:${folder.storage ?? "physical"}:${folder.path}:${JSON.stringify(folder.virtualFiles ?? [])}`).join("|");
+    const transferDestinations = (() => {
+        const destinations: TransferDestination[] = [];
+        for (const folder of openedFolders) {
+            if (folder.storage === "imaginary") {
+                destinations.push({folderId: folder.id, name: folder.name, path: "", storage: "imaginary"});
+                continue;
+            }
+            if (!folder.path) continue;
+            const selectedChildren = selectedDirectoryPaths.filter(directoryPath => isChildOfFolder(folder.path, directoryPath));
+            if (selectedChildren.length) {
+                destinations.push(...selectedChildren.map(directoryPath => ({folderId: folder.id, name: directoryPath.split(/[\\/]/).filter(Boolean).pop() ?? folder.name, path: directoryPath, storage: "physical" as const})));
+            } else {
+                destinations.push({folderId: folder.id, name: folder.name, path: folder.path, storage: "physical"});
+            }
+        }
+        return [...new Map(destinations.map(destination => [destination.storage === "imaginary" ? `imaginary:${destination.folderId}` : `physical:${comparablePath(destination.path)}`, destination])).values()];
+    })();
 
     useEffect(() => {
         const dismissDelete = (event: MouseEvent) => {
@@ -97,6 +125,13 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
     useEffect(() => {
         setOpenedFolderIds(current => current.filter(id => folders.some(folder => folder.id === id)));
     }, [folders]);
+
+    useEffect(() => {
+        const physicalRoots = openedFolders.filter(folder => folder.storage !== "imaginary" && Boolean(folder.path)).map(folder => folder.path);
+        setSelectedDirectoryPaths(current => current.filter(directoryPath => physicalRoots.some(root => isChildOfFolder(root, directoryPath))));
+    // The selected destination folders belong only to the currently opened roots.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [openedFolderKey, openedFolderSignature]);
 
     async function loadDirectory(directoryPath: string) {
         setLoadingDirectories(current => new Set(current).add(directoryPath));
@@ -187,6 +222,7 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
     function openFolderOnly(id: string) {
         setOpenedFolderIds([id]);
         setPrimaryOpenedId(id);
+        setSelectedDirectoryPaths([]);
     }
 
     function toggleFolderInView(id: string) {
@@ -195,6 +231,16 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
             : [...openedFolderIds, id];
         setOpenedFolderIds(nextOpened);
         setPrimaryOpenedId(current => current && nextOpened.includes(current) ? current : null);
+        const changedFolder = folders.find(folder => folder.id === id);
+        if (changedFolder?.path && openedFolderIds.includes(id)) {
+            setSelectedDirectoryPaths(current => current.filter(directoryPath => !isChildOfFolder(changedFolder.path, directoryPath)));
+        }
+    }
+
+    function toggleDirectoryDestination(directory: DirectoryEntry) {
+        setSelectedDirectoryPaths(current => current.includes(directory.path)
+            ? current.filter(path => path !== directory.path)
+            : [...current, directory.path]);
     }
 
     async function toggleDirectory(directory: DirectoryEntry) {
@@ -212,6 +258,7 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
 
     async function search() {
         if (!query.trim() || !openedFolders.length) return;
+        setHasSearched(true);
         try {
             const physicalPaths = openedFolders.filter(folder => folder.storage !== "imaginary" && Boolean(folder.path)).map(folder => folder.path);
             const virtualMatches = openedFolders
@@ -271,29 +318,74 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
     }
 
     async function sendQueuedFiles(mode: "copy" | "move") {
-        if (!primaryOpened || !moveQueue.length) return;
-        if (primaryOpened.storage === "imaginary") {
-            const virtualFiles = [...(primaryOpened.virtualFiles ?? []), ...moveQueue.filter(file => !(primaryOpened.virtualFiles ?? []).some(item => item.path === file.path))];
-            onUpdate(primaryOpened.id, {virtualFiles});
-            setMoveQueue([]);
-            clearFileSelection();
-            setFilesVersion(current => current + 1);
-            setMessage(`${virtualFiles.length} file(s) available in ${primaryOpened.name}.`);
-            return;
+        if (!moveQueue.length || !transferDestinations.length) return;
+        const transfer = async (endpoint: "/files/copy" | "/files/move", files: FileEntry[], destination: TransferDestination) => {
+            if (!files.length) return [] as FileEntry[];
+            const response = await fetch(`${API_BASE_URL}${endpoint}`, {method: "POST", headers: {"Content-Type": "application/json"}, credentials: "include", body: JSON.stringify({paths: files.map(file => file.path), destination: destination.path})});
+            const data = await response.json().catch(() => ({})) as {copied?: FileEntry[]; moved?: FileEntry[]; message?: string};
+            if (!response.ok) throw new Error(data.message ?? `Unable to ${endpoint === "/files/move" ? "move" : "copy"} files`);
+            const completed = endpoint === "/files/move" ? data.moved ?? [] : data.copied ?? [];
+            return completed.map((file, index) => ({...files[index], ...file}));
+        };
+        const errors: string[] = [];
+        let transferred = 0;
+
+        if (mode === "copy") {
+            for (const destination of transferDestinations) {
+                if (destination.storage === "imaginary") {
+                    const folder = folders.find(item => item.id === destination.folderId);
+                    if (!folder) continue;
+                    const existing = folder.virtualFiles ?? [];
+                    const added = moveQueue.filter(file => !existing.some(item => item.path === file.path));
+                    onUpdate(folder.id, {virtualFiles: [...existing, ...added]});
+                    transferred += added.length;
+                    continue;
+                }
+                const filesForDestination = moveQueue.filter(file => comparablePath(parentFolderPath(file.path)) !== comparablePath(destination.path));
+                if (!filesForDestination.length) continue;
+                try { transferred += (await transfer("/files/copy", filesForDestination, destination)).length; }
+                catch (error) { errors.push(`${destination.name}: ${error instanceof Error ? error.message : "copy failed"}`); }
+            }
+        } else {
+            const physicalDestinations = transferDestinations.filter((destination): destination is TransferDestination & {storage: "physical"} => destination.storage === "physical");
+            const primaryDestination = physicalDestinations[0];
+            if (!primaryDestination) { setMessage("Cut 'em needs at least one physical folder. Use Copy 'em for an imaginary folder."); return; }
+            const filesToMove = moveQueue.filter(file => comparablePath(parentFolderPath(file.path)) !== comparablePath(primaryDestination.path));
+            let primaryFiles = moveQueue.filter(file => comparablePath(parentFolderPath(file.path)) === comparablePath(primaryDestination.path));
+            let movedFiles: FileEntry[] = [];
+            try {
+                movedFiles = await transfer("/files/move", filesToMove, primaryDestination);
+                primaryFiles = [...primaryFiles, ...movedFiles];
+                transferred += movedFiles.length;
+            } catch (error) {
+                setMessage(`${primaryDestination.name}: ${error instanceof Error ? error.message : "move failed"}`);
+                return;
+            }
+            for (const destination of physicalDestinations.slice(1)) {
+                const filesForDestination = primaryFiles.filter(file => comparablePath(parentFolderPath(file.path)) !== comparablePath(destination.path));
+                if (!filesForDestination.length) continue;
+                try { transferred += (await transfer("/files/copy", filesForDestination, destination)).length; }
+                catch (error) { errors.push(`${destination.name}: ${error instanceof Error ? error.message : "copy after cut failed"}`); }
+            }
+            for (const destination of transferDestinations.filter(destination => destination.storage === "imaginary")) {
+                const folder = folders.find(item => item.id === destination.folderId);
+                if (!folder) continue;
+                const existing = folder.virtualFiles ?? [];
+                const added = primaryFiles.filter(file => !existing.some(item => item.path === file.path));
+                onUpdate(folder.id, {virtualFiles: [...existing, ...added]});
+                transferred += added.length;
+            }
+            if (movedFiles.length) window.dispatchEvent(new CustomEvent("folderrocket-files-moved", {detail: {sourcePaths: filesToMove.slice(0, movedFiles.length).map(file => file.path), moved: movedFiles, destination: primaryDestination.path}}));
         }
-        if (!primaryOpened.path) return;
-        const endpoint = mode === "copy" ? "/files/copy" : "/files/move";
-        const response = await fetch(`${API_BASE_URL}${endpoint}`, {method: "POST", headers: {"Content-Type": "application/json"}, credentials: "include", body: JSON.stringify({paths: moveQueue.map(file => file.path), destination: primaryOpened.path})});
-        const data = await response.json() as {copied?: FileEntry[]; moved?: FileEntry[]; message?: string};
-        if (!response.ok) { setMessage(data.message ?? `Unable to ${mode} files`); return; }
-        const completed = mode === "copy" ? data.copied ?? [] : data.moved ?? [];
-        if (mode === "move") {
-            window.dispatchEvent(new CustomEvent("folderrocket-files-moved", {detail: {sourcePaths: moveQueue.map(file => file.path), moved: completed, destination: primaryOpened.path}}));
-        }
+
+        if (!transferred && errors.length) { setMessage(errors.join(" · ")); return; }
+        if (!transferred) { setMessage("The selected files are already in the chosen destination."); return; }
         setMoveQueue([]);
         clearFileSelection();
         setFilesVersion(current => current + 1);
-        setMessage(`${completed.length} file(s) ${mode === "copy" ? "copied" : "moved"} to ${primaryOpened.name}.`);
+        const destinationText = transferDestinations.length === 1 ? transferDestinations[0].name : `${transferDestinations.length} destinations`;
+        const action = mode === "move" && transferDestinations.length > 1 ? "cut to the first destination and copied to the others" : mode === "copy" ? "copied" : "moved";
+        setMessage(`${transferred} file(s) ${action} to ${destinationText}.${errors.length ? ` ${errors.length} destination(s) could not be completed.` : ""}`);
     }
 
     function requestDelete(id: string) { if (pendingDeleteId === id) { onDelete(id); setPendingDeleteId(null); } else setPendingDeleteId(id); }
@@ -359,12 +451,13 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
 
     function renderDirectory(directory: DirectoryEntry, depth: number) {
         const isExpanded = expandedDirectories.has(directory.path);
+        const isTransferDestination = selectedDirectoryPaths.includes(directory.path);
         const contents = folderContents[directory.path];
         const isLoading = loadingDirectories.has(directory.path);
         return <div className="folderTreeBranch" key={directory.path} style={{"--folder-depth": depth} as CSSProperties}>
-            <div className="folderTreeDirectory">
+            <div className={isTransferDestination ? "folderTreeDirectory selectedDestination" : "folderTreeDirectory"}>
                 <button type="button" className="directoryToggle" onClick={() => void toggleDirectory(directory)} title={isExpanded ? "Close folder" : "Open folder"}>{isExpanded ? <ChevronDown size={15}/> : <ChevronRight size={15}/>}</button>
-                <FolderClosed size={15}/><strong>{directory.name}</strong>
+                <button type="button" className={isTransferDestination ? "directoryDestinationToggle active" : "directoryDestinationToggle"} onClick={() => toggleDirectoryDestination(directory)} title={isTransferDestination ? "Remove transfer destination" : "Use as transfer destination"} aria-label={isTransferDestination ? `Remove ${directory.name} as transfer destination` : `Use ${directory.name} as transfer destination`} aria-pressed={isTransferDestination}><FolderClosed size={15}/></button><button type="button" className="directoryDestinationName" onClick={() => toggleDirectoryDestination(directory)} title={isTransferDestination ? "Selected transfer destination" : "Select as transfer destination"}>{directory.name}</button>
             </div>
             {isExpanded && <div className="folderTreeChildren">
                 {isLoading && !contents ? <p>Loading folder...</p> : null}
@@ -377,9 +470,8 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
 
     return <main className="folderManagementPage">
         <section className="folderManagementLeft"><section className="folderTablePanel">
-            <div className="managementHeader"><div><h2>Folder management</h2>{orderingFolders && <p>Drag the handle and release the folder where you want it.</p>}</div><div className="managementActions"><button type="button" className={orderingFolders ? "orderFoldersButton active" : "orderFoldersButton"} onClick={() => { setOrderingFolders(current => !current); setDraggedFolderId(null); setDropTarget(null); }} title={orderingFolders ? "Finish ordering folders" : "Reorder folders"}><ListOrdered size={17}/></button><button type="button" className="addFolder" onClick={onAdd}>+</button></div></div>
             <div className="folderTable" role="table">
-                <div className={orderingFolders ? "folderTableRow folderTableHead orderingHead" : "folderTableRow folderTableHead"} role="row">{orderingFolders && <span aria-label="Reorder folder"/>}<span aria-label="Delete folder"/><span>Name</span><span>Path</span><span>Description</span><span aria-label="Open folder"/></div>
+                <div className={orderingFolders ? "folderTableRow folderTableHead orderingHead" : "folderTableRow folderTableHead"} role="row">{orderingFolders && <span aria-label="Reorder folder"/>}<span aria-label="Delete folder"/><span>Name</span><span>Path</span><span>Description</span><span className="folderTableTopActions"><button type="button" className={orderingFolders ? "orderFoldersButton active" : "orderFoldersButton"} onClick={() => { setOrderingFolders(current => !current); setDraggedFolderId(null); setDropTarget(null); }} title={orderingFolders ? "Finish ordering folders" : "Reorder folders"} aria-label={orderingFolders ? "Finish ordering folders" : "Reorder folders"}><ListOrdered size={15}/></button><button type="button" className="addFolder" onClick={onAdd} title="Add folder" aria-label="Add folder">+</button></span></div>
                 {folders.map(folder => <div className={`${folder.id === primaryOpenedId ? "folderTableRow primaryOpened" : openedFolderIds.includes(folder.id) ? "folderTableRow secondaryOpened" : "folderTableRow"}${orderingFolders ? " orderingFolder" : ""}${draggedFolderId === folder.id ? " draggingFolder" : ""}${dropTarget?.id === folder.id ? ` drop${dropTarget.placement === "before" ? "Before" : "After"}` : ""}`} role="row" key={folder.id} data-folder-id={folder.id}>
                     {orderingFolders && <span className="folderOrderHandle" role="button" tabIndex={0} onPointerDown={event => { event.preventDefault(); pointerDraggedFolderId.current = folder.id; setDraggedFolderId(folder.id); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (pointerDraggedFolderId.current !== folder.id) return; const target = getPointerDropTarget(event.clientX, event.clientY); setDropTarget(target && target.id !== folder.id ? target : null); }} onPointerUp={event => { const sourceId = pointerDraggedFolderId.current; const target = getPointerDropTarget(event.clientX, event.clientY); if (sourceId && target && sourceId !== target.id) onReorder(sourceId, target.id, target.placement); pointerDraggedFolderId.current = null; setDraggedFolderId(null); setDropTarget(null); }} onPointerCancel={() => { pointerDraggedFolderId.current = null; setDraggedFolderId(null); setDropTarget(null); }} title="Hold and drag to reorder"><GripVertical size={14}/></span>}
                     <button type="button" className={pendingDeleteId === folder.id ? "deleteFolder confirmDelete" : "deleteFolder"} onClick={() => requestDelete(folder.id)} title={pendingDeleteId === folder.id ? "Press again to delete" : "Delete folder"}>x</button>
@@ -389,11 +481,11 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
                     <span className="folderRowActions"><button type="button" className={openedFolderIds.includes(folder.id) && folder.id !== primaryOpenedId ? "toggleFolderViewButton active" : "toggleFolderViewButton"} onClick={() => toggleFolderInView(folder.id)} title={openedFolderIds.includes(folder.id) ? "Remove from current view" : "Add to current view"} aria-pressed={openedFolderIds.includes(folder.id) && folder.id !== primaryOpenedId}><Plus size={15}/></button><button type="button" className={folder.id === primaryOpenedId ? "openFolderButton active" : "openFolderButton"} onClick={() => openFolderOnly(folder.id)} title="Open only this folder" aria-pressed={folder.id === primaryOpenedId}><FolderOpen size={17}/></button></span>
                 </div>)}
             </div>
-        </section><section className="folderQuickPreview"><header><strong>Quick preview</strong><small>Selected files</small></header><div>{quickPreviewSlots.map((file, index) => <FolderQuickPreview key={file ? `${file.path}-${index}` : `empty-${index}`} file={file} slot={index}/>)}</div></section><section className={moveQueue.length ? "fireMountainCard moveFilesCard" : "fireMountainCard moveFilesCard isEmptyMove"}><div className="fireMountainFiles">{moveQueue.length ? moveQueue.map(file => <div className="fireMountainFile" key={file.path}><span className="fireMountainFileInfo"><span className="fireMountainFileName"><FileKindIcon name={file.name}/>{file.name}</span><span className="fireMountainFileSize">{file.size ? `${Math.max(1, Math.round(file.size / 1024))} KB` : "Size unavailable"} · Added {file.createdAt ? new Date(file.createdAt).toLocaleDateString("en-GB") : "now"}</span></span><button className="fireMountainRemoveButton" type="button" onClick={() => setMoveQueue(current => current.filter(item => item.path !== file.path))}>x</button></div>) : <p className="fireMountainEmpty">I like to move it move it</p>}</div><div className="moveFilesActions"><span className="moveActionText">I like to </span><button className="fireMountainButton moveFilesButton" type="button" disabled={!moveQueue.length || !primaryOpened} onClick={() => void sendQueuedFiles("copy")}>Copy 'em</button><span className="moveActionText"> / </span><button className="fireMountainButton moveFilesButton cutPasteButton" type="button" disabled={!moveQueue.length || !primaryOpened?.path || primaryOpened.storage === "imaginary"} onClick={() => void sendQueuedFiles("move")}>Cut 'em</button><span className="moveActionText"> to {primaryOpened?.name ?? "the selected folder"}</span>{moveQueue.length > 0 && <button className="fireMountainClearButton" type="button" onClick={() => setMoveQueue([])}>Clear list</button>}</div></section><FireMountain /></section>
+        </section><section className="folderQuickPreview"><div>{quickPreviewSlots.map((file, index) => <FolderQuickPreview key={file ? `${file.path}-${index}` : `empty-${index}`} file={file} slot={index}/>)}</div></section><section className={moveQueue.length ? "fireMountainCard moveFilesCard" : "fireMountainCard moveFilesCard isEmptyMove"}><div className="fireMountainFiles">{moveQueue.length ? moveQueue.map(file => <div className="fireMountainFile" key={file.path}><span className="fireMountainFileInfo"><span className="fireMountainFileName"><FileKindIcon name={file.name}/>{file.name}</span><span className="fireMountainFileSize">{file.size ? `${Math.max(1, Math.round(file.size / 1024))} KB` : "Size unavailable"} · Added {file.createdAt ? new Date(file.createdAt).toLocaleDateString("en-GB") : "now"}</span></span><button className="fireMountainRemoveButton" type="button" onClick={() => setMoveQueue(current => current.filter(item => item.path !== file.path))}>x</button></div>) : <p className="fireMountainEmpty">I like to move it move it</p>}</div><div className="moveFilesActions"><span className="moveActionText">I like to </span><button className="fireMountainButton moveFilesButton" type="button" disabled={!moveQueue.length || !transferDestinations.length} onClick={() => void sendQueuedFiles("copy")}>Copy 'em</button><span className="moveActionText"> / </span><button className="fireMountainButton moveFilesButton cutPasteButton" type="button" disabled={!moveQueue.length || !transferDestinations.some(destination => destination.storage === "physical")} onClick={() => void sendQueuedFiles("move")}>Cut 'em</button><span className="moveActionText"> to {transferDestinations.length === 1 ? transferDestinations[0].name : transferDestinations.length > 1 ? `${transferDestinations.length} destinations` : "the selected folder"}</span>{moveQueue.length > 0 && <button className="fireMountainClearButton" type="button" onClick={() => setMoveQueue([])}>Clear list</button>}</div></section><FireMountain /></section>
         <aside className="folderInspector">
             <div className="folderInspectorTitle"><FolderOpen size={20}/><div><strong>{openedFolders.length > 1 ? `${openedFolders.length} folders open` : primaryOpened?.name ?? "No folder open"}</strong><small>{openedFolders.length > 1 ? openedFolders.map(folder => folder.name).join(" · ") : primaryOpened?.path || "Open a folder from the table"}</small></div></div>
-            <div className="folderSearch"><input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {if (event.key === "Enter") void search();}} placeholder={aiSearchEnabled ? "Describe a file or its contents" : openedFolders.length > 1 ? "Search open folders" : "Search this folder"} disabled={!openedFolders.length}/>{aiEnabled && <button type="button" className={aiSearchEnabled ? "folderAiSearchToggle enabled" : "folderAiSearchToggle"} onClick={() => setAiSearchEnabled(current => !current)} title={aiSearchEnabled ? "AI Search Assistant is on" : "Turn on AI Search Assistant"} aria-pressed={aiSearchEnabled}><Sparkles size={14}/></button>}<button type="button" onClick={() => void search()} disabled={!openedFolders.length || !query.trim()} title={aiSearchEnabled ? "Search with AI assistance" : "Search files"}><Search size={17}/></button><button type="button" title="Clear search" onClick={() => { setQuery(""); setResults([]); clearFileSelection(); }}>x</button></div><div className="inspectorSelectionActions"><button type="button" disabled={!selectedPaths.length} onClick={clearFileSelection}>Deselect all</button><button type="button" disabled={!selectedPaths.length} onClick={() => void openPaths(selectedPaths)}>Open files</button><button type="button" disabled={!results.length} onClick={() => { setResults([]); clearFileSelection(); }}>Clear all</button></div>
-            <section className={results.length ? "inspectorList foundFilesPanel" : "inspectorList foundFilesPanel emptyResults"} style={results.length ? {height: foundFilesHeight} : undefined}><h3>Found files</h3>{results.length ? results.map(file => renderFile(file, `result-${file.path}`)) : <p>No search results.</p>}</section><button type="button" className={results.length ? "inspectorListsResizer" : "inspectorListsResizer disabled"} onPointerDown={startFoundFilesResize} title="Drag to resize file lists" aria-label="Resize Found files and Folder files" disabled={!results.length}><GripHorizontal size={14}/></button>
+            <div className="folderSearch"><input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {if (event.key === "Enter") void search();}} placeholder={aiSearchEnabled ? "Describe a file or its contents" : openedFolders.length > 1 ? "Search open folders" : "Search this folder"} disabled={!openedFolders.length}/>{aiEnabled && <button type="button" className={aiSearchEnabled ? "folderAiSearchToggle enabled" : "folderAiSearchToggle"} onClick={() => setAiSearchEnabled(current => !current)} title={aiSearchEnabled ? "AI Search Assistant is on" : "Turn on AI Search Assistant"} aria-pressed={aiSearchEnabled}><Sparkles size={14}/></button>}<button type="button" onClick={() => void search()} disabled={!openedFolders.length || !query.trim()} title={aiSearchEnabled ? "Search with AI assistance" : "Search files"}><Search size={17}/></button><button type="button" title="Clear search" onClick={() => { setQuery(""); setResults([]); setHasSearched(false); clearFileSelection(); }}>x</button></div><div className="inspectorSelectionActions"><button type="button" disabled={!selectedPaths.length} onClick={clearFileSelection}>Deselect all</button><button type="button" disabled={!selectedPaths.length} onClick={() => void openPaths(selectedPaths)}>Open files</button><button type="button" disabled={!results.length} onClick={() => { setResults([]); clearFileSelection(); }}>Clear all</button></div>
+            {hasSearched && <><section className={results.length ? "inspectorList foundFilesPanel" : "inspectorList foundFilesPanel emptyResults"} style={results.length ? {height: foundFilesHeight} : undefined}><h3>Found files</h3>{results.length ? results.map(file => renderFile(file, `result-${file.path}`)) : <p>No search results.</p>}</section><button type="button" className={results.length ? "inspectorListsResizer" : "inspectorListsResizer disabled"} onPointerDown={startFoundFilesResize} title="Drag to resize file lists" aria-label="Resize Found files and Folder files" disabled={!results.length}><GripHorizontal size={14}/></button></>}
             <section className="inspectorList folderFiles"><h3>Folder files</h3>{openedFolders.length ? openedFolders.map(folder => { const contents = folderContents[folderContentKey(folder)]; const isLoading = loadingDirectories.has(folderContentKey(folder)); const readFileCount = countReadFiles(folder); return <div className="folderTreeRoot" key={folder.id}><h4><FolderOpen size={15}/>{folder.name}{readFileCount !== null && <small className="folderFileCount" title="Files read in this folder">{readFileCount} files</small>}</h4>{isLoading && !contents ? <p>Loading folder...</p> : null}{!isLoading && !contents ? <p>{message || "Unable to load this folder."}</p> : null}{contents?.files.map(file => renderFile(file, `root-${folder.id}-${file.path}`))}{contents?.folders.map(directory => renderDirectory(directory, 1))}{contents && !contents.files.length && !contents.folders.length ? <p>This folder is empty.</p> : null}</div>; }) : <p>{message}</p>}</section>
         </aside>
     </main>;

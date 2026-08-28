@@ -13,6 +13,11 @@ const MAX_IMAGE_DATA_URL_LENGTH = 5_500_000;
 const MAX_QUERY_LENGTH = 360;
 const MAX_PAGE_TEXT_LENGTH = 8_500;
 const MAX_PAGE_BYTES = 600_000;
+const MAX_DOWNLOAD_BYTES = 75 * 1024 * 1024;
+// Domain blocks intentionally expose only links that are clearly direct
+// files/packages. A generic URL containing "download" is often a page,
+// tracking endpoint, or site navigation and must not appear as a file.
+const DOWNLOADABLE_EXTENSION = /\.(?:pdf|docx?|xlsx?|pptx?|csv|tsv|txt|rtf|odt|ods|odp|zip|rar|7z|tar|gz|iso|exe|msi|dmg|pkg|appimage|deb|rpm|json|xml|png|jpe?g|gif|webp|svg|bmp|mp[34]|wav|m4a|mov|avi|mkv)(?:$|[?#])/i;
 
 function getImageDataUrl(value) {
     if (typeof value !== "string" || !/^data:image\/(?:jpeg|png|webp);base64,[a-z0-9+/=\s]+$/i.test(value)) {
@@ -77,6 +82,25 @@ async function readPageBody(response) {
     }
 }
 
+async function readResponseBuffer(response, maxBytes) {
+    if (!response.body) return Buffer.alloc(0);
+    const reader = response.body.getReader();
+    const chunks = [];
+    let size = 0;
+    try {
+        while (true) {
+            const {done, value} = await reader.read();
+            if (done) break;
+            size += value.byteLength;
+            if (size > maxBytes) throw new Error("The file is larger than 75 MB.");
+            chunks.push(Buffer.from(value));
+        }
+        return Buffer.concat(chunks);
+    } finally {
+        reader.releaseLock();
+    }
+}
+
 function htmlToText(value) {
     return value
         .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, " ")
@@ -110,13 +134,13 @@ function selectPageText(text, query) {
     return excerpts.join("\n\n[... relevant page section ...]\n\n").slice(0, MAX_PAGE_TEXT_LENGTH);
 }
 
-async function fetchPublicPageText(url, query) {
+async function fetchPublicResponse(url, accept) {
     let current = await getPublicUrl(url);
     for (let redirect = 0; redirect < 4; redirect += 1) {
         const response = await fetch(current, {
             redirect: "manual",
             signal: AbortSignal.timeout(12_000),
-            headers: {accept: "text/html,text/plain;q=0.9", "user-agent": "FolderRocket/1.0"}
+            headers: {accept, "user-agent": "FolderRocket/1.0"}
         });
         if ([301, 302, 303, 307, 308].includes(response.status)) {
             const location = response.headers.get("location");
@@ -125,13 +149,100 @@ async function fetchPublicPageText(url, query) {
             continue;
         }
         if (!response.ok) throw new Error(`The page returned ${response.status}.`);
-        const type = response.headers.get("content-type") || "";
-        if (!/text\/(html|plain)/i.test(type)) throw new Error("This page does not provide readable text.");
-        const text = selectPageText(htmlToText(await readPageBody(response)), query);
-        if (!text) throw new Error("No readable text was found on this page.");
-        return {text, sourceUrl: current.href};
+        return {response, sourceUrl: current.href};
     }
     throw new Error("The page redirected too many times.");
+}
+
+async function fetchPublicPageHtml(url) {
+    const {response, sourceUrl} = await fetchPublicResponse(url, "text/html,text/plain;q=0.9");
+    const type = response.headers.get("content-type") || "";
+    if (!/text\/html/i.test(type)) throw new Error("This address does not provide an HTML page.");
+    const html = await readPageBody(response);
+    if (!html) throw new Error("No readable text was found on this page.");
+    return {html, sourceUrl};
+}
+
+async function fetchPublicPageText(url, query) {
+    const {html, sourceUrl} = await fetchPublicPageHtml(url);
+    const text = selectPageText(htmlToText(html), query);
+    if (!text) throw new Error("No readable text was found on this page.");
+    return {text, sourceUrl};
+}
+
+function readHtmlAttribute(tag, name) {
+    const expression = new RegExp(`\\b${name}\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+))`, "i");
+    const match = tag.match(expression);
+    return String(match?.[1] ?? match?.[2] ?? match?.[3] ?? "").replace(/&amp;/gi, "&").trim();
+}
+
+function pathLikeName(value) {
+    try {
+        const parsed = new URL(value);
+        const lastSegment = parsed.pathname.split("/").filter(Boolean).at(-1) || "";
+        return decodeURIComponent(lastSegment).replace(/\+/g, " ").trim();
+    } catch {
+        return "";
+    }
+}
+
+function safeDownloadName(value, fallback = "download") {
+    const name = String(value || fallback).replace(/[<>:"/\\|?*\x00-\x1f]/g, "_").trim();
+    return name.slice(0, 180) || fallback;
+}
+
+function isDownloadLink(tag, target) {
+    // The HTML download attribute is an explicit declaration by the website
+    // that the target is a file, even when the URL itself has no extension.
+    if (/\bdownload(?:\s*=|\s|>)/i.test(tag)) return true;
+    const value = `${target.pathname}${target.search}`;
+    return DOWNLOADABLE_EXTENSION.test(value);
+}
+
+function getContentDispositionFilename(value) {
+    const encoded = value.match(/filename\*\s*=\s*UTF-8''([^;]+)/i)?.[1];
+    if (encoded) {
+        try { return decodeURIComponent(encoded); } catch { return encoded; }
+    }
+    const quoted = value.match(/filename\s*=\s*"([^\"]+)"/i)?.[1];
+    return quoted || value.match(/filename\s*=\s*([^;\s]+)/i)?.[1] || "";
+}
+
+async function listDomainDownloads(url) {
+    const {html, sourceUrl} = await fetchPublicPageHtml(url);
+    const found = new Map();
+    const anchorPattern = /<a\b[^>]*\bhref\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)[^>]*>([\s\S]*?)<\/a\s*>/gi;
+    let match;
+    while ((match = anchorPattern.exec(html)) && found.size < 40) {
+        const tag = match[0];
+        const href = readHtmlAttribute(tag, "href");
+        if (!href || /^(?:#|javascript:|mailto:|tel:|data:)/i.test(href)) continue;
+        let target;
+        try { target = new URL(href, sourceUrl); } catch { continue; }
+        if (!["http:", "https:"].includes(target.protocol) || !isDownloadLink(tag, target)) continue;
+        try { await getPublicUrl(target.href); } catch { continue; }
+        const requestedName = readHtmlAttribute(tag, "download");
+        const label = htmlToText(match[1]).slice(0, 160);
+        const name = safeDownloadName(requestedName || pathLikeName(target.href) || label || "download");
+        if (!found.has(target.href)) found.set(target.href, {url: target.href, name, label: label || name});
+    }
+    return {sourceUrl, downloads: [...found.values()]};
+}
+
+async function downloadDomainFile(pageUrl, requestedUrl) {
+    if (typeof requestedUrl !== "string" || !requestedUrl.trim()) throw new Error("Select a downloadable file first.");
+    const {downloads} = await listDomainDownloads(pageUrl);
+    const selected = downloads.find(item => item.url === requestedUrl);
+    if (!selected) throw new Error("This file is no longer available from the loaded page.");
+    const {response, sourceUrl} = await fetchPublicResponse(selected.url, "*/*");
+    const contentLength = Number(response.headers.get("content-length") || 0);
+    if (contentLength > MAX_DOWNLOAD_BYTES) throw new Error("The file is larger than 75 MB.");
+    const contentType = String(response.headers.get("content-type") || "application/octet-stream").toLowerCase();
+    if (/text\/html/i.test(contentType)) throw new Error("The link returned a web page instead of a downloadable file.");
+    const content = await readResponseBuffer(response, MAX_DOWNLOAD_BYTES);
+    if (!content.length) throw new Error("The downloaded file is empty.");
+    const fileName = safeDownloadName(getContentDispositionFilename(response.headers.get("content-disposition") || "") || selected.name);
+    return {content, contentType, fileName, sourceUrl};
 }
 
 async function analyzeProjection(imageDataUrl, query) {
@@ -204,4 +315,4 @@ async function analyzeDomainPage(url, query) {
     }
 }
 
-module.exports = {analyzeDomainPage, analyzeProjection};
+module.exports = {analyzeDomainPage, analyzeProjection, downloadDomainFile, listDomainDownloads};

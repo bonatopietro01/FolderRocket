@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { Archive, File, FileSpreadsheet, FileText, Flame, Image, Send, Search, ExternalLink, ListChecks } from "lucide-react";
+import { Archive, File, FileSpreadsheet, FileText, Flame, Image, Send, Search, ExternalLink, ListChecks, X } from "lucide-react";
 import { API_BASE_URL } from "../api";
 
 interface FolderSource { name: string; path: string; }
-interface Props { folders: FolderSource[]; selectedFolderCount: number; onToggleFolders: () => void; aiEnabled: boolean; compact?: boolean; }
+interface Props { folders: FolderSource[]; selectedFolderCount: number; onToggleFolders: () => void; aiEnabled: boolean; compact?: boolean; onResultsChange?: (hasResults: boolean) => void; }
 interface Result { name: string; path: string; matches: string[]; size?: number; }
 export const SEARCH_RESULT_TYPE = "application/x-folderrocket-search-results";
 
@@ -23,7 +23,7 @@ function formatSize(bytes?: number) {
     return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function SearchWorkspace({folders, selectedFolderCount, onToggleFolders, aiEnabled, compact = false}: Props) {
+export default function SearchWorkspace({folders, selectedFolderCount, onToggleFolders, aiEnabled, compact = false, onResultsChange}: Props) {
     const [query, setQuery] = useState("");
     const [messages, setMessages] = useState<string[]>([]);
     const [results, setResults] = useState<Result[]>([]);
@@ -44,6 +44,13 @@ export default function SearchWorkspace({folders, selectedFolderCount, onToggleF
         window.addEventListener("folderrocket-fire-paths", updateFirePaths);
         return () => window.removeEventListener("folderrocket-fire-paths", updateFirePaths);
     }, []);
+
+    useEffect(() => {
+        onResultsChange?.(results.length > 0);
+        // The parent only needs to know when the result set itself changes;
+        // its inline callback intentionally must not re-run this effect.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [results.length]);
 
     useEffect(() => {
         const updateMovedPaths = (event: Event) => {
@@ -101,7 +108,7 @@ export default function SearchWorkspace({folders, selectedFolderCount, onToggleF
     const searchHeader = <>
             <div className="resultsHeader"><Search size={compact ? 15 : 20} /><span>{compact ? aiEnabled ? "AI search" : "Search" : aiEnabled ? "AI Search Assistant" : "Search Assistant"}</span><button type="button" className={selectedFolderCount ? "searchFolderToggle selected" : "searchFolderToggle"} onClick={onToggleFolders} title={selectedFolderCount ? "Deselect all folders" : "Select all folders"}><ListChecks size={compact ? 14 : 17} /></button></div>
             <div className="searchMessages">{messages.length ? messages.map((message, index) => <p key={`${message}-${index}`}>{message}</p>) : <p>{selectedFolderCount ? aiEnabled ? `${selectedFolderCount} folder${selectedFolderCount === 1 ? "" : "s"} selected. AI mode is active.` : `${selectedFolderCount} folder${selectedFolderCount === 1 ? "" : "s"} selected for search.` : "Select one or more folder blocks to search."}</p>}</div>
-            <div className="searchComposer"><input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === "Enter") void search(); }} placeholder={aiEnabled ? "Describe a file or its contents" : "Search names and file text"} /><button type="button" onClick={() => void search()} disabled={loading || !folders.length} title={folders.length ? "Search selected folders" : "Select a folder first"}><Send size={16} /></button><button type="button" title="Clear search" onClick={() => { setQuery(""); setResults([]); setMessages([]); setSelectedPaths([]); }}>×</button></div>
+            <div className="searchComposer"><span className="searchInputWrap"><input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === "Enter") void search(); }} placeholder={aiEnabled ? "Describe a file or its contents" : "Search names and file text"} /><button type="button" className="searchClearButton" title="Clear search" aria-label="Clear search" onClick={() => { setQuery(""); setResults([]); setMessages([]); setSelectedPaths([]); }}><X size={13} /></button></span><button type="button" className="searchSubmitButton" onClick={() => void search()} disabled={loading || !folders.length} title={folders.length ? "Search selected folders" : "Select a folder first"}><Send size={16} /></button></div>
     </>;
 
     return <section className={compact ? "searchResultsCard compactSearchWorkspace" : "searchResultsCard"}>

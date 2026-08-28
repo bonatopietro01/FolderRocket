@@ -27,7 +27,6 @@ interface DashboardSourceBlockProps {
     children: ReactNode;
 }
 
-const MIN_HEIGHT = 210;
 const MAX_HEIGHT = 1100;
 
 export default function DashboardSourceBlock({block, index, total, onDelete, onMove, onResize, children}: DashboardSourceBlockProps) {
@@ -50,10 +49,11 @@ export default function DashboardSourceBlock({block, index, total, onDelete, onM
     function startResize(event: ReactPointerEvent<HTMLButtonElement>) {
         const startY = event.clientY;
         const startHeight = heightRef.current;
+        const minimumHeight = block.type === "search" ? 108 : 210;
         setResizing(true);
         event.currentTarget.setPointerCapture(event.pointerId);
         const move = (moveEvent: PointerEvent) => {
-            const nextHeight = Math.min(MAX_HEIGHT, Math.max(MIN_HEIGHT, startHeight + moveEvent.clientY - startY));
+            const nextHeight = Math.min(MAX_HEIGHT, Math.max(minimumHeight, startHeight + moveEvent.clientY - startY));
             heightRef.current = nextHeight;
             onResize(nextHeight);
         };

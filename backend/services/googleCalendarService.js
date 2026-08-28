@@ -84,6 +84,10 @@ async function listEvents(userId, blockId, options = {}) {
     return (data.items || []).map(item => ({id: String(item.id || ""), title: String(item.summary || "Untitled event"), start: item.start?.dateTime || item.start?.date || "", end: item.end?.dateTime || item.end?.date || "", location: String(item.location || ""), link: String(item.htmlLink || ""), attachments: Array.isArray(item.attachments) ? item.attachments.map(a => ({fileId: String(a.fileId || ""), url: String(a.fileUrl || ""), name: String(a.title || "Calendar attachment"), mimeType: String(a.mimeType || "")})).filter(a => a.fileId && a.url) : []}));
 }
 
-function getStatus(userId, blockId) { return {connected: Boolean(connectionFor(userId, blockId))}; }
+function getStatus(userId, blockId) {
+    let configured = true;
+    try { configuration(); } catch { configured = false; }
+    return {connected: Boolean(connectionFor(userId, blockId)), configured};
+}
 function disconnect(userId, blockId) { connections.delete(key(userId, blockId)); removeConnection("calendar", userId, blockId); }
 module.exports = {disconnect, exchangeAuthorizationCode, getAuthorizationUrl, getStatus, hasPendingAuthorization, listEvents};
