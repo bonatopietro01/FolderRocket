@@ -296,8 +296,9 @@ async function listRemovableDrives() {
 }
 
 function normalizeRemovableDrivePath(value) {
-    const trimmed = String(value ?? "").trim().replace(/[\\/]+$/, "").toUpperCase();
-    return /^[A-Z]:$/.test(trimmed) ? `${trimmed}\\` : "";
+    const trimmed = String(value ?? "").trim().replace(/^"|"$/g, "");
+    if (!/^[A-Za-z]:[\\/](?:[^<>:"|?*\x00-\x1f]+[\\/]?)*$/.test(trimmed)) return "";
+    return path.resolve(trimmed);
 }
 
 function convertWordToPdf(sourcePath, targetPath) {
@@ -871,11 +872,17 @@ app.post("/devices/removable/files", requireAuthenticated, requireAdministrator,
     try {
         const requestedPath = normalizeRemovableDrivePath(req.body?.drive);
         if (!requestedPath) throw new Error("Choose a valid removable drive.");
-        const drive = (await listRemovableDrives()).find(item => item.path.toLowerCase() === requestedPath.toLowerCase());
-        if (!drive || !fs.existsSync(drive.path)) throw new Error("That USB drive is no longer connected.");
-        const entries = fs.readdirSync(drive.path, {withFileTypes: true}).slice(0, 120);
+        const drives = await listRemovableDrives();
+        const drive = drives.find(item => {
+            const root = path.resolve(item.path);
+            const requested = path.resolve(requestedPath);
+            const relative = path.relative(root, requested);
+            return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+        });
+        if (!drive || !fs.existsSync(requestedPath)) throw new Error("That USB folder is unavailable or outside the connected drive.");
+        const entries = fs.readdirSync(requestedPath, {withFileTypes: true}).slice(0, 120);
         const files = entries.filter(entry => entry.isFile()).flatMap(entry => {
-            const filePath = path.join(drive.path, entry.name);
+            const filePath = path.join(requestedPath, entry.name);
             try {
                 // USB media can be removed or locked while Windows is reading
                 // its metadata. We only list metadata here; one unreadable MKV
@@ -886,8 +893,8 @@ app.post("/devices/removable/files", requireAuthenticated, requireAdministrator,
                 return [];
             }
         }).sort((left, right) => right.createdAt.localeCompare(left.createdAt));
-        const folders = entries.filter(entry => entry.isDirectory()).map(entry => ({name: entry.name, path: path.join(drive.path, entry.name)}));
-        res.json({drive, files, folders, truncated: entries.length >= 120});
+        const folders = entries.filter(entry => entry.isDirectory()).map(entry => ({name: entry.name, path: path.join(requestedPath, entry.name)}));
+        res.json({drive, currentPath: requestedPath, files, folders, truncated: entries.length >= 120});
     } catch (error) {
         res.status(400).json({message: error instanceof Error ? error.message : "Unable to read the USB drive."});
     }

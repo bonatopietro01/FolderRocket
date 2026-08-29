@@ -1,5 +1,5 @@
 import {useEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type RefObject} from "react";
-import {FilePlus2, FileText, MailPlus, Minus, Rocket, RotateCw, ScanSearch, Send, SlidersHorizontal, Trash2, X, Zap} from "lucide-react";
+import {CalendarDays, ChevronLeft, ChevronRight, FilePlus2, FileText, MailPlus, Minus, Rocket, RotateCw, ScanSearch, Send, Settings2, SlidersHorizontal, Trash2, X, Zap} from "lucide-react";
 import {API_BASE_URL} from "../api";
 import {browserBridgeDropId, resolveBrowserBridgeDrop} from "../browserBridge";
 import {EMAIL_ATTACHMENT_TYPE} from "./GmailSourcePanel";
@@ -11,7 +11,9 @@ type CargoFile = {id: string; kind: "file"; file: File; name: string; size: numb
 type CargoPath = {id: string; kind: "path"; name: string; path: string; size?: number};
 type CargoAttachment = {id: string; kind: "attachment"; provider: "gmail" | "outlook"; name: string; size?: number; attachmentId: string; messageId: string; mimeType: string; sourceBlockId?: string};
 type CargoItem = CargoFile | CargoPath | CargoAttachment;
-type CargoMode = "transport" | "text" | "email" | "convert" | "lens";
+type CargoMode = "transport" | "calendar" | "text" | "email" | "convert" | "lens";
+type CargoCalendarEvent = {title: string; start: string; end: string; location: string; attachments: string[]};
+type CargoReminder = {id: string; text: string; reminderAt: string};
 
 interface RemoteAttachment { attachmentId: string; messageId: string; mimeType: string; name: string; size?: number; sourceBlockId?: string; }
 interface PathItem {name: string; path: string; size?: number}
@@ -97,7 +99,39 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, st
     const [targetFolderId, setTargetFolderId] = useState("");
     const [instantDelivery, setInstantDelivery] = useState(false);
     const [desktopShipOpen, setDesktopShipOpen] = useState(false);
+    const [calendarEvents, setCalendarEvents] = useState<CargoCalendarEvent[]>([]);
+    const [calendarDay, setCalendarDay] = useState(() => new Date().toISOString().slice(0, 10));
+    const [activeReminder, setActiveReminder] = useState<CargoReminder | null>(null);
+    const [showToolMenu, setShowToolMenu] = useState(false);
+    const [enabledTools, setEnabledTools] = useState<string[]>(() => { try { const value = JSON.parse(localStorage.getItem(`folderrocket-cargo-tools-${storageScope}`) || "null"); return Array.isArray(value) ? value : ["transport", "calendar", "text", "email", "convert", "lens"]; } catch { return ["transport", "calendar", "text", "email", "convert", "lens"]; } });
     const shipScale = 1;
+
+    useEffect(() => {
+        try {
+            const saved = JSON.parse(localStorage.getItem("folderrocket-calendar-context") || "null") as {events?: CargoCalendarEvent[]} | null;
+            if (Array.isArray(saved?.events)) setCalendarEvents(saved.events);
+        } catch { /* Ignore stale calendar context. */ }
+        const receiveCalendar = (event: Event) => {
+            const detail = (event as CustomEvent<{events?: CargoCalendarEvent[]}>).detail;
+            if (Array.isArray(detail?.events)) setCalendarEvents(detail.events);
+        };
+        window.addEventListener("folderrocket-calendar-context", receiveCalendar);
+        const receiveStorage = (event: StorageEvent) => {
+            if (event.key !== "folderrocket-calendar-context" || !event.newValue) return;
+            try { const detail = JSON.parse(event.newValue) as {events?: CargoCalendarEvent[]}; if (Array.isArray(detail.events)) setCalendarEvents(detail.events); } catch { /* Ignore malformed context. */ }
+        };
+        window.addEventListener("storage", receiveStorage);
+        return () => { window.removeEventListener("folderrocket-calendar-context", receiveCalendar); window.removeEventListener("storage", receiveStorage); };
+    }, []);
+
+    useEffect(() => {
+        const receive = (value: CargoReminder) => setActiveReminder(value);
+        const local = (event: Event) => receive((event as CustomEvent<CargoReminder>).detail);
+        window.addEventListener("folderrocket:reminder-fired", local);
+        const channel = "BroadcastChannel" in window ? new BroadcastChannel("folderrocket-reminders") : null;
+        if (channel) channel.onmessage = event => receive(event.data as CargoReminder);
+        return () => { window.removeEventListener("folderrocket:reminder-fired", local); channel?.close(); };
+    }, []);
 
     // The Cargo Ship must never set Electron's page zoom: Cargo Ship and the
     // main workspace share the same local origin, so doing so could resize the
@@ -114,6 +148,7 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, st
     useEffect(() => {
         localStorage.setItem(layoutKey(storageScope), JSON.stringify({x: position.x, y: position.y, ...shipSize}));
     }, [position, shipSize, storageScope]);
+    useEffect(() => { localStorage.setItem(`folderrocket-cargo-tools-${storageScope}`, JSON.stringify(enabledTools)); }, [enabledTools, storageScope]);
 
     useEffect(() => {
         if (!open) return;
@@ -146,7 +181,7 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, st
         if (instantDelivery && targetFolderId) void sendToFolder(incoming);
     }
 
-    async function handleDrop(event: DragEvent<HTMLDivElement>) {
+    async function handleDrop(event: DragEvent<HTMLElement>) {
         event.preventDefault();
         event.stopPropagation();
         setDropActive(false);
@@ -487,15 +522,16 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, st
     const shipPanelStyle = standalone
         ? undefined
         : {left: position.x, top: position.y, width: shipSize.width, height: shipSize.height, transform: `scale(${shipScale})`, transformOrigin: "top left"};
-    const shipPanel = <section ref={shipRef} className={`${dragging ? "cargoShip moving" : "cargoShip"}${standalone ? " cargoShipStandalone" : ""}${lensCapturing ? " lensCapturing" : ""}`} style={shipPanelStyle}>
-        <header className="cargoShipHeader" onPointerDown={standalone ? undefined : startDrag}><span><Rocket size={15} />Cargo Ship <small>{items.length} on board</small></span><span className="cargoShipHeaderActions"><button type="button" title="Minimize to a movable bubble" onClick={minimizeShip}><Minus size={14} /></button><button type="button" className="cargoShipClose" title="Close Cargo Ship" onClick={closeShip}><X size={14} /></button></span></header>
-        <div className="cargoShipModes" role="tablist"><button type="button" className={mode === "transport" ? "active" : ""} onClick={() => setMode("transport")}>Files</button><button type="button" className={mode === "text" ? "active" : ""} onClick={() => setMode("text")}><FilePlus2 size={11} />Text</button><button type="button" className={mode === "email" ? "active" : ""} onClick={() => setMode("email")}><MailPlus size={11} />Email</button><button type="button" className={mode === "convert" ? "active" : ""} onClick={() => setMode("convert")}><RotateCw size={11} />Convert</button>{aiEnabled && <button type="button" className={mode === "lens" ? "active" : ""} onClick={() => setMode("lens")}><ScanSearch size={11} />Lens</button>}</div>
+    const shipPanel = <section ref={shipRef} className={`${dragging ? "cargoShip moving" : "cargoShip"}${standalone ? " cargoShipStandalone" : ""}${lensCapturing ? " lensCapturing" : ""}`} style={shipPanelStyle} onDragOver={mode === "email" ? event => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } : undefined} onDrop={mode === "email" ? event => void handleDrop(event) : undefined}>
+        <header className="cargoShipHeader" onPointerDown={standalone ? undefined : startDrag}><span><Rocket size={15} />Cargo Ship <small>{items.length} on board</small></span><button type="button" className="cargoCalendarHeaderButton" title="One-day calendar" onPointerDown={event => event.stopPropagation()} onClick={() => setMode("calendar")}><CalendarDays size={14}/></button><span className="cargoShipHeaderActions"><button type="button" title="Minimize to a movable bubble" onClick={minimizeShip}><Minus size={14} /></button><button type="button" className="cargoShipClose" title="Close Cargo Ship" onClick={closeShip}><X size={14} /></button></span></header>
+        {mode === "calendar" && <div className="cargoDayCalendar"><div className="cargoDayNavigation"><button type="button" onClick={() => setCalendarDay(current => { const day = new Date(`${current}T12:00:00`); day.setDate(day.getDate() - 1); return day.toISOString().slice(0, 10); })} title="Previous day"><ChevronLeft size={15}/></button><input type="date" value={calendarDay} onChange={event => setCalendarDay(event.target.value)}/><button type="button" onClick={() => setCalendarDay(current => { const day = new Date(`${current}T12:00:00`); day.setDate(day.getDate() + 1); return day.toISOString().slice(0, 10); })} title="Next day"><ChevronRight size={15}/></button></div><div>{calendarEvents.filter(event => event.start.slice(0, 10) === calendarDay).map((event, index) => <article key={`${event.start}-${event.title}-${index}`}><strong>{event.title}</strong><small>{new Date(event.start).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})}{event.location ? ` · ${event.location}` : ""}</small>{event.attachments.map(file => <span key={file}><FileText size={11}/>{file}</span>)}</article>)}{!calendarEvents.some(event => event.start.slice(0, 10) === calendarDay) && <p>No events or files for this day.</p>}</div></div>}
+        <div className="cargoShipModes" role="tablist">{enabledTools.includes("transport") && <button type="button" className={mode === "transport" ? "active" : ""} onClick={() => setMode("transport")}>Files</button>}{enabledTools.includes("calendar") && <button type="button" className={mode === "calendar" ? "active" : ""} onClick={() => setMode("calendar")}><CalendarDays size={11}/>Day</button>}{enabledTools.includes("text") && <button type="button" className={mode === "text" ? "active" : ""} onClick={() => setMode("text")}><FilePlus2 size={11} />Text</button>}{enabledTools.includes("email") && <button type="button" className={mode === "email" ? "active" : ""} onClick={() => setMode("email")}><MailPlus size={11} />Email</button>}{enabledTools.includes("convert") && <button type="button" className={mode === "convert" ? "active" : ""} onClick={() => setMode("convert")}><RotateCw size={11} />Convert</button>}{aiEnabled && enabledTools.includes("lens") && <button type="button" className={mode === "lens" ? "active" : ""} onClick={() => setMode("lens")}><ScanSearch size={11} />Lens</button>}</div>
         {mode === "transport" && <div className={dropActive ? "cargoDropArea active" : "cargoDropArea"} onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setDropActive(true); }} onDragLeave={() => setDropActive(false)} onDrop={handleDrop}><p>{targetFolderId ? (instantDelivery ? `Instant delivery: ${folders.find(folder => folder.id === targetFolderId)?.name ?? "selected folder"}.` : "Delivery is manual.") : "Choose a FolderRocket folder."}</p><div className="cargoItemList">{items.length ? items.map(item => <div className="cargoItem" draggable key={item.id} onDragStart={event => handleItemDrag(event, item)}><FileText size={14} /><span title={item.name}>{item.name}</span><small>{formatSize(item.size)}</small><button type="button" title="Remove from Cargo Ship" onClick={() => setItems(current => current.filter(currentItem => currentItem.id !== item.id))}><Trash2 size={13} /></button></div>) : <em>Drop files here.</em>}</div><div className="cargoFolderSend"><select value={targetFolderId} onChange={event => setTargetFolderId(event.target.value)}><option value="">Choose FolderRocket folder…</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folder.storage === "imaginary" ? "◇ " : ""}{folder.name}</option>)}</select><button type="button" className={instantDelivery ? "cargoInstantToggle active" : "cargoInstantToggle"} onClick={() => setInstantDelivery(current => !current)} disabled={!targetFolderId} aria-pressed={instantDelivery} title="Toggle instant delivery"><Zap size={13}/>{instantDelivery ? "Instant ON" : "Instant"}</button><button type="button" onClick={() => void sendToFolder()} disabled={!targetFolderId || !items.length || working}>Organise</button></div><button type="button" className="cargoClear" onClick={() => setItems([])}>Clear cargo</button></div>}
         {mode === "text" && <div className="cargoForm"><input value={fileName} onChange={event => setFileName(event.target.value)} placeholder="File name or note title" /><textarea value={text} onChange={event => setText(event.target.value)} placeholder="Paste or write text here…" /><div><select value={textFormat} onChange={event => setTextFormat(event.target.value as "note" | "txt" | "pdf" | "docx")}><option value="note">Post-it note</option><option value="txt">TXT file</option><option value="pdf">PDF file</option><option value="docx">Word document</option></select><button type="button" onClick={() => void createTextFile()} disabled={!text.trim() || working}><FilePlus2 size={14} />{textFormat === "note" ? "Create note" : "Create"}</button></div></div>}
         {mode === "email" && <div className="cargoForm"><select value={emailSourceKey} onChange={event => setEmailSourceKey(event.target.value)} disabled={!emailSources.length}><option value="">{emailSources.length ? "Choose connected mailbox" : "No connected mailbox"}</option>{emailSources.map(source => <option key={`${source.provider}:${source.blockId}`} value={`${source.provider}:${source.blockId}`}>{source.label}</option>)}</select><input value={recipient} onChange={event => setRecipient(event.target.value)} placeholder="To: name@example.com" /><input value={emailSubject} onChange={event => setEmailSubject(event.target.value)} placeholder="Email subject" /><textarea value={text} onChange={event => setText(event.target.value)} placeholder="Write the email text here…" /><button type="button" onClick={() => void createEmailDraft()} disabled={!emailSources.length || !text.trim() || working}><Send size={14} />{working ? "Saving draft…" : "Save draft in mailbox"}</button></div>}
         {mode === "convert" && <div className="cargoConvert"><p>Convert files on this PC.</p><select value={convertFormat} onChange={event => setConvertFormat(event.target.value)}><option value="pdf">PDF</option><option value="txt">TXT</option><option value="xlsx">XLSX</option><option value="csv">CSV</option></select><button type="button" onClick={() => void convertItems()} disabled={working}><RotateCw className={working ? "cargoSpin" : ""} size={15} />{working ? "Converting…" : "Convert cargo"}</button><button type="button" className="cargoStudioLink" onClick={onOpenFileStudio}><SlidersHorizontal size={14} />Open File Studio</button></div>}
         {mode === "lens" && aiEnabled && <div className="cargoLens"><p>Lens captures the FolderRocket area directly behind Cargo Ship only when you press a button. Save it as a PNG, read its text with AI, or turn the reading into a file.</p><div className="cargoLensActions"><button type="button" onClick={() => void captureBehindShip()} disabled={lensWorking}>Capture screenshot</button><button type="button" onClick={() => void saveLensScreenshot()} disabled={lensWorking}>{lensWorking ? "Working…" : "Save PNG"}</button></div>{lensImage && <img className="cargoLensPreview" src={lensImage} alt="Captured area behind Cargo Ship" />}<textarea value={lensQuery} onChange={event => setLensQuery(event.target.value)} placeholder="Ask what is behind Cargo Ship, or leave empty to read and summarise the text…" /><button type="button" onClick={() => void analyseBehindShip()} disabled={lensWorking}><ScanSearch size={14}/>{lensWorking ? "Analysing…" : "Read text / analyse with AI"}</button>{lensError && <small className="cargoLensError">{lensError}</small>}{lensAnalysis && <><div className="cargoLensResult">{lensAnalysis}</div><div className="cargoLensSaveText"><select value={lensFormat} onChange={event => setLensFormat(event.target.value as "txt" | "docx" | "pdf")}><option value="txt">TXT</option><option value="docx">Word</option><option value="pdf">PDF</option></select><button type="button" onClick={() => void saveLensText()} disabled={lensWorking}>Save reading</button></div></>}</div>}
-        {message && <p className="cargoMessage">{message}</p>}
+        <button type="button" className="cargoToolsMenuButton" onClick={() => setShowToolMenu(current => !current)} title="Choose Cargo Ship tools"><Settings2 size={14}/></button>{showToolMenu && <div className="cargoToolsMenu"><strong>Cargo Ship tools</strong>{[["transport","Files"],["calendar","One-day calendar"],["text","Text"],["email","Email"],["convert","Convert"],...(aiEnabled ? [["lens","Lens"]] : [])].map(([key,label]) => <label key={key}><input type="checkbox" checked={enabledTools.includes(key)} onChange={event => setEnabledTools(current => event.target.checked ? [...new Set([...current,key])] : current.filter(item => item !== key))}/>{label}</label>)}</div>}{activeReminder && <div className="cargoReminderAlert"><strong>Reminder</strong><span>{activeReminder.text}</span><small>{new Date(activeReminder.reminderAt).toLocaleString()}</small><button type="button" onClick={() => setActiveReminder(null)}><X size={13}/>Close</button></div>}{message && <p className="cargoMessage">{message}</p>}
         <button type="button" className="cargoShipResize" onPointerDown={startResize} title="Drag to resize Cargo Ship" aria-label="Resize Cargo Ship" />
     </section>;
     if (standalone) return <main className="cargoShipStandaloneWindow">{minimized && <button ref={dockRef} type="button" className="cargoShipDock cargoShipDockStandalone" onPointerDown={startStandaloneDockDrag} onClick={() => { if (!dockMovedRef.current) openShip(); }} title="Open or move Cargo Ship"><Rocket size={25}/>{items.length > 0 && <small>{items.length}</small>}</button>}{open && shipPanel}</main>;

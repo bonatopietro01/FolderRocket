@@ -5,6 +5,7 @@ import {
 } from "react";
 
 import type {
+    CSSProperties,
     DragEvent,
     MouseEvent
 } from "react";
@@ -43,6 +44,8 @@ interface Props {
     sourceFolderPaths?: string[];
     storageScope?: string;
     aiEnabled?: boolean;
+    folderStyle?: CSSProperties;
+    titleStyle?: CSSProperties;
 
     // Indica se il blocco è selezionato
     selected?: boolean;
@@ -138,7 +141,9 @@ function FileDropZone({
     sourceFolderPaths = [],
     storageScope = "default",
     selected = false,
-    aiEnabled = false
+    aiEnabled = false,
+    folderStyle,
+    titleStyle
 }: Props) {
 
     // ==================================================
@@ -1725,6 +1730,8 @@ function FileDropZone({
 
         <div
 
+            data-folder-id={id}
+
             className={aiEnabled ? "folderDropZone aiEnabled" : "folderDropZone"}
 
             onClick={
@@ -1744,6 +1751,8 @@ function FileDropZone({
             }
 
             style={{
+
+                ...folderStyle,
 
                 position: "relative",
 
@@ -2578,7 +2587,7 @@ function FileDropZone({
             ========================================== */}
 
             <div className="folderTitleRow">
-                <h3>{name}</h3>
+                <h3 style={titleStyle}>{name}</h3>
             </div>
 
 

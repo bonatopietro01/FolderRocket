@@ -4,7 +4,7 @@ import {API_BASE_URL} from "../api";
 import type {ManagedFolder} from "./FolderManagement";
 
 type NoteColor = "yellow" | "red" | "purple" | "blue" | "green";
-interface StickyNote {id: string; color: NoteColor; text: string; relatedFiles?: string[]; x: number; y: number; width: number; height: number; hidden?: boolean; autoHeight?: boolean; ai?: boolean; aiPrompt?: string; aiResponse?: string; aiWorking?: boolean;}
+interface StickyNote {id: string; color: NoteColor; text: string; relatedFiles?: string[]; x: number; y: number; width: number; height: number; hidden?: boolean; autoHeight?: boolean; ai?: boolean; aiPrompt?: string; aiResponse?: string; aiWorking?: boolean; reminder?: boolean; reminderAt?: string; reminderFired?: boolean;}
 interface CalendarContextEvent {title?: string; start?: string; end?: string; location?: string; attachments?: string[];}
 const colors: NoteColor[] = ["yellow", "purple", "blue", "green"];
 
@@ -62,7 +62,7 @@ function FloatingStickyNote({note, deleteArmed, floatingScale, displayPosition, 
     return <article ref={noteRef} className={`floatingStickyNote ${note.color}${note.ai ? " aiStickyNote" : ""}`} style={{left: displayPosition?.x ?? note.x, top: displayPosition?.y ?? note.y, width: note.width, height: note.height, transform: `scale(${displayScale})`, transformOrigin: "top left"}}>
         <div className="stickyNoteTop" onPointerDown={beginMove} title="Drag this post-it"><button type="button" className="stickyNoteHide" onClick={onHide} title="Hide as a bookmark"><PanelLeftClose size={18}/></button>{note.ai ? <span /> : <div className="stickyNoteColors">{colors.map(color => <button key={color} type="button" className={color === note.color ? "active" : ""} onClick={() => onChange({color})} aria-label={`Use ${color} note`} />)}</div>}<button type="button" className={`stickyNoteDelete${deleteArmed ? " confirm" : ""}`} onClick={onDelete} title={deleteArmed ? "Press again to delete" : "Delete note"}><Trash2 size={18}/></button></div>
         {note.ai ? <><textarea ref={textAreaRef} value={note.aiPrompt ?? ""} maxLength={400} onChange={event => onChange({aiPrompt: event.target.value, aiResponse: ""})} onKeyDown={event => { if ((event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); onAskAI(); } }} placeholder="Quick request (one sentence)…" /><button type="button" className="stickyAiAsk" onClick={onAskAI} disabled={note.aiWorking || !(note.aiPrompt ?? "").trim()}>{note.aiWorking ? <LoaderCircle className="spinning" size={13}/> : <Sparkles size={13}/>} {note.aiWorking ? "Reading…" : "Quick AI"}</button>{aiMessage && <div className={`stickyAiResponse${aiComment ? " comment" : ""}${note.aiResponse?.startsWith("Unable") ? " error" : ""}`}>{aiMessage}</div>}</> : <textarea ref={textAreaRef} value={note.text} onChange={event => updateText(event.target.value)} placeholder="Write a note…" />}
-        {note.relatedFiles?.length ? <small>{note.relatedFiles.join(" · ")}</small> : null}<button type="button" className="stickyNoteResize" onPointerDown={beginResize} title="Drag to resize this post-it" aria-label="Resize this post-it" />
+        {note.reminder && <label className="stickyReminderTime"><span>Reminder</span><input type="datetime-local" value={note.reminderAt ?? ""} onChange={event => onChange({reminderAt: event.target.value, reminderFired: false})}/></label>}{note.relatedFiles?.length ? <small>{note.relatedFiles.join(" · ")}</small> : null}<button type="button" className="stickyNoteResize" onPointerDown={beginResize} title="Drag to resize this post-it" aria-label="Resize this post-it" />
     </article>;
 }
 
@@ -106,6 +106,9 @@ export default function StickyNotes({storageScope, folders, aiEnabled, floatingS
     const addAiNote = useCallback((prompt = "") => {
         setNotes(current => [{...createNote(current.length, "red"), ai: true, aiPrompt: prompt, aiResponse: "", aiWorking: false, autoHeight: false, width: 188, height: 132}, ...current]);
     }, []);
+    const addReminderNote = useCallback(() => {
+        setNotes(current => [{...createNote(current.length, "yellow", "Reminder"), reminder: true, reminderAt: "", reminderFired: false, autoHeight: false, width: 210, height: 132}, ...current]);
+    }, []);
     function update(id: string, change: Partial<StickyNote>) { setNotes(current => current.map(note => note.id === id ? {...note, ...change} : note)); }
     function remove(id: string) { if (deleteId === id) { setNotes(current => current.filter(note => note.id !== id)); setDeleteId(null); } else setDeleteId(id); }
     function reveal(id: string, bookmarkIndex: number) { update(id, {hidden: false, x: 16, y: Math.max(88, 124 + bookmarkIndex * 35)}); }
@@ -136,6 +139,28 @@ export default function StickyNotes({storageScope, folders, aiEnabled, floatingS
         handledAiAddRequest.current = aiAddRequest;
         addAiNote();
     }, [addAiNote, aiAddRequest, aiEnabled]);
+
+    useEffect(() => {
+        window.addEventListener("folderrocket:create-reminder-note", addReminderNote);
+        return () => window.removeEventListener("folderrocket:create-reminder-note", addReminderNote);
+    }, [addReminderNote]);
+
+    useEffect(() => {
+        const checkReminders = () => {
+            const now = Date.now();
+            setNotes(current => current.map(note => {
+                if (!note.reminder || note.reminderFired || !note.reminderAt || new Date(note.reminderAt).getTime() > now) return note;
+                const fired = {...note, reminderFired: true, hidden: false, x: Math.max(16, window.innerWidth / 2 - note.width / 2), y: 90};
+                const detail = {id: note.id, text: note.text || "Reminder", reminderAt: note.reminderAt};
+                window.dispatchEvent(new CustomEvent("folderrocket:reminder-fired", {detail}));
+                if ("BroadcastChannel" in window) { const channel = new BroadcastChannel("folderrocket-reminders"); channel.postMessage(detail); channel.close(); }
+                return fired;
+            }));
+        };
+        checkReminders();
+        const timer = window.setInterval(checkReminders, 15_000);
+        return () => window.clearInterval(timer);
+    }, []);
 
     useEffect(() => {
         const createCargoNote = (event: Event) => {

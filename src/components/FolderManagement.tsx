@@ -4,7 +4,8 @@ import {API_BASE_URL} from "../api";
 import FireMountain from "./FireMountain";
 
 export interface VirtualFile { name: string; path: string; createdAt?: string; size?: number; }
-export interface ManagedFolder { id: string; name: string; path: string; description: string; storage?: "physical" | "imaginary"; virtualFiles?: VirtualFile[]; }
+export interface FolderAppearance { backgroundColor?: string; borderColor?: string; borderWidth?: number; bold?: boolean; italic?: boolean; underline?: boolean; shadow?: boolean; symbol?: string; }
+export interface ManagedFolder { id: string; name: string; path: string; description: string; storage?: "physical" | "imaginary"; virtualFiles?: VirtualFile[]; appearance?: FolderAppearance; }
 interface FileEntry extends VirtualFile { matches?: string[]; }
 interface DirectoryEntry { name: string; path: string; createdAt?: string; }
 interface DirectoryContents { files: FileEntry[]; folders: DirectoryEntry[]; }
@@ -30,6 +31,12 @@ function isChildOfFolder(folderPath: string, candidatePath: string) {
     return Boolean(root) && candidate !== root && candidate.startsWith(`${root}\\`);
 }
 function parentFolderPath(filePath: string) { return filePath.replace(/[\\/][^\\/]+$/, ""); }
+function matchesFileFormat(name: string, format: string) {
+    if (format === "all") return true;
+    const extension = name.split(".").pop()?.toLowerCase() ?? "";
+    const groups: Record<string, string[]> = {pdf: ["pdf"], documents: ["doc", "docx", "odt", "txt", "md", "rtf"], spreadsheets: ["xls", "xlsx", "csv", "ods"], images: ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "heic"], archives: ["zip", "rar", "7z", "tar", "gz", "bz2"]};
+    return (groups[format] ?? []).includes(extension);
+}
 
 function FolderQuickPreview({file, slot}: {file: FileEntry | null; slot: number}) {
     const [preview, setPreview] = useState<CompactPreview | null>(null);
@@ -68,6 +75,9 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
     const [aiSearchEnabled, setAiSearchEnabled] = useState(false);
     const [message, setMessage] = useState("Select a folder to view its files.");
     const [orderingFolders, setOrderingFolders] = useState(false);
+    const [appearanceFolderId, setAppearanceFolderId] = useState<string | null>(null);
+    const [appearanceDraft, setAppearanceDraft] = useState<FolderAppearance>({});
+    const [fileFormat, setFileFormat] = useState("all");
     const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
     const [dropTarget, setDropTarget] = useState<{id: string; placement: "before" | "after"} | null>(null);
     const [foundFilesHeight, setFoundFilesHeight] = useState(155);
@@ -95,6 +105,60 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
         }
         return [...new Map(destinations.map(destination => [destination.storage === "imaginary" ? `imaginary:${destination.folderId}` : `physical:${comparablePath(destination.path)}`, destination])).values()];
     })();
+
+    useEffect(() => {
+        const styleId = "folderrocket-folder-appearance";
+        let element = document.getElementById(styleId) as HTMLStyleElement | null;
+        if (!element) { element = document.createElement("style"); element.id = styleId; document.head.appendChild(element); }
+        element.textContent = folders.map(folder => {
+            const appearance = folder.appearance;
+            if (!appearance) return "";
+            const safeId = CSS.escape(folder.id);
+            const width = Math.max(0, Math.min(8, Number(appearance.borderWidth) || 0));
+            const symbol = JSON.stringify((appearance.symbol || "").slice(0, 4));
+            return `.folderDropZone[data-folder-id="${safeId}"]{${appearance.backgroundColor ? `background:${appearance.backgroundColor}!important;` : ""}${appearance.borderColor ? `border-color:${appearance.borderColor}!important;` : ""}border-width:${width}px!important;border-style:solid!important;box-shadow:${appearance.shadow ? "0 10px 22px rgba(28,54,80,.24)" : "none"}!important}.folderDropZone[data-folder-id="${safeId}"]::before{content:${symbol};position:absolute;z-index:2;top:-11px;left:-9px;display:${appearance.symbol ? "grid" : "none"};width:25px;height:25px;place-items:center;border:1px solid #b9c9d8;border-radius:50%;background:#fff;font-size:14px}.folderDropZone[data-folder-id="${safeId}"] h3{font-weight:${appearance.bold ? 800 : 600}!important;font-style:${appearance.italic ? "italic" : "normal"}!important;text-decoration:${appearance.underline ? "underline" : "none"}!important}`;
+        }).join("\n");
+    }, [folders]);
+
+    useEffect(() => {
+        if (!appearanceFolderId) return;
+        const dismissAppearance = (event: PointerEvent) => {
+            if (!(event.target as Element).closest(".folderAppearancePanel,.folderAppearanceButton")) setAppearanceFolderId(null);
+        };
+        document.addEventListener("pointerdown", dismissAppearance);
+        return () => document.removeEventListener("pointerdown", dismissAppearance);
+    }, [appearanceFolderId]);
+
+    useEffect(() => { if (!orderingFolders) setAppearanceFolderId(null); }, [orderingFolders]);
+
+    useEffect(() => {
+        if (!appearanceFolderId) return;
+        const controls = document.querySelector<HTMLElement>(".folderAppearancePanel .folderAppearanceControls");
+        if (!controls) return;
+        const picker = document.createElement("div"); picker.className = "folderSymbolPicker";
+        const label = document.createElement("span"); label.textContent = "Corner symbol"; picker.appendChild(label);
+        for (const symbol of ["", "☁️", "G", "", "WA", "O", "SW", "VS", "↓", "💾", "🔑", "📁", "💼", "🎓", "🏠", "⭐", "❤️", "📌", "🚀", "📷", "🎵", "🎬", "💻", "🌐", "🧾", "🔒"]) {
+            const button = document.createElement("button"); button.type = "button"; button.textContent = symbol || "None"; button.className = appearanceDraft.symbol === symbol ? "active" : ""; button.addEventListener("click", () => setAppearanceDraft(current => ({...current, symbol}))); picker.appendChild(button);
+        }
+        controls.appendChild(picker);
+        const preview = document.querySelector<HTMLElement>(".folderAppearancePreview > div");
+        const badge = document.createElement("span"); badge.className = "folderSymbolPreview"; badge.textContent = appearanceDraft.symbol || ""; if (preview && appearanceDraft.symbol) preview.appendChild(badge);
+        return () => { picker.remove(); badge.remove(); };
+    }, [appearanceDraft.symbol, appearanceFolderId]);
+
+    useEffect(() => {
+        const header = document.querySelector<HTMLElement>(".folderInspector .folderFiles > h3");
+        if (!header) return;
+        const select = document.createElement("select");
+        select.className = "folderFilesFormatSelect";
+        select.setAttribute("aria-label", "Filter open folder files by format");
+        for (const [value, label] of [["all", "All formats"], ["pdf", "PDF"], ["documents", "Documents"], ["spreadsheets", "Spreadsheets"], ["images", "Images"], ["archives", "Archives"]]) {
+            const option = document.createElement("option"); option.value = value; option.textContent = label; option.selected = value === fileFormat; select.appendChild(option);
+        }
+        select.addEventListener("change", () => setFileFormat(select.value));
+        header.appendChild(select);
+        return () => select.remove();
+    }, [fileFormat, openedFolderKey]);
 
     useEffect(() => {
         const dismissDelete = (event: MouseEvent) => {
@@ -438,6 +502,7 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
     }
 
     function renderFile(file: FileEntry, key: string) {
+        if (!matchesFileFormat(file.name, fileFormat)) return null;
         const selected = selectedPaths.includes(file.path);
         return <div className={selected ? "inspectorFile selectedAttachment" : "inspectorFile"} onClick={() => toggleFile(file)} key={key}>
             <button className="inspectorMove" type="button" title="Add to Copy / Cut files" onClick={event => {event.stopPropagation(); stageForMove(file);}}><ArrowLeft size={14}/></button>
@@ -461,7 +526,7 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
             </div>
             {isExpanded && <div className="folderTreeChildren">
                 {isLoading && !contents ? <p>Loading folder...</p> : null}
-                {contents?.files.map(file => renderFile(file, `file-${file.path}`))}
+                {contents?.files.filter(file => matchesFileFormat(file.name, fileFormat)).map(file => renderFile(file, `file-${file.path}`))}
                 {contents?.folders.map(child => renderDirectory(child, depth + 1))}
                 {contents && !contents.files.length && !contents.folders.length ? <p>This folder is empty.</p> : null}
             </div>}
@@ -476,7 +541,7 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
                     {orderingFolders && <span className="folderOrderHandle" role="button" tabIndex={0} onPointerDown={event => { event.preventDefault(); pointerDraggedFolderId.current = folder.id; setDraggedFolderId(folder.id); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (pointerDraggedFolderId.current !== folder.id) return; const target = getPointerDropTarget(event.clientX, event.clientY); setDropTarget(target && target.id !== folder.id ? target : null); }} onPointerUp={event => { const sourceId = pointerDraggedFolderId.current; const target = getPointerDropTarget(event.clientX, event.clientY); if (sourceId && target && sourceId !== target.id) onReorder(sourceId, target.id, target.placement); pointerDraggedFolderId.current = null; setDraggedFolderId(null); setDropTarget(null); }} onPointerCancel={() => { pointerDraggedFolderId.current = null; setDraggedFolderId(null); setDropTarget(null); }} title="Hold and drag to reorder"><GripVertical size={14}/></span>}
                     <button type="button" className={pendingDeleteId === folder.id ? "deleteFolder confirmDelete" : "deleteFolder"} onClick={() => requestDelete(folder.id)} title={pendingDeleteId === folder.id ? "Press again to delete" : "Delete folder"}>x</button>
                     <span className="folderNameInput"><input value={folder.name} onChange={event => onUpdate(folder.id, {name: event.target.value})} aria-label="Folder name"/></span>
-                    <span className="pathInput"><input value={folder.path} onChange={event => onUpdate(folder.id, {path: event.target.value.replace(/^"|"$/g, ""), storage: "physical"})} placeholder={folder.storage === "imaginary" ? "Imaginary folder" : "Folder path"} aria-label="Folder path" disabled={folder.storage === "imaginary"}/><select aria-label="Path options" value={folder.storage === "imaginary" ? "imaginary" : "insert"} onChange={event => void choosePath(folder, event.target.value)}><option value="insert">Insert path</option><option value="new">New folder</option><option value="imaginary">Imaginary folder</option></select></span>
+                    <span className="pathInput"><input value={folder.path} onChange={event => onUpdate(folder.id, {path: event.target.value.replace(/^"|"$/g, ""), storage: "physical"})} placeholder={folder.storage === "imaginary" ? "Imaginary folder" : "Folder path"} aria-label="Folder path" disabled={folder.storage === "imaginary"}/>{orderingFolders ? <button type="button" className="folderAppearanceButton" onClick={() => { setAppearanceDraft({...folder.appearance}); setAppearanceFolderId(folder.id); }}>Style</button> : <select aria-label="Path options" value={folder.storage === "imaginary" ? "imaginary" : "insert"} onChange={event => void choosePath(folder, event.target.value)}><option value="insert">Insert path</option><option value="new">New folder</option><option value="imaginary">Imaginary folder</option></select>}{appearanceFolderId === folder.id && <div className="folderAppearancePanel" role="dialog" aria-modal="true" aria-label={`Customise ${folder.name}`}><header><div><strong>Folder appearance</strong><span>Customise the dashboard block</span></div><button type="button" onClick={() => setAppearanceFolderId(null)}>×</button></header><div className="folderAppearanceControls"><label><span>Folder colour</span><input type="color" value={appearanceDraft.backgroundColor || "#ffffff"} onChange={event => setAppearanceDraft(current => ({...current, backgroundColor: event.target.value}))}/></label><label><span>Outline colour</span><input type="color" value={appearanceDraft.borderColor || "#c6d6e5"} onChange={event => setAppearanceDraft(current => ({...current, borderColor: event.target.value}))}/></label><label><span>Outline thickness</span><input type="range" min="0" max="8" value={appearanceDraft.borderWidth ?? 1} onChange={event => setAppearanceDraft(current => ({...current, borderWidth: Number(event.target.value)}))}/><b>{appearanceDraft.borderWidth ?? 1}px</b></label><label className="folderShadowToggle"><input type="checkbox" checked={Boolean(appearanceDraft.shadow)} onChange={event => setAppearanceDraft(current => ({...current, shadow: event.target.checked}))}/><span>Show shadow below the block</span></label><div className="folderFontButtons"><span>Folder name</span><button type="button" className={appearanceDraft.bold ? "active" : ""} onClick={() => setAppearanceDraft(current => ({...current, bold: !current.bold}))}>Bold</button><button type="button" className={appearanceDraft.italic ? "active" : ""} onClick={() => setAppearanceDraft(current => ({...current, italic: !current.italic}))}>Italic</button><button type="button" className={appearanceDraft.underline ? "active" : ""} onClick={() => setAppearanceDraft(current => ({...current, underline: !current.underline}))}>Underline</button></div></div><section className="folderAppearancePreview"><span>Preview</span><div style={{background: appearanceDraft.backgroundColor || "#fff", borderColor: appearanceDraft.borderColor || "#c6d6e5", borderWidth: appearanceDraft.borderWidth ?? 1, boxShadow: appearanceDraft.shadow ? "0 10px 22px rgba(28,54,80,.24)" : "none"}}><strong style={{fontWeight: appearanceDraft.bold ? 800 : 600, fontStyle: appearanceDraft.italic ? "italic" : "normal", textDecoration: appearanceDraft.underline ? "underline" : "none"}}>{folder.name || "Folder name"}</strong><small>Drop files here</small></div></section><footer><button type="button" className="appearanceCancel" onClick={() => setAppearanceFolderId(null)}>Cancel</button><button type="button" className="appearanceConfirm" onClick={() => { onUpdate(folder.id, {appearance: appearanceDraft}); setAppearanceFolderId(null); }}>OK</button></footer></div>}</span>
                     <input value={folder.description} onChange={event => onUpdate(folder.id, {description: event.target.value})} placeholder="Description" aria-label="Folder description"/>
                     <span className="folderRowActions"><button type="button" className={openedFolderIds.includes(folder.id) && folder.id !== primaryOpenedId ? "toggleFolderViewButton active" : "toggleFolderViewButton"} onClick={() => toggleFolderInView(folder.id)} title={openedFolderIds.includes(folder.id) ? "Remove from current view" : "Add to current view"} aria-pressed={openedFolderIds.includes(folder.id) && folder.id !== primaryOpenedId}><Plus size={15}/></button><button type="button" className={folder.id === primaryOpenedId ? "openFolderButton active" : "openFolderButton"} onClick={() => openFolderOnly(folder.id)} title="Open only this folder" aria-pressed={folder.id === primaryOpenedId}><FolderOpen size={17}/></button></span>
                 </div>)}

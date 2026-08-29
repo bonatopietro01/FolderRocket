@@ -148,10 +148,12 @@ export default function GoogleCalendarSourcePanel({alertBlockId, weekStart, onWe
     }, [activeWeekKey]);
 
     useEffect(() => {
-        window.dispatchEvent(new CustomEvent("folderrocket-calendar-context", {detail: {
+        const detail = {
             blockId: alertBlockId,
             events: events.slice(0, 20).map(event => ({title: event.title, start: event.start, end: event.end, location: event.location, attachments: (event.attachments ?? []).map(attachment => attachment.name)}))
-        }}));
+        };
+        localStorage.setItem("folderrocket-calendar-context", JSON.stringify(detail));
+        window.dispatchEvent(new CustomEvent("folderrocket-calendar-context", {detail}));
     }, [alertBlockId, events]);
 
     useEffect(() => {
@@ -228,7 +230,7 @@ export default function GoogleCalendarSourcePanel({alertBlockId, weekStart, onWe
                 const dayEvents = events.filter(event => eventDayKey(event.start) === day.key);
                 const label = formatGridDay(day.date);
                 const attachmentCount = dayEvents.reduce((count, event) => count + (event.attachments?.length ?? 0), 0);
-                return <button type="button" role="gridcell" key={day.key} className={day.key === selectedDay.key ? "calendarDayCell selected" : "calendarDayCell"} onClick={() => setSelectedDayKey(day.key)} aria-pressed={day.key === selectedDay.key} title={`${formatSelectedDay(day.date)}${dayEvents.length ? ` · ${dayEvents.length} event${dayEvents.length === 1 ? "" : "s"}` : ""}`}><span className="calendarDayLabel">{label.weekday}</span><strong>{label.day}</strong>{dayEvents.length > 0 && <em>{dayEvents.length}</em>}<span className="calendarDayEvents">{dayEvents.slice(0, 2).map(event => <small key={event.id || `${event.title}-${event.start}`}>{event.title}</small>)}</span>{attachmentCount > 0 && <span className="calendarDayFiles"><Paperclip size={10}/>{attachmentCount}</span>}</button>;
+                return <button type="button" role="gridcell" key={day.key} className={day.key === selectedDay.key ? "calendarDayCell selected" : "calendarDayCell"} onClick={() => setSelectedDayKey(day.key)} aria-pressed={day.key === selectedDay.key} title={`${formatSelectedDay(day.date)}${dayEvents.length ? ` · ${dayEvents.length} event${dayEvents.length === 1 ? "" : "s"}` : ""}`}><span className="calendarDayLabel">{label.weekday}</span><strong>{label.day}</strong><span className="calendarDayIndicators">{dayEvents.length > 0 && <small className="hasEvents">{dayEvents.length}<span> event{dayEvents.length === 1 ? "" : "s"}</span></small>}{attachmentCount > 0 && <small className="hasFiles"><Paperclip size={9}/>{attachmentCount}<span> file{attachmentCount === 1 ? "" : "s"}</span></small>}{dayEvents.length === 0 && attachmentCount === 0 && <i>—</i>}</span></button>;
             })}</div></div>
             <section className="calendarDayDetails" aria-live="polite"><header><strong>{formatSelectedDay(selectedDay.date)}</strong><span>{selectedDayEvents.length ? `${selectedDayEvents.length} event${selectedDayEvents.length === 1 ? "" : "s"}` : "No events"}</span></header>{selectedDayEvents.length ? selectedDayEvents.map(event => <article className="calendarEvent" key={event.id || `${event.title}-${event.start}`}><div className="calendarEventSummary"><strong>{event.title}</strong><small>{formatEventTime(event.start)}{event.location ? ` · ${event.location}` : ""}</small></div>{event.link && <button type="button" onClick={() => window.open(event.link, "_blank", "noopener,noreferrer")} title="Open event in Google Calendar"><ExternalLink size={14}/></button>}{event.attachments?.map(attachment => <div key={`${event.id}-${attachment.fileId}`} className="calendarAttachment" draggable onDragStart={dragEvent => startAttachmentDrag(dragEvent, attachment)} title="Drag this file into a FolderRocket folder"><FileKindIcon name={attachment.name}/><span>{attachment.name}</span><button type="button" onClick={() => window.open(attachment.url, "_blank", "noopener,noreferrer")} title="Open file"><ExternalLink size={12}/></button><Paperclip size={11}/></div>)}</article>) : <p>{loading ? "Reading calendar…" : events.length ? "No events or files on this day." : `No events in ${formatWeekRange(activeWeekStart)}.`}</p>}</section>
         </div>}

@@ -186,7 +186,7 @@ async function backendIsReady() {
 }
 
 async function waitForBackend() {
-    const deadline = Date.now() + 20_000;
+    const deadline = Date.now() + 60_000;
     while (Date.now() < deadline) {
         if (await backendIsReady()) return true;
         await new Promise(resolve => setTimeout(resolve, 300));
@@ -232,7 +232,7 @@ function startBackend() {
     });
 }
 
-function createWindow() {
+function createWindow(loadApplication = true) {
     mainWindow = new BrowserWindow({
         width: 1440,
         height: 940,
@@ -270,7 +270,8 @@ function createWindow() {
         if (!mainWindow?.isDestroyed()) mainWindow.webContents.send("folderrocket:zoom-changed", mainWindow.webContents.getZoomFactor());
     });
     mainWindow.once("ready-to-show", () => mainWindow?.show());
-    void mainWindow.loadURL(APP_ORIGIN);
+    if (loadApplication) void mainWindow.loadURL(APP_ORIGIN);
+    else void mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><html><head><meta charset="utf-8"><title>FolderRocket</title><style>html,body{height:100%;margin:0}body{display:grid;place-items:center;background:#0e1424;color:#eef5ff;font:14px system-ui}.loader{text-align:center}.rocket{font-size:42px;animation:pulse 1.1s ease-in-out infinite}.loader strong{display:block;margin-top:12px;font-size:18px}.loader small{display:block;margin-top:7px;color:#9eb0c7}@keyframes pulse{50%{transform:translateY(-6px);opacity:.7}}</style></head><body><div class="loader"><div class="rocket">🚀</div><strong>FolderRocket is starting</strong><small>Preparing your local workspace…</small></div></body></html>`)}`);
 }
 
 function createCargoShipWindow() {
@@ -602,6 +603,8 @@ app.whenReady().then(async () => {
         fs.writeFileSync(selection.filePath, bytes);
         return {saved: true, path: selection.filePath};
     });
+    // Give immediate visual feedback while the local services initialise.
+    createWindow(false);
     let existingBackend;
     try {
         existingBackend = await prepareBackendEndpoint();
@@ -627,7 +630,7 @@ app.whenReady().then(async () => {
         app.quit();
         return;
     }
-    createWindow();
+    await mainWindow?.loadURL(APP_ORIGIN);
     const initialProtocolUrl = process.argv.find(value => value.startsWith(`${FOLDERROCKET_PROTOCOL}://`));
     if (initialProtocolUrl) handleFolderRocketProtocol(initialProtocolUrl);
 });

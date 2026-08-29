@@ -15,7 +15,6 @@ import {
     ExternalLink,
     MessageSquareText,
     RefreshCw,
-    Settings2,
     BellRing
 } from "lucide-react";
 
@@ -407,6 +406,7 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
             const target = event.target as Element;
             if (!target.closest(".emailSourceCard")) setSelectedIds([]);
             if (!target.closest(".gmailWarningsMenu") && !target.closest(".gmailWarningToggle")) setShowWarnings(false);
+            if (!target.closest(".emailReaderHeaderControl")) setShowSettings(false);
             if (!target.closest(".emailConnectionControls")) { setShowDisconnect(false); setDisconnectArmed(false); }
         };
         document.addEventListener("pointerdown", dismissWhenOutside);
@@ -421,6 +421,16 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
         window.addEventListener("folderrocket-email-alert-favorites", syncFavorites);
         return () => window.removeEventListener("folderrocket-email-alert-favorites", syncFavorites);
     }, []);
+
+    useEffect(() => {
+        const refreshFromSplitButton = (event: MouseEvent) => {
+            if (!(event.target as Element).closest(".emailReaderHeaderButton svg")) return;
+            event.preventDefault(); event.stopPropagation();
+            if (attachmentReader.enabled && !loading) void refresh();
+        };
+        document.addEventListener("click", refreshFromSplitButton, true);
+        return () => document.removeEventListener("click", refreshFromSplitButton, true);
+    }, [attachmentReader.enabled, loading, refresh]);
 
     function toggleSelection(id: string) {
         setSelectedIds(current => current.includes(id)
@@ -537,6 +547,7 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
             <div className="sourceHeader">
                 <Mail className="gmailPanelIcon" size={29} />
                 {connected ? <span className="emailConnectionControls"><button type="button" className="sourceTitle emailConnectionTitle" onClick={() => { setShowDisconnect(current => !current); setDisconnectArmed(false); }} title="Gmail connection options">Gmail</button>{showDisconnect && <button type="button" className={disconnectArmed ? "emailDisconnectButton armed" : "emailDisconnectButton"} onClick={() => { if (disconnectArmed) void disconnect(); else setDisconnectArmed(true); }} title={disconnectArmed ? "Press again to disconnect Gmail" : "Disconnect Gmail"}>{disconnectArmed ? "Confirm" : "Disconnect"}</button>}</span> : <span className="sourceTitle">Gmail</span>}
+                {connected && <span className="emailReaderHeaderControl"><button type="button" className={`emailReaderHeaderButton${attachmentReader.enabled ? " active" : ""}`} onClick={() => setShowSettings(current => !current)} title="Read attachments and choose period"><RefreshCw className={loading ? "spin" : ""} size={13}/><span>Read attachments</span></button>{showSettings && <div className="emailReaderHeaderMenu"><header><strong>Read attachments</strong><button type="button" onClick={() => void refresh()} disabled={loading || !attachmentReader.enabled} title="Refresh attachments"><RefreshCw className={loading ? "spin" : ""} size={14}/></button></header><label className="emailReaderEnabled"><input type="checkbox" checked={attachmentReader.enabled} onChange={event => { const enabled = event.target.checked; setAttachmentReader(current => ({...current, enabled})); if (!enabled) setAttachments([]); }}/>Enable attachment reading</label><select value={mode} onChange={event => { const nextMode = event.target.value as FilterMode; setMode(nextMode); setAttachmentReader(current => ({...current, filter: {...current.filter, mode: nextMode}})); }}><option value="relative">Last days</option><option value="range">Date range</option></select>{mode === "relative" ? <label>Days back<input type="number" min="1" value={days} onChange={event => { const value = Math.max(1, Number(event.target.value) || 1); setDays(value); setAttachmentReader(current => ({...current, filter: {...current.filter, days: value}})); }}/></label> : <div className="emailDateRange"><label>From<input type="date" value={startDate} onChange={event => { setStartDate(event.target.value); setAttachmentReader(current => ({...current, filter: {...current.filter, startDate: event.target.value}})); }}/></label><label>To<input type="date" value={endDate} onChange={event => { setEndDate(event.target.value); setAttachmentReader(current => ({...current, filter: {...current.filter, endDate: event.target.value}})); }}/></label></div>}<button type="button" className="emailReaderApply" onClick={() => { setShowSettings(false); if (attachmentReader.enabled) void refresh(); }}>Apply & refresh</button></div>}</span>}
                 {connected && <button type="button" className="gmailWarningToggle" onClick={toggleWarnings} title="Gmail alerts"><BellRing size={15} /></button>}
                 {connected && <span className={warningLoading ? "emailAlertSlots analyzing" : "emailAlertSlots"}>{warningLoading ? "Analyzing…" : visibleWarnings.filter(rule => rule.enabled).slice(0, 5).map(rule => { const result = warningResults.find(item => item.ruleId === rule.id); return result ? <button key={`ready-${rule.id}`} type="button" className={`gmailAlertCount alertColor-${rule.color}`} title={`Show ${rule.label} emails`} onClick={() => toggleWarningPreview(rule.kind)}>{result.total}</button> : <span key={`ready-${rule.id}`} className={`emailAlertReadyDot alertColor-${rule.color}`} title={`${rule.label} is active`} />; })}</span>}
                 {connected && <span className="emailHeaderStatus">Connected</span>}
@@ -573,23 +584,9 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
                         {warningLoading && <p className="gmailWarningStatus">Checking the current Gmail view…</p>}
                         {warningError && <p className="emailError">{warningError}</p>}
                     </div>}
-                    <div className="emailToolbar">
-                        <button type="button" onClick={() => setShowSettings(current => !current)} title="Attachment period"><Settings2 size={16} /></button>
-                        <button type="button" className={`emailReadAttachmentsButton${attachmentReader.enabled ? " active" : ""}`} onClick={() => { const enabled = !attachmentReader.enabled; setAttachmentReader(current => ({...current, enabled})); if (!enabled) { setShowSettings(false); setAttachments([]); } }}>Read attachments</button>
-                        {attachmentReader.enabled && <button type="button" onClick={() => void refresh()} disabled={loading} title="Refresh attachments"><RefreshCw className={loading ? "spin" : ""} size={16} /></button>}
+                    <div className="emailToolbar emailSelectionToolbar">
                         {visibleAttachments.length > 0 && <div className="gmailSelectionActions emailInlineSelectionActions"><button type="button" disabled={!selectedIds.length} onClick={() => setSelectedIds([])}>Deselect all</button><button type="button" disabled={!selectedIds.length} onClick={dismissSelected}>Hide selected</button><button type="button" disabled={!selectedIds.length} onClick={() => void openSelected()}>Open files</button><button type="button" onClick={() => { setAttachments([]); setSelectedIds([]); }}>Clear all</button></div>}
                     </div>
-
-                    {showSettings && attachmentReader.enabled && (
-                        <div className="emailSettings">
-                            <strong>Attachment period</strong>
-                            <select value={mode} onChange={event => { const nextMode = event.target.value as FilterMode; setMode(nextMode); setAttachmentReader(current => ({...current, filter: {...current.filter, mode: nextMode}})); }}>
-                                <option value="relative">Last days</option>
-                                <option value="range">Date range</option>
-                            </select>
-                            {mode === "relative" ? <label>Days back<input type="number" min="1" value={days} onChange={event => { const value = Number(event.target.value); setDays(value); setAttachmentReader(current => ({...current, filter: {...current.filter, days: value}})); }} aria-label="Days back" /></label> : <div className="emailDateRange"><label>From<input type="date" value={startDate} onChange={event => { setStartDate(event.target.value); setAttachmentReader(current => ({...current, filter: {...current.filter, startDate: event.target.value}})); }} /></label><label>To<input type="date" value={endDate} onChange={event => { setEndDate(event.target.value); setAttachmentReader(current => ({...current, filter: {...current.filter, endDate: event.target.value}})); }} /></label></div>}
-                        </div>
-                    )}
 
                     {error && <p className="emailError">{error}</p>}
                     <div className="emailAttachmentList">

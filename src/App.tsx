@@ -159,8 +159,11 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     const [floatingBookmarkScale, setFloatingBookmarkScale] = useState(() => readFloatingToolsScale(floatingBookmarkScaleStorageKey));
     const [noteAddRequest, setNoteAddRequest] = useState(0);
     const [aiNoteAddRequest, setAiNoteAddRequest] = useState(0);
+    const [reminderAddRequest, setReminderAddRequest] = useState(0);
     const initialAppZoomRef = useRef(appZoom);
     const dashboardRef = useRef<HTMLElement | null>(null);
+
+    useEffect(() => { if (reminderAddRequest > 0) window.dispatchEvent(new CustomEvent("folderrocket:create-reminder-note")); }, [reminderAddRequest]);
 
     useEffect(() => {
         let active = true;
@@ -393,7 +396,7 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
             <img className="appLogo" src={folderRocketWordmark} alt="FolderRocket" />
             <nav className="appNavigation">
                 {aiEnabled && <button type="button" className="notesAiQuickAdd" onClick={() => setAiNoteAddRequest(current => current + 1)} title="Create an AI post-it" aria-label="Create an AI post-it"><span>AI</span></button>}
-                <button type="button" className={aiEnabled ? "notesQuickAdd withAi" : "notesQuickAdd"} onClick={() => setNoteAddRequest(current => current + 1)} title="Add a post-it" aria-label="Add a post-it"><Plus size={19}/></button>
+                <button type="button" className={aiEnabled ? "notesQuickAdd withAi" : "notesQuickAdd"} onClick={() => setNoteAddRequest(current => current + 1)} title="Add a post-it" aria-label="Add a post-it"><Plus size={19}/></button><button type="button" className="notesReminderQuickAdd" onClick={() => setReminderAddRequest(current => current + 1)} title="Create a reminder post-it" aria-label="Create a reminder post-it"><span>!</span></button>
                 <button className={page === "dashboard" ? "active" : ""} type="button" onClick={() => setPage("dashboard")}>Dashboard</button>
                 <button className={page === "folders" ? "active" : ""} type="button" onClick={() => setPage("folders")}>Folder management</button>
                 <button className={page === "processing" ? "active" : ""} type="button" onClick={() => setPage("processing")}>File Studio</button>
