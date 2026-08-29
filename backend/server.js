@@ -65,6 +65,7 @@ const {
 
 const {
     disconnect: disconnectGoogleCalendar,
+    downloadAttachment: downloadGoogleCalendarAttachment,
     exchangeAuthorizationCode: exchangeGoogleCalendarAuthorizationCode,
     getAuthorizationUrl: getGoogleCalendarAuthorizationUrl,
     getStatus: getGoogleCalendarStatus,
@@ -820,26 +821,23 @@ app.get("/calendar/google/events", requireAuthenticated, async (req, res) => {
     }
 });
 
-// Calendar attachments are downloaded only from Google Drive's public download
-// endpoint. Private Drive files need a future Google Drive OAuth connection.
+// Calendar attachments use the read-only Drive permission attached to the
+// selected Calendar block, so private meeting files remain available by drag.
 app.get("/calendar/google/attachments/download", requireAuthenticated, requireAdministrator, async (req, res) => {
     try {
-        if (!String(process.env.GOOGLE_CALENDAR_API_KEY ?? "").trim()) {
-            throw new Error("Add a Google Calendar API key in Settings first.");
-        }
         const fileId = typeof req.query?.fileId === "string" ? req.query.fileId.trim() : "";
         if (!/^[A-Za-z0-9_-]{10,200}$/.test(fileId)) throw new Error("Invalid Google Drive attachment.");
         const requestedName = typeof req.query?.name === "string" ? path.basename(req.query.name).trim() : "";
         const fileName = requestedName || "calendar-attachment";
         const requestedMimeType = typeof req.query?.mimeType === "string" ? req.query.mimeType.trim() : "";
-        const driveResponse = await fetch(`https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`, {redirect: "follow"});
-        if (!driveResponse.ok) throw new Error("Google Drive could not download this attachment.");
+        const blockId = typeof req.query?.blockId === "string" ? req.query.blockId.trim() : "";
+        const driveResponse = await downloadGoogleCalendarAttachment(req.user.id, blockId, fileId);
         const contentLength = Number(driveResponse.headers.get("content-length") || 0);
         if (contentLength > 75 * 1024 * 1024) throw new Error("This attachment is larger than 75 MB. Open it from Google Drive instead.");
         const content = Buffer.from(await driveResponse.arrayBuffer());
         const contentType = String(driveResponse.headers.get("content-type") || "").toLowerCase();
         const probablyHtml = contentType.includes("text/html") || /^\s*<(?:!doctype|html)/i.test(content.subarray(0, 256).toString("utf8"));
-        if (probablyHtml) throw new Error("This Google Drive file is private or needs a Google Drive connection. Use Open file for now.");
+        if (probablyHtml) throw new Error("Google Drive returned an invalid attachment. Reconnect Calendar and try again.");
         res.setHeader("Content-Disposition", `attachment; filename="${fileName.replaceAll('"', "")}"`);
         res.type(requestedMimeType || contentType || "application/octet-stream").send(content);
     } catch (error) {
@@ -1477,6 +1475,32 @@ app.post("/search-files", async (req, res) => {
     }
 });
 
+app.post("/applications/discover", requireAuthenticated, requireAdministrator, async (req, res) => {
+    try {
+        const extensions = [...new Set((Array.isArray(req.body?.extensions) ? req.body.extensions : []).map(value => String(value).replace(/^\./, "").toLowerCase()).filter(value => /^[a-z0-9]{1,12}$/.test(value)))];
+        if (!extensions.length) throw new Error("Select at least one file type for this application.");
+        const roots = [];
+        if (process.platform === "win32") for (let code = 67; code <= 90; code += 1) { const root = `${String.fromCharCode(code)}:\\`; if (fs.existsSync(root)) roots.push(root); }
+        else roots.push(os.homedir());
+        const excluded = new Set(["windows","program files","program files (x86)","programdata","$recycle.bin","system volume information","node_modules",".git","appdata"]);
+        const pending = [...roots]; const results = []; const folders = new Map(); let inspected = 0;
+        while (pending.length && inspected < 50_000 && results.length < 1_000) {
+            const current = pending.pop(); let entries;
+            try { entries = await fs.promises.readdir(current, {withFileTypes:true}); } catch { continue; }
+            for (const entry of entries) {
+                if (entry.isDirectory()) { if (!excluded.has(entry.name.toLowerCase())) pending.push(path.join(current,entry.name)); continue; }
+                if (!entry.isFile()) continue; inspected += 1;
+                const extension = path.extname(entry.name).slice(1).toLowerCase(); if (!extensions.includes(extension)) continue;
+                const filePath = path.join(current,entry.name); let stats; try { stats=await fs.promises.stat(filePath); } catch { continue; }
+                results.push({name:entry.name,path:filePath,size:stats.size,createdAt:stats.birthtime.toISOString(),extension}); folders.set(current,(folders.get(current)||0)+1);
+                if (results.length >= 1_000) break;
+            }
+            if (inspected % 500 === 0) await new Promise(resolve => setImmediate(resolve));
+        }
+        res.json({files:results,folders:[...folders.entries()].map(([folder,count])=>({path:folder,count})).sort((a,b)=>b.count-a.count),inspected,truncated:Boolean(pending.length)});
+    } catch (error) { res.status(400).json({message:error instanceof Error?error.message:"Unable to scan application files."}); }
+});
+
 app.post("/sticky-notes/ai", async (req, res) => {
     try {
         if (!integrationStatus().aiConfigured) throw new Error("Enable the OpenAI AI integration before creating AI notes.");
@@ -1533,6 +1557,19 @@ app.post("/list-folder-files", (req, res) => {
     catch (error) {
         res.status(400).json({message: error instanceof Error ? error.message : "Impossibile leggere la cartella"});
     }
+});
+
+app.post("/file-types/inventory", requireAuthenticated, requireAdministrator, async (req, res) => {
+    try {
+        const roots = (Array.isArray(req.body?.folders) ? req.body.folders : []).map(folder => assertUserPath(req.user, folder)).filter(folder => fs.existsSync(folder) && fs.statSync(folder).isDirectory());
+        const pending = [...new Set(roots)]; const counts = new Map(); let inspected = 0;
+        while (pending.length && inspected < 20_000) {
+            const current = pending.pop(); let entries; try { entries = await fs.promises.readdir(current,{withFileTypes:true}); } catch { continue; }
+            for (const entry of entries) { if (entry.isDirectory()) pending.push(path.join(current,entry.name)); else if (entry.isFile()) { inspected += 1; const type=path.extname(entry.name).slice(1).toLowerCase(); if(type)counts.set(type,(counts.get(type)||0)+1); } if(inspected>=20_000)break; }
+            if(inspected%500===0)await new Promise(resolve=>setImmediate(resolve));
+        }
+        res.json({types:[...counts.entries()].map(([type,count])=>({type,count})).sort((a,b)=>a.type.localeCompare(b.type)),total:[...counts.values()].reduce((sum,count)=>sum+count,0),truncated:Boolean(pending.length)});
+    } catch(error){res.status(400).json({message:error instanceof Error?error.message:"Unable to inventory file types."});}
 });
 
 // File Studio uses this deliberately small local preview. Text-based documents
@@ -1784,10 +1821,17 @@ app.post("/cargo-ship/email-draft", requireAuthenticated, async (req, res) => {
         const to = typeof req.body?.to === "string" ? req.body.to : "";
         const subject = typeof req.body?.subject === "string" ? req.body.subject : "";
         const text = typeof req.body?.text === "string" ? req.body.text : "";
+        const attachments = Array.isArray(req.body?.attachments) ? req.body.attachments.slice(0, 20).map(item => {
+            const targetPath = assertUserPath(req.user, item?.path);
+            if (!fs.existsSync(targetPath) || !fs.statSync(targetPath).isFile()) throw new Error("One email attachment is no longer available.");
+            const attachmentLimit = provider === "outlook" ? 3 * 1024 * 1024 : 20 * 1024 * 1024;
+            if (fs.statSync(targetPath).size > attachmentLimit) throw new Error(`${path.basename(targetPath)} is too large for this mailbox draft.`);
+            return {path: targetPath, name: path.basename(typeof item?.name === "string" ? item.name : targetPath)};
+        }) : [];
         if (!provider || !blockId || !text.trim()) throw new Error("Choose a connected email source and add the email text.");
         const draft = provider === "gmail"
-            ? await createGmailDraft({to, subject, text}, req.user.id, blockId)
-            : await createOutlookDraft({to, subject, text}, req.user.id, blockId);
+            ? await createGmailDraft({to, subject, text, attachments}, req.user.id, blockId)
+            : await createOutlookDraft({to, subject, text, attachments}, req.user.id, blockId);
         addAuditEvent({user: req.user, action: "cargo_email_draft_created", details: {fileName: subject || "FolderRocket draft"}});
         res.json({message: `Draft saved in ${provider === "gmail" ? "Gmail" : "Outlook"}. Review and send it from that mailbox.`, draftId: draft?.id ?? ""});
     } catch (error) {

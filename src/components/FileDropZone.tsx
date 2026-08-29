@@ -937,10 +937,10 @@ function FileDropZone({
         }
         if (calendarAttachments) {
             try {
-                const attachments = JSON.parse(calendarAttachments) as Array<{fileId: string; name: string; mimeType?: string}>;
+                const attachments = JSON.parse(calendarAttachments) as Array<{fileId: string; name: string; mimeType?: string; sourceBlockId?: string}>;
                 if (!attachments.length) return;
                 const downloadedFiles = await Promise.all(attachments.map(async attachment => {
-                    const parameters = new URLSearchParams({fileId: attachment.fileId, name: attachment.name, mimeType: attachment.mimeType ?? ""});
+                    const parameters = new URLSearchParams({fileId: attachment.fileId, name: attachment.name, mimeType: attachment.mimeType ?? "", blockId: attachment.sourceBlockId ?? ""});
                     const response = await fetch(`${API_BASE_URL}/calendar/google/attachments/download?${parameters}`, {credentials: "include"});
                     if (!response.ok) {
                         const data = await readJsonResponse<{message?: string}>(response);
@@ -1490,7 +1490,7 @@ function FileDropZone({
                     detail: {sourcePaths: pendingMoveFiles.map(file => file.path), moved: data.moved ?? [], destination: path.trim()}
                 }));
                 setPendingMoveFiles([]);
-                if (movedNames.length > 0) setLastUploadedFile(movedNames[movedNames.length - 1]);
+                setLastUploadedFile("");
                 setFiles(current => current.filter(file => !pendingMoveFiles.some(move => move.name === file.name && (move.size === undefined || move.size === file.size))));
                 if (filesToUpload.length === 0) {
                     alert(`${movedNames.length} file(s) moved successfully`);

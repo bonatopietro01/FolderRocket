@@ -1,4 +1,6 @@
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 const {getConnection, migrateLegacyConnectionToBlock, removeConnection, saveConnection} = require("./emailTokenStore");
 
 const GMAIL_API_BASE =
@@ -792,16 +794,25 @@ async function getEmailIdentity(userId, blockId = "") {
     return typeof profile.emailAddress === "string" ? profile.emailAddress : "";
 }
 
-async function createDraft({to, subject, text}, userId, blockId = "") {
+async function createDraft({to, subject, text, attachments = []}, userId, blockId = "") {
     const recipient = cleanHeader(to);
     if (!recipient) throw new Error("Add at least one recipient.");
-    const raw = [
+    const boundary = `folderrocket-${crypto.randomBytes(12).toString("hex")}`;
+    const raw = attachments.length ? [
         `To: ${recipient}`,
         `Subject: ${cleanHeader(subject) || "FolderRocket draft"}`,
         "MIME-Version: 1.0",
-        "Content-Type: text/plain; charset=UTF-8",
+        `Content-Type: multipart/mixed; boundary="${boundary}"`,
         "",
-        String(text ?? "")
+        `--${boundary}`,
+        "Content-Type: text/plain; charset=UTF-8",
+        "Content-Transfer-Encoding: 8bit",
+        "",
+        String(text ?? ""),
+        ...attachments.flatMap(attachment => [`--${boundary}`, "Content-Type: application/octet-stream", `Content-Disposition: attachment; filename="${cleanHeader(path.basename(attachment.name))}"`, "Content-Transfer-Encoding: base64", "", fs.readFileSync(attachment.path).toString("base64").replace(/.{1,76}/g, "$&\r\n").trim()]),
+        `--${boundary}--`
+    ].join("\r\n") : [
+        `To: ${recipient}`, `Subject: ${cleanHeader(subject) || "FolderRocket draft"}`, "MIME-Version: 1.0", "Content-Type: text/plain; charset=UTF-8", "", String(text ?? "")
     ].join("\r\n");
     const response = await gmailFetch(userId, "/drafts", blockId, 2, {
         method: "POST",

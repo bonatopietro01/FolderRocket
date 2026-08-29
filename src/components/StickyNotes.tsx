@@ -3,7 +3,7 @@ import {LoaderCircle, PanelLeftClose, Sparkles, Trash2} from "lucide-react";
 import {API_BASE_URL} from "../api";
 import type {ManagedFolder} from "./FolderManagement";
 
-type NoteColor = "yellow" | "red" | "purple" | "blue" | "green";
+type NoteColor = "yellow" | "orange" | "red" | "purple" | "blue" | "green";
 interface StickyNote {id: string; color: NoteColor; text: string; relatedFiles?: string[]; x: number; y: number; width: number; height: number; hidden?: boolean; autoHeight?: boolean; ai?: boolean; aiPrompt?: string; aiResponse?: string; aiWorking?: boolean; reminder?: boolean; reminderAt?: string; reminderFired?: boolean;}
 interface CalendarContextEvent {title?: string; start?: string; end?: string; location?: string; attachments?: string[];}
 const colors: NoteColor[] = ["yellow", "purple", "blue", "green"];
@@ -107,7 +107,7 @@ export default function StickyNotes({storageScope, folders, aiEnabled, floatingS
         setNotes(current => [{...createNote(current.length, "red"), ai: true, aiPrompt: prompt, aiResponse: "", aiWorking: false, autoHeight: false, width: 188, height: 132}, ...current]);
     }, []);
     const addReminderNote = useCallback(() => {
-        setNotes(current => [{...createNote(current.length, "yellow", "Reminder"), reminder: true, reminderAt: "", reminderFired: false, autoHeight: false, width: 210, height: 132}, ...current]);
+        setNotes(current => [{...createNote(current.length, "orange", "Reminder"), reminder: true, reminderAt: "", reminderFired: false, autoHeight: false, width: 230, height: 150}, ...current]);
     }, []);
     function update(id: string, change: Partial<StickyNote>) { setNotes(current => current.map(note => note.id === id ? {...note, ...change} : note)); }
     function remove(id: string) { if (deleteId === id) { setNotes(current => current.filter(note => note.id !== id)); setDeleteId(null); } else setDeleteId(id); }
@@ -150,7 +150,8 @@ export default function StickyNotes({storageScope, folders, aiEnabled, floatingS
             const now = Date.now();
             setNotes(current => current.map(note => {
                 if (!note.reminder || note.reminderFired || !note.reminderAt || new Date(note.reminderAt).getTime() > now) return note;
-                const fired = {...note, reminderFired: true, hidden: false, x: Math.max(16, window.innerWidth / 2 - note.width / 2), y: 90};
+                const width = 340; const height = 230;
+                const fired = {...note, color: "orange" as NoteColor, reminderFired: true, hidden: false, autoHeight: false, width, height, x: Math.max(16, window.innerWidth / 2 - width / 2), y: 90};
                 const detail = {id: note.id, text: note.text || "Reminder", reminderAt: note.reminderAt};
                 window.dispatchEvent(new CustomEvent("folderrocket:reminder-fired", {detail}));
                 if ("BroadcastChannel" in window) { const channel = new BroadcastChannel("folderrocket-reminders"); channel.postMessage(detail); channel.close(); }

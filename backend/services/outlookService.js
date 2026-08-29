@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const fs = require("fs");
 const {getConnection, migrateLegacyConnectionToBlock, removeConnection, saveConnection} = require("./emailTokenStore");
 
 const GRAPH_API_BASE = "https://graph.microsoft.com/v1.0";
@@ -303,7 +304,7 @@ async function getEmailIdentity(userId, blockId = "") {
         : (typeof profile.userPrincipalName === "string" ? profile.userPrincipalName : "");
 }
 
-async function createDraft({to, subject, text}, userId, blockId = "") {
+async function createDraft({to, subject, text, attachments = []}, userId, blockId = "") {
     const recipients = String(to ?? "").split(/[;,]/).map(value => value.trim()).filter(Boolean);
     if (!recipients.length) throw new Error("Add at least one recipient.");
     const response = await graphFetch(userId, "/me/messages", blockId, {
@@ -315,7 +316,11 @@ async function createDraft({to, subject, text}, userId, blockId = "") {
             toRecipients: recipients.map(address => ({emailAddress: {address}}))
         })
     });
-    return response.json();
+    const draft = await response.json();
+    for (const attachment of attachments) {
+        await graphFetch(userId, `/me/messages/${encodeURIComponent(draft.id)}/attachments`, blockId, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({"@odata.type":"#microsoft.graph.fileAttachment",name:attachment.name,contentBytes:fs.readFileSync(attachment.path).toString("base64")})});
+    }
+    return draft;
 }
 
 module.exports = {createDraft, disconnect, downloadAttachment, exchangeAuthorizationCode, getAuthorizationUrl, getEmailIdentity, getMessageText, getStatus, listAttachments, listInboxMessages};

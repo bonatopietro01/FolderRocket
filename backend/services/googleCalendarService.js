@@ -4,7 +4,7 @@ const {getConnection, removeConnection, saveConnection} = require("./emailTokenS
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CALENDAR_API = "https://www.googleapis.com/calendar/v3";
-const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
+const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/drive.readonly";
 const authorizations = new Map();
 const connections = new Map();
 
@@ -79,9 +79,20 @@ function timeWindow({view, days, weekStart} = {}) {
 
 async function listEvents(userId, blockId, options = {}) {
     const range = timeWindow(options);
-    const query = new URLSearchParams({singleEvents: "true", orderBy: "startTime", timeMin: range.start.toISOString(), timeMax: range.end.toISOString(), maxResults: "60", fields: "items(id,summary,start,end,location,htmlLink,attachments(fileId,fileUrl,title,mimeType))"});
+    const query = new URLSearchParams({singleEvents: "true", orderBy: "startTime", timeMin: range.start.toISOString(), timeMax: range.end.toISOString(), maxResults: "60", fields: "items(id,summary,start,end,location,htmlLink,hangoutLink,conferenceData(entryPoints(entryPointType,uri,label)),attachments(fileId,fileUrl,title,mimeType))"});
     const data = await (await calendarFetch(userId, `/calendars/primary/events?${query}`, blockId)).json();
-    return (data.items || []).map(item => ({id: String(item.id || ""), title: String(item.summary || "Untitled event"), start: item.start?.dateTime || item.start?.date || "", end: item.end?.dateTime || item.end?.date || "", location: String(item.location || ""), link: String(item.htmlLink || ""), attachments: Array.isArray(item.attachments) ? item.attachments.map(a => ({fileId: String(a.fileId || ""), url: String(a.fileUrl || ""), name: String(a.title || "Calendar attachment"), mimeType: String(a.mimeType || "")})).filter(a => a.fileId && a.url) : []}));
+    return (data.items || []).map(item => ({id: String(item.id || ""), title: String(item.summary || "Untitled event"), start: item.start?.dateTime || item.start?.date || "", end: item.end?.dateTime || item.end?.date || "", location: String(item.location || ""), link: "", meetingLink: String(item.hangoutLink || item.conferenceData?.entryPoints?.find(point => point.entryPointType === "video")?.uri || ""), attachments: Array.isArray(item.attachments) ? item.attachments.map(a => ({fileId: String(a.fileId || ""), url: String(a.fileUrl || ""), name: String(a.title || "Calendar attachment"), mimeType: String(a.mimeType || "")})).filter(a => a.fileId && a.url) : []}));
+}
+
+async function downloadAttachment(userId, blockId, fileId) {
+    let current = connectionFor(userId, blockId);
+    if (!current) throw new Error("Google Calendar is not connected.");
+    if (Date.now() >= Number(current.expiresAt || 0) - 60_000) await refresh(userId, blockId);
+    current = connectionFor(userId, blockId);
+    let response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`, {headers: {Authorization: `Bearer ${current.accessToken}`}});
+    if (response.status === 401) { await refresh(userId, blockId); current = connectionFor(userId, blockId); response = await fetch(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`, {headers: {Authorization: `Bearer ${current.accessToken}`}}); }
+    if (!response.ok) throw new Error(response.status === 403 ? "Reconnect Google Calendar and allow read-only Google Drive access." : "Google Drive could not download this attachment.");
+    return response;
 }
 
 function getStatus(userId, blockId) {
@@ -90,4 +101,4 @@ function getStatus(userId, blockId) {
     return {connected: Boolean(connectionFor(userId, blockId)), configured};
 }
 function disconnect(userId, blockId) { connections.delete(key(userId, blockId)); removeConnection("calendar", userId, blockId); }
-module.exports = {disconnect, exchangeAuthorizationCode, getAuthorizationUrl, getStatus, hasPendingAuthorization, listEvents};
+module.exports = {disconnect, downloadAttachment, exchangeAuthorizationCode, getAuthorizationUrl, getStatus, hasPendingAuthorization, listEvents};

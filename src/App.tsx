@@ -21,6 +21,8 @@ const DomainSourcePanel = lazy(() => import("./components/DomainSourcePanel"));
 const ScreenCaptureSourcePanel = lazy(() => import("./components/ScreenCaptureSourcePanel"));
 const GoogleCalendarSourcePanel = lazy(() => import("./components/GoogleCalendarSourcePanel"));
 const UsbSourcePanel = lazy(() => import("./components/UsbSourcePanel"));
+const ApplicationsWorkspace = lazy(() => import("./components/ApplicationsWorkspace"));
+const DashboardFolderBrowser = lazy(() => import("./components/DashboardFolderBrowser"));
 
 type Folder = ManagedFolder;
 interface DashboardWidths { left: number; center: number; right: number; }
@@ -144,7 +146,7 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     const floatingToolsScaleStorageKey = `${FLOATING_TOOLS_SCALE_KEY}-${user.id}`;
     const floatingBookmarkScaleStorageKey = `${FLOATING_BOOKMARK_SCALE_KEY}-${user.id}`;
     const isCargoShipWindow = new URLSearchParams(window.location.search).has("folderrocketCargoShip");
-    const [page, setPage] = useState<"dashboard" | "folders" | "processing">("dashboard");
+    const [page, setPage] = useState<"dashboard" | "folders" | "processing" | "applications">("dashboard");
     const [folders, setFolders] = useState<Folder[]>(() => readFolders(foldersStorageKey, user.workspacePath, user.role === "admin"));
     const [dashboardWidths, setDashboardWidths] = useState<DashboardWidths | null>(() => readDashboardWidths(widthsStorageKey));
     const [dashboardHeight, setDashboardHeight] = useState<number | null>(() => readDashboardHeight(heightStorageKey));
@@ -162,10 +164,32 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     const [noteAddRequest, setNoteAddRequest] = useState(0);
     const [aiNoteAddRequest, setAiNoteAddRequest] = useState(0);
     const [reminderAddRequest, setReminderAddRequest] = useState(0);
+    const [dashboardBrowser, setDashboardBrowser] = useState<{path:string;name:string}|null>(null);
     const initialAppZoomRef = useRef(appZoom);
     const dashboardRef = useRef<HTMLElement | null>(null);
+    const dashboardFolderHover = useRef<{id:string;timer:number}|null>(null);
 
     useEffect(() => { if (reminderAddRequest > 0) window.dispatchEvent(new CustomEvent("folderrocket:create-reminder-note")); }, [reminderAddRequest]);
+    useEffect(() => {
+        const clear = () => { if (dashboardFolderHover.current) window.clearTimeout(dashboardFolderHover.current.timer); dashboardFolderHover.current = null; };
+        const openIfNested = async (folder: ManagedFolder) => {
+            const response = await fetch(`${API_BASE_URL}/list-folder-files`, {method:"POST", credentials:"include", headers:{"Content-Type":"application/json"}, body:JSON.stringify({folder:folder.path})});
+            const data = await response.json().catch(() => ({})) as {folders?: unknown[]};
+            if (response.ok && Array.isArray(data.folders) && data.folders.length > 0) setDashboardBrowser({path:folder.path,name:folder.name});
+        };
+        const openClickedFolder = (event: MouseEvent) => { const target=event.target as Element; if(target.closest("button,input,select,textarea,.deadlineControls,.deleteZone"))return; const id=target.closest<HTMLElement>(".folderDropZone[data-folder-id]")?.dataset.folderId; const folder=folders.find(item=>item.id===id&&item.storage!=="imaginary"&&item.path); if(folder)void openIfNested(folder); };
+        const hover = (event: DragEvent) => {
+            if (event.dataTransfer?.types.includes("application/x-folderrocket-folder-order")) return;
+            const target = event.target as Element;
+            if (target.closest("button,.deleteZone,.deleteFile,.sauron")) { clear(); return; }
+            const block = target.closest<HTMLElement>(".folderDropZone[data-folder-id]");
+            const id = block?.dataset.folderId; const folder = folders.find(item => item.id === id && item.storage !== "imaginary" && item.path);
+            if (!folder || dashboardFolderHover.current?.id === folder.id) return;
+            clear(); dashboardFolderHover.current = {id:folder.id,timer:window.setTimeout(()=>{clear();void openIfNested(folder)},2000)};
+        };
+        document.addEventListener("click",openClickedFolder); document.addEventListener("dragover", hover); document.addEventListener("drop", clear); document.addEventListener("dragend", clear);
+        return () => { clear(); document.removeEventListener("click",openClickedFolder); document.removeEventListener("dragover", hover); document.removeEventListener("drop", clear); document.removeEventListener("dragend", clear); };
+    }, [folders]);
 
     useEffect(() => {
         let active = true;
@@ -357,7 +381,6 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
         });
     }
     function updateSourceBlock(column: "left" | "right", id: string, change: Partial<DashboardSourceBlockData>) { updateColumnBlocks(column, current => current.map(block => block.id === id ? {...block, ...change} : block)); }
-    function toggleSearchFolder(id: string) { setSearchFolderIds(current => current.includes(id) ? current.filter(item => item !== id) : [...current, id]); }
     function toggleAllSearchFolders() {
         const availableIds = folders.filter(folder => Boolean(folder.path)).map(folder => folder.id);
         setSearchFolderIds(current => current.some(id => availableIds.includes(id)) ? [] : availableIds);
@@ -403,6 +426,7 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
                 <button className={page === "dashboard" ? "active" : ""} type="button" onClick={() => setPage("dashboard")}>Dashboard</button>
                 <button className={page === "folders" ? "active" : ""} type="button" onClick={() => setPage("folders")}>Folder management</button>
                 <button className={page === "processing" ? "active" : ""} type="button" onClick={() => setPage("processing")}>File Studio</button>
+                <button className={page === "applications" ? "active" : ""} type="button" onClick={() => setPage("applications")}>Applications</button>
                 {page === "dashboard" && <button type="button" className="dashboardResetButton" onClick={resetDashboardLayout} title="Restore default dashboard size" aria-label="Restore default dashboard size"><RotateCcw size={14} /></button>}
             </nav>
             <div className="appHeaderTools"><IntegrationSetup isAdmin={user.role === "admin"} onAIStatusChange={setAiConfigured} aiMode={aiMode} onAIModeChange={setAiMode} /><CargoShip {...cargoShipProps} /><AccountMenu user={user} onLogout={onLogout} appZoom={appZoom} onAppZoomChange={setDesktopZoom} floatingToolsScale={floatingToolsScale} onFloatingToolsScaleChange={setFloatingToolsScale} bookmarkScale={floatingBookmarkScale} onBookmarkScaleChange={setFloatingBookmarkScale} /></div>
@@ -410,11 +434,11 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
         <StickyNotes key={user.id} storageScope={user.id} folders={folders} aiEnabled={aiEnabled} floatingScale={floatingToolsScale} bookmarkScale={floatingBookmarkScale} addRequest={noteAddRequest} aiAddRequest={aiNoteAddRequest} /><div className="pageFrame"><main ref={dashboardRef} style={dashboardStyle} className={page === "dashboard" ? "dashboard" : "dashboard pageHidden"}>
             <DashboardSourceColumn className="sourcesColumn" title="Sources" blocks={sourceBlocks} onAdd={type => addSourceBlock("left", type)} onDelete={id => deleteSourceBlock("left", id)} onMove={(id, direction) => moveSourceBlock("left", id, direction)} onResize={(id, height) => updateSourceBlock("left", id, {height})} renderBlock={block => renderSourceBlock("left", block)} />
             <div className="dashboardResizer" role="separator" aria-label="Ridimensiona colonne sinistra e centrale" onPointerDown={event => startColumnResize("left", event)} />
-            <section className="dashboardColumn foldersColumn"><div className="foldersContainer">{folders.map(folder => <div className={draggedFolderId === folder.id ? "folderOrderItem draggingFolder" : "folderOrderItem"} draggable onDragStart={event => { if (event.target !== event.currentTarget) return; setDraggedFolderId(folder.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("application/x-folderrocket-folder-order", folder.id); }} onDragOver={event => { if (event.dataTransfer.types.includes("application/x-folderrocket-folder-order")) event.preventDefault(); }} onDrop={event => { const sourceId = event.dataTransfer.getData("application/x-folderrocket-folder-order"); if (sourceId) { event.preventDefault(); event.stopPropagation(); moveFolder(sourceId, folder.id); } setDraggedFolderId(null); }} onDragEnd={() => setDraggedFolderId(null)} key={folder.id}><FileDropZone id={folder.id} name={folder.name} pathValue={folder.path} hidePath imaginary={folder.storage === "imaginary"} selected={Boolean(folder.path) && searchFolderIds.includes(folder.id)} onClick={event => { if (folder.path && event.target === event.currentTarget) toggleSearchFolder(folder.id); }} sourceFolderPaths={folders.filter(item => item.storage !== "imaginary" && Boolean(item.path)).map(item => item.path)} storageScope={user.id} aiEnabled={aiEnabled} onVirtualFilesAdd={items => updateFolder(folder.id, {virtualFiles: [...(folder.virtualFiles ?? []), ...items.filter(item => !(folder.virtualFiles ?? []).some(file => file.path === item.path))]})} onPathChange={path => updateFolder(folder.id, {path, storage: "physical"})} /></div>)}</div></section>
+            <section className="dashboardColumn foldersColumn">{dashboardBrowser ? <Suspense fallback={<p className="sourceLoading">Loading folder…</p>}><DashboardFolderBrowser key={dashboardBrowser.path} initialPath={dashboardBrowser.path} initialName={dashboardBrowser.name} onHome={()=>setDashboardBrowser(null)}/></Suspense> : <div className="foldersContainer">{folders.map(folder => <div className={draggedFolderId === folder.id ? "folderOrderItem draggingFolder" : "folderOrderItem"} draggable onDragStart={event => { if (event.target !== event.currentTarget) return; setDraggedFolderId(folder.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("application/x-folderrocket-folder-order", folder.id); }} onDragOver={event => { if (event.dataTransfer.types.includes("application/x-folderrocket-folder-order")) event.preventDefault(); }} onDrop={event => { const sourceId = event.dataTransfer.getData("application/x-folderrocket-folder-order"); if (sourceId) { event.preventDefault(); event.stopPropagation(); moveFolder(sourceId, folder.id); } setDraggedFolderId(null); }} onDragEnd={() => setDraggedFolderId(null)} key={folder.id}><FileDropZone id={folder.id} name={folder.name} pathValue={folder.path} hidePath imaginary={folder.storage === "imaginary"} selected={Boolean(folder.path) && searchFolderIds.includes(folder.id)} onClick={event => { if (folder.path && event.target === event.currentTarget) setDashboardBrowser({path:folder.path,name:folder.name}); }} sourceFolderPaths={folders.filter(item => item.storage !== "imaginary" && Boolean(item.path)).map(item => item.path)} storageScope={user.id} aiEnabled={aiEnabled} onVirtualFilesAdd={items => updateFolder(folder.id, {virtualFiles: [...(folder.virtualFiles ?? []), ...items.filter(item => !(folder.virtualFiles ?? []).some(file => file.path === item.path))]})} onPathChange={path => updateFolder(folder.id, {path, storage: "physical"})} /></div>)}</div>}</section>
             <div className="dashboardResizer" role="separator" aria-label="Resize center and right columns" onPointerDown={event => startColumnResize("right", event)} />
             <DashboardSourceColumn className="rightSourcesColumn" title="Sources" blocks={rightSourceBlocks} onAdd={type => addSourceBlock("right", type)} onDelete={id => deleteSourceBlock("right", id)} onMove={(id, direction) => moveSourceBlock("right", id, direction)} onResize={(id, height) => updateSourceBlock("right", id, {height})} renderBlock={block => renderSourceBlock("right", block)} />
             <button type="button" className="dashboardHeightResizer" onPointerDown={startDashboardHeightResize} title="Drag to set dashboard height" aria-label="Set dashboard height"><GripHorizontal size={15} /></button>
-        </main><div className={page === "folders" ? "folderPage" : "folderPage pageHidden"}><FolderManagement folders={folders} onAdd={addFolder} onUpdate={updateFolder} onDelete={deleteFolder} onReorder={moveFolder} aiEnabled={aiEnabled} /></div><div className={page === "processing" ? "processingView" : "processingView pageHidden"}><ProcessingWorkspace folders={folders} onUpdate={updateFolder} /></div></div><nav className="navigationHistory" aria-label="Navigation history"><button type="button" onClick={() => navigateHistory("back")} title="Back" disabled={!navigation.canGoBack}><ChevronLeft size={16} /></button><button type="button" onClick={() => setPage("dashboard")} title="Home"><Home size={15} /></button><button type="button" onClick={() => navigateHistory("forward")} title="Forward" disabled={!navigation.canGoForward}><ChevronRight size={16} /></button></nav>
+        </main><div className={page === "folders" ? "folderPage" : "folderPage pageHidden"}><FolderManagement folders={folders} onAdd={addFolder} onUpdate={updateFolder} onDelete={deleteFolder} onReorder={moveFolder} aiEnabled={aiEnabled} /></div><div className={page === "processing" ? "processingView" : "processingView pageHidden"}><ProcessingWorkspace folders={folders} onUpdate={updateFolder} /></div><div className={page === "applications" ? "applicationsView" : "applicationsView pageHidden"}><Suspense fallback={<p className="sourceLoading">Loading applications…</p>}><ApplicationsWorkspace storageScope={user.id}/></Suspense></div></div><nav className="navigationHistory" aria-label="Navigation history"><button type="button" onClick={() => navigateHistory("back")} title="Back" disabled={!navigation.canGoBack}><ChevronLeft size={16} /></button><button type="button" onClick={() => setPage("dashboard")} title="Home"><Home size={15} /></button><button type="button" onClick={() => navigateHistory("forward")} title="Forward" disabled={!navigation.canGoForward}><ChevronRight size={16} /></button></nav>
     </div>;
 }
 

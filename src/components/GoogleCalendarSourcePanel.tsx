@@ -10,6 +10,7 @@ interface CalendarEvent {
     end: string;
     location: string;
     link: string;
+    meetingLink?: string;
     attachments?: CalendarAttachment[];
 }
 
@@ -63,6 +64,14 @@ function formatEventTime(value: string) {
     return allDay
         ? date.toLocaleDateString("en-GB", {weekday: "short", day: "numeric", month: "short"})
         : date.toLocaleString("en-GB", {weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit"});
+}
+
+function formatDuration(start: string, end: string) {
+    const from = new Date(start).getTime();
+    const to = new Date(end).getTime();
+    if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) return "";
+    const minutes = Math.round((to - from) / 60000);
+    return minutes < 60 ? `- ${minutes} min` : `- ${Math.floor(minutes / 60)}h${minutes % 60 ? ` ${minutes % 60}m` : ""}`;
 }
 
 function eventDayKey(value: string) {
@@ -187,7 +196,7 @@ export default function GoogleCalendarSourcePanel({alertBlockId, weekStart, onWe
     }
 
     function startAttachmentDrag(event: React.DragEvent<HTMLElement>, attachment: CalendarAttachment) {
-        const data = JSON.stringify([attachment]);
+        const data = JSON.stringify([{...attachment, sourceBlockId: alertBlockId}]);
         event.dataTransfer.effectAllowed = "copy";
         event.dataTransfer.setData(CALENDAR_ATTACHMENT_TYPE, data);
         event.dataTransfer.setData("text/plain", `folderrocket-calendar:${data}`);
@@ -230,7 +239,7 @@ export default function GoogleCalendarSourcePanel({alertBlockId, weekStart, onWe
                 const attachmentCount = dayEvents.reduce((count, event) => count + (event.attachments?.length ?? 0), 0);
                 return <button type="button" role="gridcell" key={day.key} className={day.key === selectedDay.key ? "calendarDayCell selected" : "calendarDayCell"} onClick={() => setSelectedDayKey(day.key)} aria-pressed={day.key === selectedDay.key} title={`${formatSelectedDay(day.date)}${dayEvents.length ? ` · ${dayEvents.length} event${dayEvents.length === 1 ? "" : "s"}` : ""}`}><span className="calendarDayLabel">{label.weekday}</span><strong>{label.day}</strong><span className="calendarDayIndicators">{dayEvents.length > 0 && <small className="hasEvents">{dayEvents.length}<span> event{dayEvents.length === 1 ? "" : "s"}</span></small>}{attachmentCount > 0 && <small className="hasFiles"><Paperclip size={9}/>{attachmentCount}<span> file{attachmentCount === 1 ? "" : "s"}</span></small>}{dayEvents.length === 0 && attachmentCount === 0 && <i>—</i>}</span></button>;
             })}</div></div>
-            <section className="calendarDayDetails" aria-live="polite"><header><strong>{formatSelectedDay(selectedDay.date)}</strong><span>{selectedDayEvents.length ? `${selectedDayEvents.length} event${selectedDayEvents.length === 1 ? "" : "s"}` : "No events"}</span></header>{selectedDayEvents.length ? selectedDayEvents.map(event => <article className="calendarEvent" key={event.id || `${event.title}-${event.start}`}><div className="calendarEventSummary"><strong>{event.title}</strong><small>{formatEventTime(event.start)}{event.location ? ` · ${event.location}` : ""}</small></div>{event.link && <button type="button" onClick={() => window.open(event.link, "_blank", "noopener,noreferrer")} title="Open event in Google Calendar"><ExternalLink size={14}/></button>}{event.attachments?.map(attachment => <div key={`${event.id}-${attachment.fileId}`} className="calendarAttachment" draggable onDragStart={dragEvent => startAttachmentDrag(dragEvent, attachment)} title="Drag this file into a FolderRocket folder"><FileKindIcon name={attachment.name}/><span>{attachment.name}</span><button type="button" onClick={() => window.open(attachment.url, "_blank", "noopener,noreferrer")} title="Open file"><ExternalLink size={12}/></button><Paperclip size={11}/></div>)}</article>) : <p>{loading ? "Reading calendar…" : events.length ? "No events or files on this day." : `No events in ${formatWeekRange(activeWeekStart)}.`}</p>}</section>
+            <section className="calendarDayDetails" aria-live="polite"><header><strong>{formatSelectedDay(selectedDay.date)}</strong><span>{selectedDayEvents.length ? `${selectedDayEvents.length} event${selectedDayEvents.length === 1 ? "" : "s"}` : "No events"}</span></header>{selectedDayEvents.length ? selectedDayEvents.map(event => <article className="calendarEvent" key={event.id || `${event.title}-${event.start}`}><div className="calendarEventSummary"><strong>{event.title}</strong><span className="calendarEventTiming">{formatEventTime(event.start)}{event.end ? ` → ${new Date(event.end).toLocaleTimeString("en-GB", {hour:"2-digit",minute:"2-digit"})}` : ""}{formatDuration(event.start,event.end) ? <b>{formatDuration(event.start,event.end)}</b> : null}</span>{event.location && <small>{event.location}</small>}<span className="calendarEventLinks">{event.meetingLink && <button type="button" onClick={() => window.open(event.meetingLink, "_blank", "noopener,noreferrer")}>Join video meeting</button>}{event.link && <button type="button" onClick={() => window.open(event.link, "_blank", "noopener,noreferrer")}>Open calendar</button>}</span></div>{event.attachments?.map(attachment => <div key={`${event.id}-${attachment.fileId}`} className="calendarAttachment" draggable onDragStart={dragEvent => startAttachmentDrag(dragEvent, attachment)} title="Drag this file into a FolderRocket folder"><FileKindIcon name={attachment.name}/><span>{attachment.name}</span><button type="button" onClick={() => window.open(attachment.url, "_blank", "noopener,noreferrer")} title="Open file"><ExternalLink size={12}/></button><Paperclip size={11}/></div>)}</article>) : <p>{loading ? "Reading calendar…" : events.length ? "No events or files on this day." : `No events in ${formatWeekRange(activeWeekStart)}.`}</p>}</section>
         </div>}
         <small className="calendarNote">Drag event files to a FolderRocket folder, or open them directly.</small>
     </section>;
