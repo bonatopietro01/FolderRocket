@@ -137,9 +137,14 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
         if (!controls) return;
         const picker = document.createElement("div"); picker.className = "folderSymbolPicker";
         const label = document.createElement("span"); label.textContent = "Corner symbol"; picker.appendChild(label);
-        for (const symbol of ["", "☁️", "G", "", "WA", "O", "SW", "VS", "↓", "💾", "🔑", "📁", "💼", "🎓", "🏠", "⭐", "❤️", "📌", "🚀", "📷", "🎵", "🎬", "💻", "🌐", "🧾", "🔒"]) {
+        for (const symbol of ["", "☁️", "🔌", "📥", "💾", "🔑", "📁", "💼", "🎓", "🏠", "⭐", "❤️", "📌", "🚀", "📷", "🎵", "🎬", "💻", "🌐", "🧾", "🔒", "🛠️", "📊", "🗂️"]) {
             const button = document.createElement("button"); button.type = "button"; button.textContent = symbol || "None"; button.className = appearanceDraft.symbol === symbol ? "active" : ""; button.addEventListener("click", () => setAppearanceDraft(current => ({...current, symbol}))); picker.appendChild(button);
         }
+        const custom = document.createElement("label"); custom.className = "folderCustomSymbol";
+        const customLabel = document.createElement("span"); customLabel.textContent = "Custom initials"; custom.appendChild(customLabel);
+        const customInput = document.createElement("input"); customInput.type = "text"; customInput.maxLength = 2; customInput.placeholder = "2 letters"; customInput.value = appearanceDraft.symbol && /^[A-Za-zÀ-ÿ]{1,2}$/.test(appearanceDraft.symbol) ? appearanceDraft.symbol : "";
+        const customApply = document.createElement("button"); customApply.type = "button"; customApply.textContent = "Use"; customApply.addEventListener("click", () => { const symbol = customInput.value.trim().slice(0, 2).toUpperCase(); if (symbol) setAppearanceDraft(current => ({...current, symbol})); });
+        custom.append(customInput, customApply); picker.appendChild(custom);
         controls.appendChild(picker);
         const preview = document.querySelector<HTMLElement>(".folderAppearancePreview > div");
         const badge = document.createElement("span"); badge.className = "folderSymbolPreview"; badge.textContent = appearanceDraft.symbol || ""; if (preview && appearanceDraft.symbol) preview.appendChild(badge);
