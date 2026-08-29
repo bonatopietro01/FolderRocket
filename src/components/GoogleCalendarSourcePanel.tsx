@@ -1,6 +1,7 @@
 import {CalendarDays, ChevronLeft, ChevronRight, ExternalLink, File, FileSpreadsheet, FileText, Image, Paperclip, RefreshCw} from "lucide-react";
-import {useEffect, useState} from "react";
+import {useCallback, useEffect, useState} from "react";
 import {API_BASE_URL} from "../api";
+import {CALENDAR_ATTACHMENT_TYPE} from "../dragTypes";
 
 interface CalendarEvent {
     id: string;
@@ -19,7 +20,6 @@ interface CalendarAttachment {
     url: string;
 }
 
-export const CALENDAR_ATTACHMENT_TYPE = "application/x-folderrocket-calendar-attachments";
 
 interface GoogleCalendarSourcePanelProps {
     alertBlockId: string;
@@ -104,7 +104,7 @@ export default function GoogleCalendarSourcePanel({alertBlockId, weekStart, onWe
     const activeWeekStart = readWeekStart(weekStart);
     const activeWeekKey = dateKey(activeWeekStart);
     const [selectedDayKey, setSelectedDayKey] = useState(activeWeekKey);
-    const calendarUrl = (endpoint: string) => `${API_BASE_URL}/calendar/google${endpoint}${endpoint.includes("?") ? "&" : "?"}blockId=${encodeURIComponent(alertBlockId)}`;
+    const calendarUrl = useCallback((endpoint: string) => `${API_BASE_URL}/calendar/google${endpoint}${endpoint.includes("?") ? "&" : "?"}blockId=${encodeURIComponent(alertBlockId)}`, [alertBlockId]);
     const calendarAuthUrl = (endpoint: string) => `${API_BASE_URL}/auth/calendar${endpoint}?blockId=${encodeURIComponent(alertBlockId)}`;
     const weekDays = Array.from({length: 7}, (_, index) => {
         const date = new Date(activeWeekStart);
@@ -130,7 +130,7 @@ export default function GoogleCalendarSourcePanel({alertBlockId, weekStart, onWe
         window.addEventListener("focus", refreshStatus);
         const interval = window.setInterval(refreshStatus, authorizationPending ? 1_500 : 15_000);
         return () => { active = false; window.removeEventListener("focus", refreshStatus); window.clearInterval(interval); };
-    }, [alertBlockId, authorizationPending]);
+    }, [authorizationPending, calendarUrl]);
 
     useEffect(() => {
         const unsubscribe = window.folderRocketDesktop?.onOAuthComplete(provider => {
@@ -139,13 +139,25 @@ export default function GoogleCalendarSourcePanel({alertBlockId, weekStart, onWe
         return () => unsubscribe?.();
     }, []);
 
-    useEffect(() => {
-        if (connected) void refresh();
-    }, [connected, activeWeekKey]);
+    async function refresh(selectedWeekStart?: Date) {
+        if (!connected) return;
+        const targetWeekStart = selectedWeekStart ?? readWeekStart(activeWeekKey);
+        setLoading(true); setError("");
+        try {
+            const response = await fetch(`${calendarUrl("/events")}&days=7&view=week&weekStart=${encodeURIComponent(dateKey(targetWeekStart))}`, {credentials: "include"});
+            const data = await response.json().catch(() => ({})) as {events?: CalendarEvent[]; message?: string};
+            if (!response.ok) throw new Error(data.message || "Unable to read Google Calendar.");
+            setEvents(Array.isArray(data.events) ? data.events : []);
+        } catch (reason) {
+            setError(reason instanceof Error ? reason.message : "Unable to read Google Calendar.");
+        } finally { setLoading(false); }
+    }
 
     useEffect(() => {
-        setSelectedDayKey(activeWeekKey);
-    }, [activeWeekKey]);
+        if (!connected) return;
+        const timer = window.setTimeout(() => void refresh(), 0);
+        return () => window.clearTimeout(timer);
+    }, [connected, activeWeekKey]);
 
     useEffect(() => {
         const detail = {
@@ -168,24 +180,10 @@ export default function GoogleCalendarSourcePanel({alertBlockId, weekStart, onWe
         return () => document.removeEventListener("pointerdown", closeConnectionOptions);
     }, []);
 
-    async function refresh(selectedWeekStart = activeWeekStart) {
-        if (!connected) return;
-        setLoading(true); setError("");
-        try {
-            const response = await fetch(`${calendarUrl("/events")}&days=7&view=week&weekStart=${encodeURIComponent(dateKey(selectedWeekStart))}`, {credentials: "include"});
-            const data = await response.json().catch(() => ({})) as {events?: CalendarEvent[]; message?: string};
-            if (!response.ok) throw new Error(data.message || "Unable to read Google Calendar.");
-            setEvents(Array.isArray(data.events) ? data.events : []);
-        } catch (reason) {
-            setError(reason instanceof Error ? reason.message : "Unable to read Google Calendar.");
-        } finally { setLoading(false); }
-    }
-
     function moveWeek(direction: -1 | 1) {
         const next = new Date(activeWeekStart);
         next.setDate(next.getDate() + direction * 7);
         onWeekStartChange(dateKey(next));
-        void refresh(next);
     }
 
     function startAttachmentDrag(event: React.DragEvent<HTMLElement>, attachment: CalendarAttachment) {

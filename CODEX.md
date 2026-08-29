@@ -58,7 +58,10 @@ VibingApp/
 │   └── uploads/
 ├── src/
 │   ├── assets/
-│   │   └── folderrocket-logo.png
+│   │   ├── folderrocket-mark.png
+│   │   ├── folderrocket-wordmark.png
+│   │   ├── folderrocket-login-logo.png
+│   │   └── folderrocket-space-login.png
 │   ├── components/
 │   │   ├── FileDropZone.tsx
 │   │   └── FireMountain.tsx

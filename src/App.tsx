@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
+import {lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode} from "react";
 import {ChevronLeft, ChevronRight, GripHorizontal, Home, Plus, RotateCcw} from "lucide-react";
 import {AccountMenu, type FolderRocketUser} from "./components/AuthGate";
 import {API_BASE_URL} from "./api";
@@ -9,16 +9,18 @@ import GmailSourcePanel from "./components/GmailSourcePanel";
 import OutlookSourcePanel from "./components/OutlookSourcePanel";
 import {type DashboardSourceBlockData, type DashboardSourceType} from "./components/DashboardSourceBlock";
 import DashboardSourceColumn from "./components/DashboardSourceColumn";
-import DomainSourcePanel from "./components/DomainSourcePanel";
-import ScreenCaptureSourcePanel from "./components/ScreenCaptureSourcePanel";
-import GoogleCalendarSourcePanel from "./components/GoogleCalendarSourcePanel";
-import UsbSourcePanel, {type UsbDrive} from "./components/UsbSourcePanel";
+import type {UsbDrive} from "./components/UsbSourcePanel";
 import SearchSourcePanel from "./components/SearchSourcePanel";
 import ProcessingWorkspace from "./components/ProcessingWorkspace";
 import CargoShip from "./components/CargoShip";
 import IntegrationSetup from "./components/IntegrationSetup";
 import StickyNotes from "./components/StickyNotes";
 import folderRocketWordmark from "./assets/folderrocket-wordmark.png";
+
+const DomainSourcePanel = lazy(() => import("./components/DomainSourcePanel"));
+const ScreenCaptureSourcePanel = lazy(() => import("./components/ScreenCaptureSourcePanel"));
+const GoogleCalendarSourcePanel = lazy(() => import("./components/GoogleCalendarSourcePanel"));
+const UsbSourcePanel = lazy(() => import("./components/UsbSourcePanel"));
 
 type Folder = ManagedFolder;
 interface DashboardWidths { left: number; center: number; right: number; }
@@ -361,12 +363,13 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
         setSearchFolderIds(current => current.some(id => availableIds.includes(id)) ? [] : availableIds);
     }
     function renderSourceBlock(column: "left" | "right", block: DashboardSourceBlockData) {
+        const deferred = (content: ReactNode) => <Suspense fallback={<p className="sourceLoading">Loading…</p>}>{content}</Suspense>;
         if (block.type === "gmail") return <GmailSourcePanel storageScope={`${user.id}-${block.id}`} alertBlockId={block.id} aiEnabled={aiEnabled} />;
         if (block.type === "outlook") return <OutlookSourcePanel storageScope={`${user.id}-${block.id}`} alertBlockId={block.id} aiEnabled={aiEnabled} />;
-        if (block.type === "calendar") return <GoogleCalendarSourcePanel alertBlockId={block.id} weekStart={block.calendarWeekStart} onWeekStartChange={calendarWeekStart => updateSourceBlock(column, block.id, {calendarWeekStart})} />;
-        if (block.type === "usb") return <UsbSourcePanel onUseDrive={useUsbDriveAsFolder} />;
-        if (block.type === "domain") return <DomainSourcePanel url={block.url} onUrlChange={url => updateSourceBlock(column, block.id, {url})} aiEnabled={aiEnabled} />;
-        if (block.type === "screen") return <ScreenCaptureSourcePanel crop={block.crop} onCropChange={crop => updateSourceBlock(column, block.id, {crop})} aiEnabled={aiEnabled} />;
+        if (block.type === "calendar") return deferred(<GoogleCalendarSourcePanel alertBlockId={block.id} weekStart={block.calendarWeekStart} onWeekStartChange={calendarWeekStart => updateSourceBlock(column, block.id, {calendarWeekStart})} />);
+        if (block.type === "usb") return deferred(<UsbSourcePanel onUseDrive={useUsbDriveAsFolder} />);
+        if (block.type === "domain") return deferred(<DomainSourcePanel url={block.url} onUrlChange={url => updateSourceBlock(column, block.id, {url})} aiEnabled={aiEnabled} />);
+        if (block.type === "screen") return deferred(<ScreenCaptureSourcePanel crop={block.crop} onCropChange={crop => updateSourceBlock(column, block.id, {crop})} aiEnabled={aiEnabled} />);
         return <SearchSourcePanel aiEnabled={aiEnabled} folders={folders.filter(folder => Boolean(folder.path) && searchFolderIds.includes(folder.id)).map(folder => ({name: folder.name, path: folder.path}))} selectedFolderCount={folders.filter(folder => Boolean(folder.path) && searchFolderIds.includes(folder.id)).length} onToggleFolders={toggleAllSearchFolders} onResultsChange={hasResults => { if (!hasResults) updateColumnBlocks(column, current => current.map(item => item.id === block.id && item.height !== 108 ? {...item, height: 108} : item)); }} />;
     }
     const dashboardStyle = (dashboardWidths || dashboardHeight) ? {

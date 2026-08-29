@@ -23,7 +23,7 @@ import {browserBridgeDropId, resolveBrowserBridgeDrop} from "../browserBridge";
 import { EMAIL_ATTACHMENT_TYPE } from "./GmailSourcePanel";
 import { OUTLOOK_ATTACHMENT_TYPE } from "./OutlookSourcePanel";
 import { SEARCH_RESULT_TYPE } from "./SearchWorkspace";
-import { CALENDAR_ATTACHMENT_TYPE } from "./GoogleCalendarSourcePanel";
+import {CALENDAR_ATTACHMENT_TYPE} from "../dragTypes";
 
 
 interface Props {
@@ -151,15 +151,8 @@ function FileDropZone({
     // ==================================================
 
     // Percorso della cartella di destinazione
-    const [path, setPath] =
-        useState(pathValue ?? "");
-
-    useEffect(
-        () => {
-            setPath(pathValue ?? "");
-        },
-        [pathValue]
-    );
+    const [internalPath, setInternalPath] = useState("");
+    const path = pathValue ?? internalPath;
 
 
     // File trascinati e pronti per l'upload
@@ -2627,7 +2620,7 @@ function FileDropZone({
                     const normalizedPath = value.length >= 2 && value.startsWith('"') && value.endsWith('"')
                         ? value.slice(1, -1).trim()
                         : event.target.value;
-                    setPath(normalizedPath);
+                    setInternalPath(normalizedPath);
                     onPathChange?.(normalizedPath);
                 }}
 

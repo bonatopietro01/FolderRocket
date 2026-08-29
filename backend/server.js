@@ -6,32 +6,19 @@ const path = require("path");
 const os = require("os");
 const crypto = require("crypto");
 const {execFile, spawn} = require("child_process");
-const XLSX = require("xlsx");
+let xlsxModule;
+let readFileContentModule;
+let analyzeDocumentModule;
+let saveFileInfoModule;
+let checkFolderDeadlinesModule;
+let syncArchiveModule;
 
-
-// Lettura contenuto dei file
-const readFileContent =
-    require("./ai/reader");
-
-
-// Analisi generale del documento
-const analyzeDocument =
-    require("./ai/analyzer");
-
-
-// Gestione archivio Excel
-const saveFileInfo =
-    require("./database/excelManager");
-
-
-// Servizio dedicato al controllo scadenze
-const {
-    checkFolderDeadlines
-} = require("./services/deadlineService");
-
-const {
-    syncArchive
-} = require("./services/archiveService");
+function getXlsx() { return xlsxModule ??= require("xlsx"); }
+function readFileContent(...args) { return (readFileContentModule ??= require("./ai/reader"))(...args); }
+function analyzeDocument(...args) { return (analyzeDocumentModule ??= require("./ai/analyzer"))(...args); }
+function saveFileInfo(...args) { return (saveFileInfoModule ??= require("./database/excelManager"))(...args); }
+function checkFolderDeadlines(...args) { return (checkFolderDeadlinesModule ??= require("./services/deadlineService").checkFolderDeadlines)(...args); }
+function syncArchive(...args) { return (syncArchiveModule ??= require("./services/archiveService").syncArchive)(...args); }
 
 const {moveToTrash} = require("./services/trashService");
 const {searchFiles} = require("./services/searchService");
@@ -1857,9 +1844,11 @@ app.post("/convert-files", async (req, res) => {
                 if (!content || content === "Formato non supportato") throw new Error(`${path.basename(sourcePath)} non può essere convertito in TXT`);
                 fs.writeFileSync(targetPath, content, "utf8");
             } else if (targetFormat === "csv" && sourceExtension === ".xlsx") {
+                const XLSX = getXlsx();
                 const workbook = XLSX.readFile(sourcePath);
                 fs.writeFileSync(targetPath, XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]), "utf8");
             } else if (targetFormat === "xlsx" && sourceExtension === ".csv") {
+                const XLSX = getXlsx();
                 const workbook = XLSX.readFile(sourcePath, {type: "file"});
                 XLSX.writeFile(workbook, targetPath);
             } else throw new Error(`${path.basename(sourcePath)} non supporta la conversione selezionata`);
