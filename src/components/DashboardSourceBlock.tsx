@@ -1,7 +1,7 @@
 import {ChevronDown, ChevronUp, GripHorizontal, Minus, X} from "lucide-react";
 import {useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode} from "react";
 
-export type DashboardSourceType = "gmail" | "outlook" | "calendar" | "usb" | "domain" | "screen" | "search";
+export type DashboardSourceType = "gmail" | "outlook" | "calendar" | "usb" | "domain" | "screen" | "search" | "recent" | "phone";
 
 export interface ScreenCaptureCrop { x: number; y: number; width: number; height: number; }
 
@@ -10,6 +10,9 @@ export interface DashboardSourceBlockData {
     type: DashboardSourceType;
     height: number;
     url?: string;
+    recentHours?: number;
+    recentPaths?: string;
+    phoneHours?: number;
     calendarId?: string;
     calendarDays?: number;
     calendarView?: "week" | "upcoming";

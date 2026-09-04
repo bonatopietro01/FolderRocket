@@ -4,7 +4,7 @@ import {API_BASE_URL} from "../api";
 import type {ManagedFolder} from "./FolderManagement";
 
 type NoteColor = "yellow" | "orange" | "red" | "purple" | "blue" | "green";
-interface StickyNote {id: string; color: NoteColor; text: string; relatedFiles?: string[]; x: number; y: number; width: number; height: number; hidden?: boolean; autoHeight?: boolean; ai?: boolean; aiPrompt?: string; aiResponse?: string; aiWorking?: boolean; reminder?: boolean; reminderAt?: string; reminderFired?: boolean;}
+interface StickyNote {id:string;color:NoteColor;title?:string;text:string;relatedFiles?:string[];x:number;y:number;width:number;height:number;hidden?:boolean;autoHeight?:boolean;ai?:boolean;aiPrompt?:string;aiResponse?:string;aiWorking?:boolean;reminder?:boolean;reminderAt?:string;reminderFired?:boolean;}
 interface CalendarContextEvent {title?: string; start?: string; end?: string; location?: string; attachments?: string[];}
 const colors: NoteColor[] = ["yellow", "purple", "blue", "green"];
 
@@ -19,7 +19,7 @@ function readNotes(scope: string): StickyNote[] {
     } catch { return []; }
 }
 function createNote(index: number, color: NoteColor, text = "", relatedFiles: string[] = []): StickyNote {
-    return {id: crypto.randomUUID(), color, text, relatedFiles, autoHeight: true, ...defaultNoteLayout(index)};
+    return {id:crypto.randomUUID(),color,title:'',text,relatedFiles,autoHeight:true,...defaultNoteLayout(index)};
 }
 
 function FloatingStickyNote({note, deleteArmed, floatingScale, displayPosition, onChange, onDelete, onHide, onAskAI}: {note: StickyNote; deleteArmed: boolean; floatingScale: number; displayPosition?: {x: number; y: number}; onChange: (change: Partial<StickyNote>) => void; onDelete: () => void; onHide: () => void; onAskAI: () => void}) {
@@ -61,15 +61,14 @@ function FloatingStickyNote({note, deleteArmed, floatingScale, displayPosition, 
     const aiComment = note.aiWorking || note.aiResponse?.startsWith("Unable") === true;
     return <article ref={noteRef} className={`floatingStickyNote ${note.color}${note.ai ? " aiStickyNote" : ""}`} style={{left: displayPosition?.x ?? note.x, top: displayPosition?.y ?? note.y, width: note.width, height: note.height, transform: `scale(${displayScale})`, transformOrigin: "top left"}}>
         <div className="stickyNoteTop" onPointerDown={beginMove} title="Drag this post-it"><button type="button" className="stickyNoteHide" onClick={onHide} title="Hide as a bookmark"><PanelLeftClose size={18}/></button>{note.ai ? <span /> : <div className="stickyNoteColors">{colors.map(color => <button key={color} type="button" className={color === note.color ? "active" : ""} onClick={() => onChange({color})} aria-label={`Use ${color} note`} />)}</div>}<button type="button" className={`stickyNoteDelete${deleteArmed ? " confirm" : ""}`} onClick={onDelete} title={deleteArmed ? "Press again to delete" : "Delete note"}><Trash2 size={18}/></button></div>
+        {!note.ai&&<input className="stickyNoteTitle" value={note.title??''} maxLength={80} onChange={event=>onChange({title:event.target.value})} placeholder="Post-it title" aria-label="Post-it title"/>}
         {note.ai ? <><textarea ref={textAreaRef} value={note.aiPrompt ?? ""} maxLength={400} onChange={event => onChange({aiPrompt: event.target.value, aiResponse: ""})} onKeyDown={event => { if ((event.ctrlKey || event.metaKey) && event.key === "Enter") { event.preventDefault(); onAskAI(); } }} placeholder="Quick request (one sentence)…" /><button type="button" className="stickyAiAsk" onClick={onAskAI} disabled={note.aiWorking || !(note.aiPrompt ?? "").trim()}>{note.aiWorking ? <LoaderCircle className="spinning" size={13}/> : <Sparkles size={13}/>} {note.aiWorking ? "Reading…" : "Quick AI"}</button>{aiMessage && <div className={`stickyAiResponse${aiComment ? " comment" : ""}${note.aiResponse?.startsWith("Unable") ? " error" : ""}`}>{aiMessage}</div>}</> : <textarea ref={textAreaRef} value={note.text} onChange={event => updateText(event.target.value)} placeholder="Write a note…" />}
         {note.reminder && <label className="stickyReminderTime"><span>Reminder</span><input type="datetime-local" value={note.reminderAt ?? ""} onChange={event => onChange({reminderAt: event.target.value, reminderFired: false})}/></label>}{note.relatedFiles?.length ? <small>{note.relatedFiles.join(" · ")}</small> : null}<button type="button" className="stickyNoteResize" onPointerDown={beginResize} title="Drag to resize this post-it" aria-label="Resize this post-it" />
     </article>;
 }
 
 function StickyBookmark({note, index, scale, onOpen}: {note: StickyNote; index: number; scale: number; onOpen: () => void}) {
-    const trimmed = note.text.trim();
-    const title = trimmed.includes("\n\n") ? trimmed.split("\n\n", 1)[0].trim() : "";
-    const label = title || trimmed.split(/\s+/).slice(0, 3).join(" ") || "Empty";
+    const trimmed=note.text.trim();const label=note.title?.trim()||trimmed.split(/\s+/).slice(0,3).join(' ')||'Empty';
     return <button type="button" className={`floatingStickyBookmark ${note.color}`} style={{left: 0, top: 132 + index * 35 * scale, transform: `scale(${scale})`, transformOrigin: "left top"}} onClick={onOpen} title={`Show post-it: ${label}`} aria-label={`Show hidden post-it: ${label}`}><span>{label}</span></button>;
 }
 

@@ -1,5 +1,5 @@
 import {CalendarDays, Check, CircleAlert, Eye, EyeOff, KeyRound, Mail, Save, Sparkles, X} from "lucide-react";
-import {useEffect, useRef, useState} from "react";
+import {useCallback, useEffect, useRef, useState} from "react";
 import {API_BASE_URL} from "../api";
 
 interface IntegrationStatus {
@@ -43,11 +43,13 @@ export default function IntegrationSetup({isAdmin, onAIStatusChange, aiMode, onA
     const [message, setMessage] = useState("");
     const [browserBridgeCode, setBrowserBridgeCode] = useState("");
 
-    async function loadStatus() {
+    const loadStatus = useCallback(async () => {
         if (!isAdmin) return;
         setLoading(true);
+        const controller = new AbortController();
+        const timeout = window.setTimeout(() => controller.abort(), 8000);
         try {
-            const response = await fetch(`${API_BASE_URL}/desktop/integrations/status`, {credentials: "include"});
+            const response = await fetch(`${API_BASE_URL}/desktop/integrations/status`, {credentials: "include", signal:controller.signal});
             const data = await response.json().catch(() => ({})) as IntegrationStatus & {message?: string};
             if (!response.ok) throw new Error(data.message || "Unable to read integration status.");
             setStatus(data);
@@ -56,9 +58,12 @@ export default function IntegrationSetup({isAdmin, onAIStatusChange, aiMode, onA
         } catch (error) {
             setMessage(error instanceof Error ? error.message : "Unable to read integration status.");
         } finally {
+            window.clearTimeout(timeout);
             setLoading(false);
         }
-    }
+    }, [isAdmin, onAIStatusChange]);
+
+    useEffect(() => { if (!isAdmin) return; const timer=window.setTimeout(()=>void loadStatus(),0); return()=>window.clearTimeout(timer); }, [isAdmin, loadStatus]);
 
     useEffect(() => {
         if (!open) return;

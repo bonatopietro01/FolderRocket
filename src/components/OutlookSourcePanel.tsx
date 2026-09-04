@@ -1,3 +1,4 @@
+import {additionalFileIcon} from './AdditionalFileIcons';
 import {useCallback, useEffect, useMemo, useState} from "react";
 import {Archive, BellRing, ExternalLink, File, FileSpreadsheet, FileText, Image, Mail, MessageSquareText, RefreshCw} from "lucide-react";
 import {API_BASE_URL} from "../api";
@@ -21,11 +22,14 @@ function readResults(scope: string): OutlookWarningResult[] { try { const value 
 function formatSize(bytes: number) { return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`; }
 function formatReceivedAt(value: string) { const date = new Date(value); return Number.isNaN(date.getTime()) ? "" : date.toLocaleDateString("en-GB", {day: "2-digit", month: "short"}); }
 function mergeAttachments(current: OutlookAttachment[], incoming: OutlookAttachment[]) { const merged = new Map(current.map(item => [`${item.messageId}:${item.attachmentId}`, item])); for (const item of incoming) merged.set(`${item.messageId}:${item.attachmentId}`, item); return [...merged.values()].sort((a, b) => new Date(b.receivedAt).getTime() - new Date(a.receivedAt).getTime()); }
-function FileKindIcon({name}: {name: string}) { const extension = name.split(".").pop()?.toLowerCase() ?? ""; if (extension === "pdf") return <span className="fileKindIcon pdf"><FileText size={14} /></span>; if (["doc", "docx", "odt"].includes(extension)) return <span className="fileKindIcon word"><FileText size={14} /></span>; if (["xls", "xlsx", "csv", "ods"].includes(extension)) return <span className="fileKindIcon excel"><FileSpreadsheet size={14} /></span>; if (["txt", "md", "rtf", "log"].includes(extension)) return <span className="fileKindIcon txt"><FileText size={14} /></span>; if (["png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff", "svg", "heic"].includes(extension)) return <span className="fileKindIcon image"><Image size={14} /></span>; if (["zip", "rar", "7z", "tar", "gz", "bz2"].includes(extension)) return <span className="fileKindIcon archive"><Archive size={14} /></span>; return <span className="fileKindIcon generic"><File size={14} /></span>; }
+function FileKindIcon({name}: {name: string}) { const extension = name.split(".").pop()?.toLowerCase() ?? "";
+    const additional = additionalFileIcon(extension, 14);
+    if (additional) return additional;
+    if (["ppt", "pptx", "pptm", "pps", "ppsx", "ppsm", "pot", "potx", "potm", "odp"].includes(extension)) return <span className="fileKindIcon powerpoint" title="PowerPoint presentation" aria-label="PowerPoint"><b>P</b></span>; if (extension === "pdf") return <span className="fileKindIcon pdf"><FileText size={14} /></span>; if (["doc", "docx", "odt"].includes(extension)) return <span className="fileKindIcon word"><FileText size={14} /></span>; if (["xls", "xlsx", "csv", "ods"].includes(extension)) return <span className="fileKindIcon excel"><FileSpreadsheet size={14} /></span>; if (["txt", "md", "rtf", "log"].includes(extension)) return <span className="fileKindIcon txt"><FileText size={14} /></span>; if (["png", "jpg", "jpeg", "gif", "webp", "bmp", "tif", "tiff", "svg", "heic"].includes(extension)) return <span className="fileKindIcon image"><Image size={14} /></span>; if (["zip", "rar", "7z", "tar", "gz", "bz2"].includes(extension)) return <span className="fileKindIcon archive"><Archive size={14} /></span>; return <span className="fileKindIcon generic"><File size={14} /></span>; }
 
 function OutlookSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {storageScope: string; alertBlockId: string; aiEnabled?: boolean}) {
     const alertSettingsUrl = `${API_BASE_URL}/email/alerts/settings/outlook?blockId=${encodeURIComponent(alertBlockId)}`;
-    const outlookUrl = (endpoint: string) => `${API_BASE_URL}/email/outlook${endpoint}${endpoint.includes("?") ? "&" : "?"}blockId=${encodeURIComponent(alertBlockId)}`;
+    const outlookUrl = useCallback((endpoint: string) => `${API_BASE_URL}/email/outlook${endpoint}${endpoint.includes("?") ? "&" : "?"}blockId=${encodeURIComponent(alertBlockId)}`, [alertBlockId]);
     const outlookAuthUrl = (endpoint: string) => `${API_BASE_URL}/auth/outlook${endpoint}?blockId=${encodeURIComponent(alertBlockId)}`;
     const [connected, setConnected] = useState(false);
     const [attachments, setAttachments] = useState<OutlookAttachment[]>([]);
@@ -80,7 +84,7 @@ function OutlookSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {st
             seenByMessage.set(item.attachment.messageId, seen);
             return {...item, messageGroup: seen === 1 ? "start" as const : seen === total ? "end" as const : "middle" as const};
         });
-    }, [colorByMessage, results, visibleAttachments]);
+    }, [colorByMessage, results, visibleAttachments, rulesById]);
     const previewRule = rulesById.get(previewRuleId ?? "");
     const previewMessages = results.find(result => result.ruleId === previewRuleId)?.messages ?? [];
 
@@ -114,7 +118,7 @@ function OutlookSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {st
             localStorage.setItem(storageKey(SEEN_KEY, storageScope), JSON.stringify(nextSeen));
         } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to check Outlook alerts"); }
         finally { setChecking(false); }
-    }, [aiEnabled, connected, rules, storageScope]);
+    }, [aiEnabled, connected, rules, storageScope, outlookUrl]);
 
     const refresh = useCallback(async () => {
         if (!connected) return;
@@ -129,7 +133,7 @@ function OutlookSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {st
             void checkRules();
         } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to refresh Outlook"); }
         finally { setLoading(false); }
-    }, [attachmentReader, checkRules, connected]);
+    }, [attachmentReader, checkRules, connected, outlookUrl]);
 
     useEffect(() => {
         let active = true;
@@ -142,11 +146,17 @@ function OutlookSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {st
         refreshConnection();
         window.addEventListener("focus", refreshConnection);
         return () => { active = false; window.removeEventListener("focus", refreshConnection); };
-    }, [alertBlockId]);
-    useEffect(() => { let active = true; void loadAlertSettings(true).finally(() => { if (active) setSettingsReady(true); }); return () => { active = false; }; }, [loadAlertSettings]);
+    }, [outlookUrl]);
+    useEffect(() => {
+        let active = true;
+        const timer = window.setTimeout(() => {
+            void loadAlertSettings(true).then(() => { if (active) setSettingsReady(true); }).catch(() => { if (active) setError("Unable to load Outlook alert settings."); });
+        }, 0);
+        return () => { active = false; window.clearTimeout(timer); };
+    }, [loadAlertSettings]);
     useEffect(() => { if (!settingsReady) return; const timer = window.setTimeout(() => { void fetch(alertSettingsUrl, {method: "PUT", headers: {"Content-Type": "application/json"}, credentials: "include", body: JSON.stringify({providerSettings: {attachmentReader, rules}, favorites})}); }, 350); return () => window.clearTimeout(timer); }, [alertSettingsUrl, attachmentReader, favorites, rules, settingsReady]);
-    useEffect(() => { if (!liveReading || !connected) return; void refresh(); const timer = window.setInterval(() => void refresh(), 60_000); return () => window.clearInterval(timer); }, [connected, liveReading, refresh]);
-    useEffect(() => { if (!connected) return; const timer = window.setInterval(() => void loadAlertSettings(false), 60_000); return () => window.clearInterval(timer); }, [connected, loadAlertSettings]);
+    useEffect(() => { if (!liveReading || !connected) return; const initial = window.setTimeout(() => void refresh(), 0); const timer = window.setInterval(() => void refresh(), 60_000); return () => { window.clearTimeout(initial); window.clearInterval(timer); }; }, [connected, liveReading, refresh]);
+    useEffect(() => { if (!connected) return; const timer = window.setInterval(() => void loadAlertSettings(false).catch(() => setError("Unable to refresh Outlook alert settings.")), 60_000); return () => window.clearInterval(timer); }, [connected, loadAlertSettings]);
     useEffect(() => { const onOutside = (event: MouseEvent) => { const target = event.target as Element; if (!target.closest(".outlookSourceCard")) setSelectedIds([]); if (!target.closest(".gmailWarningsMenu") && !target.closest(".gmailWarningToggle")) setShowAlerts(false); if (!target.closest(".emailReaderHeaderControl")) setShowSettings(false); if (!target.closest(".emailConnectionControls")) { setShowDisconnect(false); setDisconnectArmed(false); } }; document.addEventListener("pointerdown", onOutside); return () => document.removeEventListener("pointerdown", onOutside); }, []);
     useEffect(() => { const refreshFromSplitButton = (event: MouseEvent) => { if (!(event.target as Element).closest(".emailReaderHeaderButton svg")) return; event.preventDefault(); event.stopPropagation(); if (attachmentReader.enabled && !loading) void refresh(); }; document.addEventListener("click", refreshFromSplitButton, true); return () => document.removeEventListener("click", refreshFromSplitButton, true); }, [attachmentReader.enabled, loading, refresh]);
     useEffect(() => { const syncFavorites = (event: Event) => { const favorites = (event as CustomEvent<EmailAlertRule[]>).detail; if (Array.isArray(favorites)) setFavorites(favorites); }; window.addEventListener("folderrocket-email-alert-favorites", syncFavorites); return () => window.removeEventListener("folderrocket-email-alert-favorites", syncFavorites); }, []);

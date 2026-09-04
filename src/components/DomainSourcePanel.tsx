@@ -1,6 +1,7 @@
 import {Download, ExternalLink, FileDown, Globe2, LoaderCircle, RefreshCw, Search, X} from "lucide-react";
 import {useEffect, useState} from "react";
 import {API_BASE_URL} from "../api";
+import {recordDailyActivity} from "../dailyActivity";
 
 function normalizeHttpUrl(value: string) {
     const trimmed = value.trim();
@@ -40,15 +41,8 @@ export default function DomainSourcePanel({title = "Domain", url = "", onUrlChan
     const [downloadsLoading, setDownloadsLoading] = useState(false);
     const [downloadsError, setDownloadsError] = useState("");
     const [savingDownloadUrl, setSavingDownloadUrl] = useState("");
-
-    useEffect(() => {
-        setDraft(url);
-        setLoadedUrl(url);
-        setDownloads([]);
-        setDownloadsUrl("");
-        setShowDownloads(false);
-        setDownloadsError("");
-    }, [url]);
+    const [preview,setPreview]=useState<{title:string;text:string}|null>(null);
+    const [previewLoading,setPreviewLoading]=useState(false),[previewError,setPreviewError]=useState("");
 
     useEffect(() => {
         const closeDownloads = (event: MouseEvent) => {
@@ -58,6 +52,15 @@ export default function DomainSourcePanel({title = "Domain", url = "", onUrlChan
         document.addEventListener("pointerdown", closeDownloads);
         return () => document.removeEventListener("pointerdown", closeDownloads);
     }, []);
+
+    async function loadPreview(address:string) {
+        setPreviewLoading(true);setPreviewError("");setPreview(null);
+        try {const response=await fetch(`${API_BASE_URL}/domain/preview`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({url:address})});const data=await response.json().catch(()=>({})) as {title?:string;text?:string;message?:string};if(!response.ok)throw new Error(data.message||"Unable to read this page.");setPreview({title:data.title||new URL(address).hostname,text:data.text||""});}
+        catch(reason){setPreviewError(reason instanceof Error?reason.message:"Unable to read this page.");}
+        finally{setPreviewLoading(false);}
+    }
+
+    useEffect(()=>{let active=true;queueMicrotask(()=>{if(active&&loadedUrl)void loadPreview(loadedUrl);});return()=>{active=false;};},[loadedUrl]);
 
     function loadDomain() {
         const normalized = normalizeHttpUrl(draft);
@@ -75,6 +78,7 @@ export default function DomainSourcePanel({title = "Domain", url = "", onUrlChan
         setShowDownloads(false);
         setDownloadsError("");
         onUrlChange(normalized);
+        recordDailyActivity({kind:"domain",summary:`Viewed ${new URL(normalized).hostname}`,destination:normalized});
     }
 
     function openOutside() {
@@ -163,6 +167,7 @@ export default function DomainSourcePanel({title = "Domain", url = "", onUrlChan
             if (window.folderRocketDesktop?.saveDownload) {
                 const result = await window.folderRocketDesktop.saveDownload({suggestedName, bytes: new Uint8Array(await content.arrayBuffer())});
                 if (!result.saved && !result.canceled) throw new Error(result.message || "Unable to save this file.");
+                if(result.saved)recordDailyActivity({kind:"domain",summary:`Downloaded ${suggestedName}`,files:[suggestedName],destination:result.path});
             } else {
                 const temporaryUrl = URL.createObjectURL(content);
                 const link = document.createElement("a");
@@ -199,7 +204,7 @@ export default function DomainSourcePanel({title = "Domain", url = "", onUrlChan
         </div>
         {error && <p className="domainError">{error}</p>}
         {loadedUrl ? <>
-            <div className="domainFrameWrap"><div className="domainZoomViewport"><iframe key={loadedUrl} src={loadedUrl} title={`Embedded ${title}`} /></div><p className="domainEmbedHelp">If this area stays blank, the website blocks embedded pages. Use ↗ to open it externally.</p></div>
+            <div className="domainFrameWrap"><div className="domainZoomViewport"><iframe key={loadedUrl} src={loadedUrl} title={`Embedded ${title}`} />{(previewLoading||preview||previewError)&&<aside className="domainReadablePreview"><header><strong>{previewLoading?"Reading public page…":preview?.title||"Page preview"}</strong>{previewLoading&&<LoaderCircle className="spinning" size={13}/>}</header>{preview&&<p>{preview.text}</p>}{previewError&&<p className="error">{previewError}</p>}</aside>}</div><p className="domainEmbedHelp">If the website blocks embedded pages, use the readable preview or ↗ to open it externally.</p></div>
             <div className="domainAiPanel domainUtilityPanel">
                 <div className="domainAiControls">
                     <span className="domainDownloadsWrap">

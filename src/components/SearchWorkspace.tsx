@@ -1,14 +1,18 @@
+import {additionalFileIcon} from './AdditionalFileIcons';
 import { useEffect, useState } from "react";
 import { Archive, File, FileSpreadsheet, FileText, Flame, Image, Send, Search, ExternalLink, ListChecks, X } from "lucide-react";
 import { API_BASE_URL } from "../api";
 
 interface FolderSource { name: string; path: string; }
-interface Props { folders: FolderSource[]; selectedFolderCount: number; onToggleFolders: () => void; aiEnabled: boolean; compact?: boolean; onResultsChange?: (hasResults: boolean) => void; }
+interface Props { folders: FolderSource[]; selectedFolderCount: number; onToggleFolders?: () => void; automaticFolders?: boolean; aiEnabled: boolean; compact?: boolean; onResultsChange?: (hasResults: boolean) => void; }
 interface Result { name: string; path: string; matches: string[]; size?: number; }
 export const SEARCH_RESULT_TYPE = "application/x-folderrocket-search-results";
 
 function FileKindIcon({name}: {name: string}) {
     const extension = name.split(".").pop()?.toLowerCase() ?? "";
+    const additional = additionalFileIcon(extension, 14);
+    if (additional) return additional;
+    if (["ppt", "pptx", "pptm", "pps", "ppsx", "ppsm", "pot", "potx", "potm", "odp"].includes(extension)) return <span className="fileKindIcon powerpoint" title="PowerPoint presentation" aria-label="PowerPoint"><b>P</b></span>;
     if (extension === "pdf") return <span className="fileKindIcon pdf"><FileText size={14} /></span>;
     if (["doc", "docx", "odt"].includes(extension)) return <span className="fileKindIcon word"><FileText size={14} /></span>;
     if (["xls", "xlsx", "csv", "ods"].includes(extension)) return <span className="fileKindIcon excel"><FileSpreadsheet size={14} /></span>;
@@ -23,7 +27,7 @@ function formatSize(bytes?: number) {
     return bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export default function SearchWorkspace({folders, selectedFolderCount, onToggleFolders, aiEnabled, compact = false, onResultsChange}: Props) {
+export default function SearchWorkspace({folders, selectedFolderCount, onToggleFolders, automaticFolders = false, aiEnabled, compact = false, onResultsChange}: Props) {
     const [query, setQuery] = useState("");
     const [messages, setMessages] = useState<string[]>([]);
     const [results, setResults] = useState<Result[]>([]);
@@ -106,7 +110,7 @@ export default function SearchWorkspace({folders, selectedFolderCount, onToggleF
     function selectOrOpenResult(result: Result) { toggleResultSelection(result.path); }
 
     const searchHeader = <>
-            <div className="resultsHeader"><Search size={compact ? 15 : 20} /><span>{compact ? aiEnabled ? "AI search" : "Search" : aiEnabled ? "AI Search Assistant" : "Search Assistant"}</span><button type="button" className={selectedFolderCount ? "searchFolderToggle selected" : "searchFolderToggle"} onClick={onToggleFolders} title={selectedFolderCount ? "Deselect all folders" : "Select all folders"}><ListChecks size={compact ? 14 : 17} /></button></div>
+            <div className="resultsHeader"><Search size={compact ? 15 : 20} /><span>{compact ? aiEnabled ? "AI search" : "Search" : aiEnabled ? "AI Search Assistant" : "Search Assistant"}</span>{!automaticFolders && <button type="button" className={selectedFolderCount ? "searchFolderToggle selected" : "searchFolderToggle"} onClick={onToggleFolders} title={selectedFolderCount ? "Deselect all folders" : "Select all folders"}><ListChecks size={compact ? 14 : 17} /></button>}</div>
             <div className="searchMessages">{messages.length ? messages.map((message, index) => <p key={`${message}-${index}`}>{message}</p>) : <p>{selectedFolderCount ? aiEnabled ? `${selectedFolderCount} folder${selectedFolderCount === 1 ? "" : "s"} selected. AI mode is active.` : `${selectedFolderCount} folder${selectedFolderCount === 1 ? "" : "s"} selected for search.` : "Select one or more folder blocks to search."}</p>}</div>
             <div className="searchComposer"><span className="searchInputWrap"><input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === "Enter") void search(); }} placeholder={aiEnabled ? "Describe a file or its contents" : "Search names and file text"} /><button type="button" className="searchClearButton" title="Clear search" aria-label="Clear search" onClick={() => { setQuery(""); setResults([]); setMessages([]); setSelectedPaths([]); }}><X size={13} /></button></span><button type="button" className="searchSubmitButton" onClick={() => void search()} disabled={loading || !folders.length} title={folders.length ? "Search selected folders" : "Select a folder first"}><Send size={16} /></button></div>
     </>;

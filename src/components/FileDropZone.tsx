@@ -24,6 +24,7 @@ import { EMAIL_ATTACHMENT_TYPE } from "./GmailSourcePanel";
 import { OUTLOOK_ATTACHMENT_TYPE } from "./OutlookSourcePanel";
 import { SEARCH_RESULT_TYPE } from "./SearchWorkspace";
 import {CALENDAR_ATTACHMENT_TYPE} from "../dragTypes";
+import {recordDailyActivity,type DailyActivityKind} from "../dailyActivity";
 
 
 interface Props {
@@ -165,6 +166,7 @@ function FileDropZone({
     // essere spostati (non scaricati e caricati di nuovo) nella cartella scelta.
     const [pendingMoveFiles, setPendingMoveFiles] =
         useState<Array<{name: string; path: string; size?: number}>>([]);
+    const [pendingDailySource,setPendingDailySource]=useState<DailyActivityKind>("folders");
 
 
     // Ultimo file inviato correttamente
@@ -764,9 +766,12 @@ function FileDropZone({
         event.stopPropagation();
 
         setDragging(false);
+        const declaredDailySource=event.dataTransfer.getData("application/x-folderrocket-daily-source");
+        if (["recent","phone","usb"].includes(declaredDailySource)) setPendingDailySource(declaredDailySource as DailyActivityKind);
 
         const bridgeId = browserBridgeDropId(event.dataTransfer.getData("text/plain"));
         if (bridgeId) {
+            setPendingDailySource("gmail");
             try {
                 const stagedFiles = await resolveBrowserBridgeDrop(bridgeId);
                 if (imaginary) {
@@ -812,6 +817,7 @@ function FileDropZone({
 
 
         if (emailAttachments) {
+            setPendingDailySource(emailProvider);
 
             try {
 
@@ -1449,6 +1455,7 @@ function FileDropZone({
             }
 
             onVirtualFilesAdd?.(virtualFiles);
+            recordDailyActivity({kind:pendingDailySource,summary:`Transferred ${virtualFiles.length} file${virtualFiles.length===1?"":"s"}`,files:virtualFiles.map(file=>file.name),destination:name});
             setLastUploadedFile(`${virtualFiles.length} file(s) kept in this imaginary folder`);
             setFiles([]);
             setPendingVirtualFiles([]);
@@ -1649,6 +1656,7 @@ function FileDropZone({
                         uploadedNames.length - 1
                     ]
                 );
+                recordDailyActivity({kind:pendingDailySource,summary:`Transferred ${uploadedNames.length} file${uploadedNames.length===1?"":"s"}`,files:uploadedNames,destination:path.trim()});
 
             }
 
@@ -1788,7 +1796,7 @@ function FileDropZone({
         >
 
             {/* ==========================================
-                SCADENZE — ALTO A SINISTRA
+                SCADENZE — BASSO A SINISTRA
             ========================================== */}
 
             <div
@@ -1803,7 +1811,7 @@ function FileDropZone({
 
                     position: "absolute",
 
-                    top: "8px",
+                    bottom: "8px",
 
                     left: "10px",
 
@@ -1828,7 +1836,7 @@ function FileDropZone({
 
                     type="button"
 
-                    className="deadlineButton deadlineCompact"
+                    className="deadlineButton deadlineCompact archiveButton archiveCompact"
 
                     title="Impostazioni scadenze"
 
@@ -1999,7 +2007,7 @@ function FileDropZone({
 
                                 position: "absolute",
 
-                                top: "48px",
+                                bottom: "42px",
 
                                 left: "0",
 
@@ -2290,7 +2298,7 @@ function FileDropZone({
 
                                 position: "absolute",
 
-                                top: "48px",
+                                bottom: "42px",
 
                                 left: "0",
 
@@ -2779,7 +2787,7 @@ function FileDropZone({
 
                     margin: "3px",
 
-                    fontSize: "13px"
+                    fontSize: "10px"
 
                 }}
 

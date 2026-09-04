@@ -118,7 +118,12 @@ function migrateLegacyConnectionToBlock(provider, userId, blockId) {
         try { return decrypt(existing); } catch { return null; }
     }
     const providerBlocks = user.blocks?.[provider];
-    if (providerBlocks && Object.keys(providerBlocks).length) return null;
+    if (providerBlocks && Object.keys(providerBlocks).length >= 1) {
+        const encrypted = providerBlocks[Object.keys(providerBlocks)[0]];
+        user.blocks[provider] = {...providerBlocks, [blockId]: encrypted};
+        writeStore(data);
+        try { return decrypt(encrypted); } catch { return null; }
+    }
     if (!user[provider]) return null;
     user.blocks = user.blocks && typeof user.blocks === "object" ? user.blocks : {};
     user.blocks[provider] = {[blockId]: user[provider]};

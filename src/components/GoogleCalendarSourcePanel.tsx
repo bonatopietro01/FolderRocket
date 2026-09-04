@@ -1,3 +1,4 @@
+import {additionalFileIcon} from './AdditionalFileIcons';
 import {CalendarDays, ChevronLeft, ChevronRight, ExternalLink, File, FileSpreadsheet, FileText, Image, Paperclip, RefreshCw} from "lucide-react";
 import {useCallback, useEffect, useState} from "react";
 import {API_BASE_URL} from "../api";
@@ -93,6 +94,9 @@ function formatSelectedDay(value: Date) {
 
 function FileKindIcon({name}: {name: string}) {
     const extension = name.split(".").pop()?.toLowerCase() ?? "";
+    const additional = additionalFileIcon(extension, 12);
+    if (additional) return additional;
+    if (["ppt", "pptx", "pptm", "pps", "ppsx", "ppsm", "pot", "potx", "potm", "odp"].includes(extension)) return <span className="fileKindIcon powerpoint" title="PowerPoint presentation" aria-label="PowerPoint"><b>P</b></span>;
     if (extension === "pdf") return <span className="fileKindIcon pdf"><FileText size={12}/></span>;
     if (["doc", "docx", "odt"].includes(extension)) return <span className="fileKindIcon word"><FileText size={12}/></span>;
     if (["xls", "xlsx", "csv", "ods"].includes(extension)) return <span className="fileKindIcon excel"><FileSpreadsheet size={12}/></span>;
@@ -148,9 +152,9 @@ export default function GoogleCalendarSourcePanel({alertBlockId, weekStart, onWe
         return () => unsubscribe?.();
     }, []);
 
-    async function refresh(selectedWeekStart?: Date) {
+    const refresh = useCallback(async (selectedWeekStart?: Date) => {
         if (!connected) return;
-        const targetWeekStart = selectedWeekStart ?? readWeekStart(activeWeekKey);
+        const targetWeekStart = selectedWeekStart ?? readWeekStart(weekStart);
         setLoading(true); setError("");
         try {
             const response = await fetch(`${calendarUrl("/events")}&days=7&view=week&weekStart=${encodeURIComponent(dateKey(targetWeekStart))}`, {credentials: "include"});
@@ -160,13 +164,13 @@ export default function GoogleCalendarSourcePanel({alertBlockId, weekStart, onWe
         } catch (reason) {
             setError(reason instanceof Error ? reason.message : "Unable to read Google Calendar.");
         } finally { setLoading(false); }
-    }
+    }, [connected, weekStart, calendarUrl]);
 
     useEffect(() => {
         if (!connected) return;
         const timer = window.setTimeout(() => void refresh(), 0);
         return () => window.clearTimeout(timer);
-    }, [connected, activeWeekKey]);
+    }, [connected, refresh]);
 
     useEffect(() => {
         const detail = {
@@ -237,10 +241,10 @@ export default function GoogleCalendarSourcePanel({alertBlockId, weekStart, onWe
                 const dayEvents = events.filter(event => eventDayKey(event.start) === day.key);
                 const label = formatGridDay(day.date);
                 const attachmentCount = dayEvents.reduce((count, event) => count + (event.attachments?.length ?? 0), 0);
-                return <button type="button" role="gridcell" key={day.key} className={day.key === selectedDay.key ? "calendarDayCell selected" : "calendarDayCell"} onClick={() => setSelectedDayKey(day.key)} aria-pressed={day.key === selectedDay.key} title={`${formatSelectedDay(day.date)}${dayEvents.length ? ` · ${dayEvents.length} event${dayEvents.length === 1 ? "" : "s"}` : ""}`}><span className="calendarDayLabel">{label.weekday}</span><strong>{label.day}</strong><span className="calendarDayIndicators">{dayEvents.length > 0 && <small className="hasEvents">{dayEvents.length}<span> event{dayEvents.length === 1 ? "" : "s"}</span></small>}{attachmentCount > 0 && <small className="hasFiles"><Paperclip size={9}/>{attachmentCount}<span> file{attachmentCount === 1 ? "" : "s"}</span></small>}{dayEvents.length === 0 && attachmentCount === 0 && <i>—</i>}</span></button>;
+                const className = `calendarDayCell${day.key === selectedDay.key ? " selected" : ""}${day.key === dateKey(new Date()) ? " today" : ""}`;
+                return <button type="button" role="gridcell" key={day.key} className={className} onClick={() => setSelectedDayKey(day.key)} aria-pressed={day.key === selectedDay.key} aria-current={day.key === dateKey(new Date()) ? "date" : undefined} title={`${formatSelectedDay(day.date)}${dayEvents.length ? ` · ${dayEvents.length} event${dayEvents.length === 1 ? "" : "s"}` : ""}`}><span className="calendarDayLabel">{label.weekday}</span><strong>{label.day}</strong><span className="calendarDayIndicators">{dayEvents.length > 0 && <small className="hasEvents">{dayEvents.length}<span> event{dayEvents.length === 1 ? "" : "s"}</span></small>}{attachmentCount > 0 && <small className="hasFiles"><Paperclip size={9}/>{attachmentCount}<span> file{attachmentCount === 1 ? "" : "s"}</span></small>}{dayEvents.length === 0 && attachmentCount === 0 && <i>—</i>}</span></button>;
             })}</div></div>
             <section className="calendarDayDetails" aria-live="polite"><header><strong>{formatSelectedDay(selectedDay.date)}</strong><span>{selectedDayEvents.length ? `${selectedDayEvents.length} event${selectedDayEvents.length === 1 ? "" : "s"}` : "No events"}</span></header>{selectedDayEvents.length ? selectedDayEvents.map(event => <article className="calendarEvent" key={event.id || `${event.title}-${event.start}`}><div className="calendarEventSummary"><strong>{event.title}</strong><span className="calendarEventTiming">{formatEventTime(event.start)}{event.end ? ` → ${new Date(event.end).toLocaleTimeString("en-GB", {hour:"2-digit",minute:"2-digit"})}` : ""}{formatDuration(event.start,event.end) ? <b>{formatDuration(event.start,event.end)}</b> : null}</span>{event.location && <small>{event.location}</small>}<span className="calendarEventLinks">{event.meetingLink && <button type="button" onClick={() => window.open(event.meetingLink, "_blank", "noopener,noreferrer")}>Join video meeting</button>}{event.link && <button type="button" onClick={() => window.open(event.link, "_blank", "noopener,noreferrer")}>Open calendar</button>}</span></div>{event.attachments?.map(attachment => <div key={`${event.id}-${attachment.fileId}`} className="calendarAttachment" draggable onDragStart={dragEvent => startAttachmentDrag(dragEvent, attachment)} title="Drag this file into a FolderRocket folder"><FileKindIcon name={attachment.name}/><span>{attachment.name}</span><button type="button" onClick={() => window.open(attachment.url, "_blank", "noopener,noreferrer")} title="Open file"><ExternalLink size={12}/></button><Paperclip size={11}/></div>)}</article>) : <p>{loading ? "Reading calendar…" : events.length ? "No events or files on this day." : `No events in ${formatWeekRange(activeWeekStart)}.`}</p>}</section>
         </div>}
-        <small className="calendarNote">Drag event files to a FolderRocket folder, or open them directly.</small>
     </section>;
 }

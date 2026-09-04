@@ -1,3 +1,4 @@
+import {additionalFileIcon} from './AdditionalFileIcons';
 import {
     useCallback,
     useEffect,
@@ -151,6 +152,9 @@ function mergeAttachments(current: EmailAttachment[], incoming: EmailAttachment[
 
 function FileKindIcon({name}: {name: string}) {
     const extension = name.split(".").pop()?.toLowerCase() ?? "";
+    const additional = additionalFileIcon(extension, 14);
+    if (additional) return additional;
+    if (["ppt", "pptx", "pptm", "pps", "ppsx", "ppsm", "pot", "potx", "potm", "odp"].includes(extension)) return <span className="fileKindIcon powerpoint" title="PowerPoint presentation" aria-label="PowerPoint"><b>P</b></span>;
     if (extension === "pdf") return <span className="fileKindIcon pdf"><FileText size={14} /></span>;
     if (["doc", "docx", "odt"].includes(extension)) return <span className="fileKindIcon word"><FileText size={14} /></span>;
     if (["xls", "xlsx", "csv", "ods"].includes(extension)) return <span className="fileKindIcon excel"><FileSpreadsheet size={14} /></span>;
@@ -162,7 +166,7 @@ function FileKindIcon({name}: {name: string}) {
 
 function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {storageScope: string; alertBlockId: string; aiEnabled?: boolean}) {
     const alertSettingsUrl = `${API_BASE_URL}/email/alerts/settings/gmail?blockId=${encodeURIComponent(alertBlockId)}`;
-    const gmailUrl = (endpoint: string) => `${API_BASE_URL}/email/gmail${endpoint}${endpoint.includes("?") ? "&" : "?"}blockId=${encodeURIComponent(alertBlockId)}`;
+    const gmailUrl = useCallback((endpoint: string) => `${API_BASE_URL}/email/gmail${endpoint}${endpoint.includes("?") ? "&" : "?"}blockId=${encodeURIComponent(alertBlockId)}`, [alertBlockId]);
     const gmailAuthUrl = (endpoint: string) => `${API_BASE_URL}/auth/gmail${endpoint}?blockId=${encodeURIComponent(alertBlockId)}`;
     const [connected, setConnected] = useState(false);
     const [attachments, setAttachments] = useState<EmailAttachment[]>([]);
@@ -283,7 +287,7 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
         finally {
             setWarningLoading(false);
         }
-    }, [aiEnabled, connected, days, endDate, mode, startDate, storageScope, warnings]);
+    }, [aiEnabled, connected, days, endDate, mode, startDate, storageScope, warnings, gmailUrl]);
 
     const refresh = useCallback(async () => {
         if (!connected) {
@@ -315,7 +319,7 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
         finally {
             setLoading(false);
         }
-    }, [attachmentReader, checkWarnings, connected]);
+    }, [attachmentReader, checkWarnings, connected, gmailUrl]);
 
     useEffect(() => {
         let active = true;
@@ -328,7 +332,7 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
         refreshConnection();
         window.addEventListener("focus", refreshConnection);
         return () => { active = false; window.removeEventListener("focus", refreshConnection); };
-    }, [alertBlockId]);
+    }, [gmailUrl]);
 
     useEffect(() => {
         let active = true;
@@ -354,7 +358,7 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
             })
             .finally(() => { if (active) setAlertSettingsReady(true); });
         return () => { active = false; };
-    }, [alertSettingsUrl]);
+    }, [alertSettingsUrl, storageScope]);
 
     useEffect(() => {
         if (!alertSettingsReady) return;
@@ -384,7 +388,7 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
                 });
         }, 60_000);
         return () => window.clearInterval(interval);
-    }, [alertSettingsUrl, connected]);
+    }, [alertSettingsUrl, connected, storageScope]);
 
     useEffect(() => {
         if (!liveReading || !connected) {
@@ -547,7 +551,7 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
             <div className="sourceHeader">
                 <Mail className="gmailPanelIcon" size={29} />
                 {connected ? <span className="emailConnectionControls"><button type="button" className="sourceTitle emailConnectionTitle" onClick={() => { setShowDisconnect(current => !current); setDisconnectArmed(false); }} title="Gmail connection options">Gmail</button>{showDisconnect && <button type="button" className={disconnectArmed ? "emailDisconnectButton armed" : "emailDisconnectButton"} onClick={() => { if (disconnectArmed) void disconnect(); else setDisconnectArmed(true); }} title={disconnectArmed ? "Press again to disconnect Gmail" : "Disconnect Gmail"}>{disconnectArmed ? "Confirm" : "Disconnect"}</button>}</span> : <span className="sourceTitle">Gmail</span>}
-                {connected && <span className="emailReaderHeaderControl"><button type="button" className={`emailReaderHeaderButton${attachmentReader.enabled ? " active" : ""}`} onClick={() => setShowSettings(current => !current)} title="Read attachments and choose period"><RefreshCw className={loading ? "spin" : ""} size={13}/><span>Read attachments</span></button>{showSettings && <div className="emailReaderHeaderMenu"><header><strong>Read attachments</strong><button type="button" onClick={() => void refresh()} disabled={loading || !attachmentReader.enabled} title="Refresh attachments"><RefreshCw className={loading ? "spin" : ""} size={14}/></button></header><label className="emailReaderEnabled"><input type="checkbox" checked={attachmentReader.enabled} onChange={event => { const enabled = event.target.checked; setAttachmentReader(current => ({...current, enabled})); if (!enabled) setAttachments([]); }}/>Enable attachment reading</label><select value={mode} onChange={event => { const nextMode = event.target.value as FilterMode; setMode(nextMode); setAttachmentReader(current => ({...current, filter: {...current.filter, mode: nextMode}})); }}><option value="relative">Last days</option><option value="range">Date range</option></select>{mode === "relative" ? <label>Days back<input type="number" min="1" value={days} onChange={event => { const value = Math.max(1, Number(event.target.value) || 1); setDays(value); setAttachmentReader(current => ({...current, filter: {...current.filter, days: value}})); }}/></label> : <div className="emailDateRange"><label>From<input type="date" value={startDate} onChange={event => { setStartDate(event.target.value); setAttachmentReader(current => ({...current, filter: {...current.filter, startDate: event.target.value}})); }}/></label><label>To<input type="date" value={endDate} onChange={event => { setEndDate(event.target.value); setAttachmentReader(current => ({...current, filter: {...current.filter, endDate: event.target.value}})); }}/></label></div>}<button type="button" className="emailReaderApply" onClick={() => { setShowSettings(false); if (attachmentReader.enabled) void refresh(); }}>Apply & refresh</button></div>}</span>}
+                {connected && <span className="emailReaderHeaderControl"><button type="button" className={`emailReaderHeaderButton${attachmentReader.enabled ? " active" : ""}`} onClick={() => setShowSettings(current => !current)} title="Read attachments and choose period"><span className="emailRefreshIcon"><RefreshCw className={loading ? "spin" : ""} size={13}/></span><span>Read attachments</span></button>{showSettings && <div className="emailReaderHeaderMenu"><header><strong>Read attachments</strong><button type="button" onClick={() => void refresh()} disabled={loading || !attachmentReader.enabled} title="Refresh attachments"><RefreshCw className={loading ? "spin" : ""} size={14}/></button></header><label className="emailReaderEnabled"><input type="checkbox" checked={attachmentReader.enabled} onChange={event => { const enabled = event.target.checked; setAttachmentReader(current => ({...current, enabled})); if (!enabled) setAttachments([]); }}/>Enable attachment reading</label><select value={mode} onChange={event => { const nextMode = event.target.value as FilterMode; setMode(nextMode); setAttachmentReader(current => ({...current, filter: {...current.filter, mode: nextMode}})); }}><option value="relative">Last days</option><option value="range">Date range</option></select>{mode === "relative" ? <label>Days back<input type="number" min="1" value={days} onChange={event => { const value = Math.max(1, Number(event.target.value) || 1); setDays(value); setAttachmentReader(current => ({...current, filter: {...current.filter, days: value}})); }}/></label> : <div className="emailDateRange"><label>From<input type="date" value={startDate} onChange={event => { setStartDate(event.target.value); setAttachmentReader(current => ({...current, filter: {...current.filter, startDate: event.target.value}})); }}/></label><label>To<input type="date" value={endDate} onChange={event => { setEndDate(event.target.value); setAttachmentReader(current => ({...current, filter: {...current.filter, endDate: event.target.value}})); }}/></label></div>}<button type="button" className="emailReaderApply" onClick={() => { setShowSettings(false); if (attachmentReader.enabled) void refresh(); }}>Apply & refresh</button></div>}</span>}
                 {connected && <button type="button" className="gmailWarningToggle" onClick={toggleWarnings} title="Gmail alerts"><BellRing size={15} /></button>}
                 {connected && <span className={warningLoading ? "emailAlertSlots analyzing" : "emailAlertSlots"}>{warningLoading ? "Analyzing…" : visibleWarnings.filter(rule => rule.enabled).slice(0, 5).map(rule => { const result = warningResults.find(item => item.ruleId === rule.id); return result ? <button key={`ready-${rule.id}`} type="button" className={`gmailAlertCount alertColor-${rule.color}`} title={`Show ${rule.label} emails`} onClick={() => toggleWarningPreview(rule.kind)}>{result.total}</button> : <span key={`ready-${rule.id}`} className={`emailAlertReadyDot alertColor-${rule.color}`} title={`${rule.label} is active`} />; })}</span>}
                 {connected && <span className="emailHeaderStatus">Connected</span>}

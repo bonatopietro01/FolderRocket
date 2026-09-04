@@ -170,6 +170,15 @@ async function fetchPublicPageText(url, query) {
     return {text, sourceUrl};
 }
 
+async function readDomainPreview(url) {
+    const {html, sourceUrl} = await fetchPublicPageHtml(url);
+    const titleMatch = html.match(/<title\b[^>]*>([\s\S]*?)<\/title>/i);
+    const title = titleMatch ? htmlToText(titleMatch[1]).slice(0, 180) : new URL(sourceUrl).hostname;
+    const text = selectPageText(htmlToText(html), "").slice(0, 5_000);
+    if (!text) throw new Error("No readable text was found on this page.");
+    return {title, text, sourceUrl};
+}
+
 function readHtmlAttribute(tag, name) {
     const expression = new RegExp(`\\b${name}\\s*=\\s*(?:\"([^\"]*)\"|'([^']*)'|([^\\s>]+))`, "i");
     const match = tag.match(expression);
@@ -315,4 +324,4 @@ async function analyzeDomainPage(url, query) {
     }
 }
 
-module.exports = {analyzeDomainPage, analyzeProjection, downloadDomainFile, listDomainDownloads};
+module.exports = {analyzeDomainPage, analyzeProjection, downloadDomainFile, listDomainDownloads, readDomainPreview};

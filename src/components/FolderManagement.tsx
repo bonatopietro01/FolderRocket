@@ -1,20 +1,24 @@
+import {useFilePreview} from '../useFilePreview';
+import {additionalFileIcon} from './AdditionalFileIcons';
 import {useEffect, useRef, useState, type CSSProperties} from "react";
 import {Archive, ArrowLeft, ChevronDown, ChevronRight, ExternalLink, File, FileSpreadsheet, FileText, Film, Flame, FolderClosed, FolderOpen, GripHorizontal, GripVertical, Image, ListOrdered, Music, Pencil, Plus, Search, Sparkles} from "lucide-react";
 import {API_BASE_URL} from "../api";
 import FireMountain from "./FireMountain";
 
 export interface VirtualFile { name: string; path: string; createdAt?: string; size?: number; }
-export interface FolderAppearance { backgroundColor?: string; borderColor?: string; borderWidth?: number; bold?: boolean; italic?: boolean; underline?: boolean; shadow?: boolean; symbol?: string; }
-export interface ManagedFolder { id: string; name: string; path: string; description: string; storage?: "physical" | "imaginary"; virtualFiles?: VirtualFile[]; appearance?: FolderAppearance; }
+export interface FolderAppearance { backgroundColor?: string; borderColor?: string; borderWidth?: number; bold?: boolean; italic?: boolean; underline?: boolean; shadow?: boolean; symbol?: string; workGroup?: string; }
+export interface ManagedFolder { id: string; name: string; path: string; description: string; storage?: "physical" | "imaginary"; usbDrivePath?: string; virtualFiles?: VirtualFile[]; appearance?: FolderAppearance; }
 interface FileEntry extends VirtualFile { matches?: string[]; }
 interface DirectoryEntry { name: string; path: string; createdAt?: string; }
 interface DirectoryContents { files: FileEntry[]; folders: DirectoryEntry[]; }
 interface TransferDestination { folderId: string; name: string; path: string; storage: "physical" | "imaginary"; }
 interface Props { folders: ManagedFolder[]; onAdd: () => void; onUpdate: (id: string, change: Partial<ManagedFolder>) => void; onDelete: (id: string) => void; onReorder: (sourceId: string, targetId: string, placement: "before" | "after") => void; aiEnabled: boolean; }
-interface CompactPreview { kind: "loading" | "text" | "image" | "pdf" | "unavailable"; text?: string; url?: string; message?: string; }
 
 function FileKindIcon({name}: {name: string}) {
     const extension = name.split(".").pop()?.toLowerCase() ?? "";
+    const additional = additionalFileIcon(extension, 17);
+    if (additional) return additional;
+    if (["ppt", "pptx", "pptm", "pps", "ppsx", "ppsm", "pot", "potx", "potm", "odp"].includes(extension)) return <span className="fileKindIcon powerpoint" title="PowerPoint presentation" aria-label="PowerPoint"><b>P</b></span>;
     if (extension === "pdf") return <span className="fileKindIcon pdf" title="PDF"><FileText size={17} /></span>;
     if (["doc", "docx", "odt"].includes(extension)) return <span className="fileKindIcon word" title="Word document"><FileText size={17} /></span>;
     if (["xls", "xlsx", "ods"].includes(extension)) return <span className="fileKindIcon excel" title="Spreadsheet"><FileSpreadsheet size={17} /></span>;
@@ -41,20 +45,7 @@ function matchesFileFormat(name: string, format: string) {
 }
 
 function FolderQuickPreview({file, slot}: {file: FileEntry | null; slot: number}) {
-    const [preview, setPreview] = useState<CompactPreview | null>(null);
-    useEffect(() => {
-        if (!file?.path) { setPreview(null); return; }
-        let disposed = false;
-        setPreview({kind: "loading"});
-        void (async () => {
-            try {
-                const response = await fetch(`${API_BASE_URL}/files/preview`, {method: "POST", headers: {"Content-Type": "application/json"}, credentials: "include", body: JSON.stringify({path: file.path})});
-                const data = await response.json().catch(() => ({})) as CompactPreview;
-                if (!disposed) setPreview(response.ok && data.kind ? data : {kind: "unavailable", message: data.message || "Preview unavailable."});
-            } catch { if (!disposed) setPreview({kind: "unavailable", message: "Preview unavailable."}); }
-        })();
-        return () => { disposed = true; };
-    }, [file?.path]);
+    const preview = useFilePreview(file?.path);
     if (!file) return <article className="folderQuickPreviewSlot empty"><span>{slot + 1}</span><p>Select a file</p></article>;
     return <article className="folderQuickPreviewSlot"><div className="folderQuickPreviewVisual">{preview?.kind === "loading" && <p>Loading…</p>}{preview?.kind === "text" && <pre>{preview.text || "No readable text."}</pre>}{preview?.kind === "image" && preview.url && <img src={`${API_BASE_URL}${preview.url}`} alt={`Preview of ${file.name}`}/>} {preview?.kind === "pdf" && preview.url && <iframe src={`${API_BASE_URL}${preview.url}`} title={`Preview of ${file.name}`}/>} {preview?.kind === "unavailable" && <p>{preview.message || "Preview unavailable."}</p>}</div><div className="folderQuickPreviewName"><FileKindIcon name={file.name}/><strong title={file.name}>{file.name}</strong></div></article>;
 }
@@ -71,6 +62,12 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
     const [selectedPaths, setSelectedPaths] = useState<string[]>([]);
     const [selectedFiles, setSelectedFiles] = useState<FileEntry[]>([]);
     const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+    const [newFolder, setNewFolder] = useState<{id:string; name:string; parent:string} | null>(null);
+    const [newFolderName, setNewFolderName] = useState("");
+    const [creatingFolder, setCreatingFolder] = useState(false);
+    const [createFolderError, setCreateFolderError] = useState("");
+    const newFolderDialog = useRef<HTMLDialogElement>(null);
+    useEffect(() => { if (newFolder) newFolderDialog.current?.showModal(); }, [newFolder]);
     const [moveQueue, setMoveQueue] = useState<FileEntry[]>([]);
     const [filesVersion, setFilesVersion] = useState(0);
     const [query, setQuery] = useState("");
@@ -85,13 +82,14 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
     const [dropTarget, setDropTarget] = useState<{id: string; placement: "before" | "after"} | null>(null);
     const [foundFilesHeight, setFoundFilesHeight] = useState(155);
     const [quickPreviewSlots, setQuickPreviewSlots] = useState<Array<FileEntry | null>>([null, null, null]);
+    const directoryRequests = useRef(new Map<string, AbortController>());
     const pointerDraggedFolderId = useRef<string | null>(null);
     const nextQuickPreviewSlot = useRef(0);
     const openedFolders = folders.filter(folder => openedFolderIds.includes(folder.id));
+    const inventoryPaths = JSON.stringify(openedFolders.filter(folder => folder.storage !== "imaginary" && folder.path).map(folder => folder.path));
     const primaryOpened = folders.find(folder => folder.id === primaryOpenedId) ?? openedFolders[0];
     const openedFolderKey = openedFolderIds.join("|");
     const openedFolderSignature = openedFolders.map(folder => `${folder.id}:${folder.storage ?? "physical"}:${folder.path}:${JSON.stringify(folder.virtualFiles ?? [])}`).join("|");
-    const fileTypeSignature = fileTypeCounts.map(([type,count])=>`${type}:${count}`).join("|");
     const transferDestinations = (() => {
         const destinations: TransferDestination[] = [];
         for (const folder of openedFolders) {
@@ -110,19 +108,7 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
         return [...new Map(destinations.map(destination => [destination.storage === "imaginary" ? `imaginary:${destination.folderId}` : `physical:${comparablePath(destination.path)}`, destination])).values()];
     })();
 
-    useEffect(() => {
-        const styleId = "folderrocket-folder-appearance";
-        let element = document.getElementById(styleId) as HTMLStyleElement | null;
-        if (!element) { element = document.createElement("style"); element.id = styleId; document.head.appendChild(element); }
-        element.textContent = folders.map(folder => {
-            const appearance = folder.appearance;
-            if (!appearance || !Object.entries(appearance).some(([key,value]) => key !== "shadow" && value !== undefined && value !== false && value !== "")) return "";
-            const safeId = CSS.escape(folder.id);
-            const width = Math.max(0, Math.min(8, Number(appearance.borderWidth) || 0));
-            const symbol = JSON.stringify((appearance.symbol || "").slice(0, 4));
-            return `.folderDropZone[data-folder-id="${safeId}"]{${appearance.backgroundColor ? `background:${appearance.backgroundColor}!important;` : ""}${appearance.borderColor ? `border-color:${appearance.borderColor}!important;` : ""}border-width:${width}px!important;border-style:solid!important;box-shadow:none!important}.folderDropZone[data-folder-id="${safeId}"]::before{content:${symbol};position:absolute;z-index:2;top:-11px;left:-9px;display:${appearance.symbol ? "grid" : "none"};width:25px;height:25px;place-items:center;border:1px solid #b9c9d8;border-radius:50%;background:#fff;font-size:14px}.folderDropZone[data-folder-id="${safeId}"] h3{font-weight:${appearance.bold ? 800 : 600}!important;font-style:${appearance.italic ? "italic" : "normal"}!important;text-decoration:${appearance.underline ? "underline" : "none"}!important}`;
-        }).join("\n");
-    }, [folders]);
+
 
     useEffect(() => {
         if (!appearanceFolderId) return;
@@ -133,7 +119,7 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
         return () => document.removeEventListener("pointerdown", dismissAppearance);
     }, [appearanceFolderId]);
 
-    useEffect(() => { if (!orderingFolders) setAppearanceFolderId(null); }, [orderingFolders]);
+    if (!orderingFolders && appearanceFolderId !== null) setAppearanceFolderId(null);
 
     useEffect(() => {
         if (!appearanceFolderId) return;
@@ -156,22 +142,22 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
     }, [appearanceDraft.symbol, appearanceFolderId]);
 
     useEffect(() => {
-        const physicalPaths=openedFolders.filter(folder=>folder.storage!=="imaginary"&&folder.path).map(folder=>folder.path); if(!physicalPaths.length){setFileTypeCounts([]);return;} let active=true; void fetch(`${API_BASE_URL}/file-types/inventory`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({folders:physicalPaths})}).then(response=>response.ok?response.json():{types:[]}).then((data:{types?:Array<{type:string;count:number}>})=>{if(active)setFileTypeCounts((data.types||[]).map(item=>[item.type,item.count]))}); return()=>{active=false};
-    }, [openedFolderSignature]);
+        const controller = new AbortController();
+        void (async () => {
+            await Promise.resolve();
+            if (controller.signal.aborted) return;
+            const physicalPaths: string[] = JSON.parse(inventoryPaths);
+            if (!physicalPaths.length) { setFileTypeCounts([]); return; }
+            try {
+                const response = await fetch(`${API_BASE_URL}/file-types/inventory`, {method: "POST", signal: controller.signal, credentials: "include", headers: {"Content-Type": "application/json"}, body: JSON.stringify({folders: physicalPaths})});
+                if (!response.ok) throw new Error("Inventory unavailable");
+                const data = await response.json() as {types?: Array<{type: string; count: number}>};
+                if (!controller.signal.aborted) setFileTypeCounts((data.types || []).map(item => [item.type, item.count]));
+            } catch { if (!controller.signal.aborted) setFileTypeCounts([]); }
+        })();
+        return () => controller.abort();
+    }, [inventoryPaths, filesVersion]);
 
-    useEffect(() => {
-        const header = document.querySelector<HTMLElement>(".folderInspector .folderFiles > h3");
-        if (!header) return;
-        const select = document.createElement("select");
-        select.className = "folderFilesFormatSelect";
-        select.setAttribute("aria-label", "Filter open folder files by format");
-        for (const [value, label] of [["all", `All formats (${fileTypeCounts.reduce((sum,[,count])=>sum+count,0)})`], ...fileTypeCounts.map(([type,count])=>[type, `${type.toUpperCase()} (${count})`])]) {
-            const option = document.createElement("option"); option.value = value; option.textContent = label; option.selected = value === fileFormat; select.appendChild(option);
-        }
-        select.addEventListener("change", () => setFileFormat(select.value));
-        header.appendChild(select);
-        return () => select.remove();
-    }, [fileFormat, fileTypeSignature, openedFolderKey]);
 
     useEffect(() => {
         const dismissDelete = (event: MouseEvent) => {
@@ -195,26 +181,22 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
         return () => window.removeEventListener("folderrocket-files-moved", refreshFiles);
     }, []);
 
-    useEffect(() => {
-        if (!aiEnabled) setAiSearchEnabled(false);
-    }, [aiEnabled]);
-
-    useEffect(() => {
-        setOpenedFolderIds(current => current.filter(id => folders.some(folder => folder.id === id)));
-    }, [folders]);
-
-    useEffect(() => {
-        const physicalRoots = openedFolders.filter(folder => folder.storage !== "imaginary" && Boolean(folder.path)).map(folder => folder.path);
-        setSelectedDirectoryPaths(current => current.filter(directoryPath => physicalRoots.some(root => isChildOfFolder(root, directoryPath))));
-    // The selected destination folders belong only to the currently opened roots.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [openedFolderKey, openedFolderSignature]);
+    if (!aiEnabled && aiSearchEnabled) setAiSearchEnabled(false);
+    const existingOpenedIds = openedFolderIds.filter(id => folders.some(folder => folder.id === id));
+    if (existingOpenedIds.length !== openedFolderIds.length) setOpenedFolderIds(existingOpenedIds);
+    const physicalRoots = openedFolders.filter(folder => folder.storage !== "imaginary" && folder.path).map(folder => folder.path);
+    const validDirectoryPaths = selectedDirectoryPaths.filter(directoryPath => physicalRoots.some(root => isChildOfFolder(root, directoryPath)));
+    if (validDirectoryPaths.length !== selectedDirectoryPaths.length) setSelectedDirectoryPaths(validDirectoryPaths);
 
     async function loadDirectory(directoryPath: string) {
+        directoryRequests.current.get(directoryPath)?.abort();
+        const controller = new AbortController();
+        directoryRequests.current.set(directoryPath, controller);
         setLoadingDirectories(current => new Set(current).add(directoryPath));
         try {
             const response = await fetch(`${API_BASE_URL}/list-folder-files`, {
                 method: "POST",
+                signal: controller.signal,
                 headers: {"Content-Type": "application/json"},
                 credentials: "include",
                 body: JSON.stringify({folder: directoryPath})
@@ -224,38 +206,50 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
                 try { return JSON.parse(raw) as {files?: FileEntry[]; folders?: DirectoryEntry[]; message?: string}; }
                 catch { throw new Error("The backend did not return folder data. Restart the backend and try again."); }
             })();
+            if (controller.signal.aborted) return;
             if (!response.ok) throw new Error(data.message ?? "Unable to read this folder");
             setFolderContents(current => ({...current, [directoryPath]: {files: data.files ?? [], folders: data.folders ?? []}}));
             setMessage("");
         } catch (error) {
-            setMessage(error instanceof Error ? error.message : "Unable to read this folder");
+            if (!controller.signal.aborted) setMessage(error instanceof Error ? error.message : "Unable to read this folder");
         } finally {
-            setLoadingDirectories(current => {
-                const next = new Set(current);
-                next.delete(directoryPath);
-                return next;
-            });
+            if (directoryRequests.current.get(directoryPath) === controller) {
+                directoryRequests.current.delete(directoryPath);
+                setLoadingDirectories(current => {
+                    const next = new Set(current);
+                    next.delete(directoryPath);
+                    return next;
+                });
+            }
         }
     }
 
     useEffect(() => {
-        setFolderContents({});
-        setExpandedDirectories(new Set());
-        setResults([]);
-        clearFileSelection();
-        setQuery("");
-        if (!openedFolders.length) {
-            setMessage("Select a folder to view its files.");
-            return;
-        }
-        setMessage("Loading files...");
-        for (const folder of openedFolders) {
-            if (folder.storage === "imaginary") {
-                setFolderContents(current => ({...current, [`virtual:${folder.id}`]: {files: folder.virtualFiles ?? [], folders: []}}));
-            } else if (folder.path) {
-                void loadDirectory(folder.path);
+        let active = true;
+        const requests = directoryRequests.current;
+        queueMicrotask(() => {
+            if (!active) return;
+            setLoadingDirectories(new Set());
+            setFolderContents({});
+            setExpandedDirectories(new Set());
+            setResults([]);
+            clearFileSelection();
+            setQuery("");
+            if (!openedFolders.length) {
+                setMessage("Select a folder to view its files.");
+                return;
             }
-        }
+            setMessage("Loading files...");
+            for (const folder of openedFolders) {
+                if (folder.storage === "imaginary") {
+                    setFolderContents(current => ({...current, [`virtual:${folder.id}`]: {files: folder.virtualFiles ?? [], folders: []}}));
+                } else if (folder.path) {
+                    void loadDirectory(folder.path);
+                }
+            }
+            });
+        return () => { active = false; requests.forEach(controller => controller.abort()); requests.clear(); };
+
     // Folder paths are part of the identity here: a changed path must reload its root.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [openedFolderKey, openedFolderSignature, filesVersion]);
@@ -429,7 +423,7 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
             if (!primaryDestination) { setMessage("Cut 'em needs at least one physical folder. Use Copy 'em for an imaginary folder."); return; }
             const filesToMove = moveQueue.filter(file => comparablePath(parentFolderPath(file.path)) !== comparablePath(primaryDestination.path));
             let primaryFiles = moveQueue.filter(file => comparablePath(parentFolderPath(file.path)) === comparablePath(primaryDestination.path));
-            let movedFiles: FileEntry[] = [];
+            let movedFiles: FileEntry[];
             try {
                 movedFiles = await transfer("/files/move", filesToMove, primaryDestination);
                 primaryFiles = [...primaryFiles, ...movedFiles];
@@ -476,15 +470,31 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
             const parentData = await parentResponse.json() as {path?: string | null; message?: string};
             if (!parentResponse.ok) throw new Error(parentData.message ?? "Unable to open the folder picker");
             if (!parentData.path) return;
-            const folderName = window.prompt("Name the new folder:");
-            const safeName = folderName?.trim().replace(/[\\/]+/g, "") ?? "";
-            if (!safeName) return;
-            const requestedPath = `${parentData.path.replace(/[\\/]+$/, "")}\\${safeName}`;
+            setNewFolderName("");
+            setCreateFolderError("");
+            setNewFolder({id:folder.id, name:folder.name, parent:parentData.path});
+        } catch (error) { setMessage(error instanceof Error ? error.message : "Folder creation failed"); }
+    }
+
+    async function createAndLinkFolder() {
+        if (!newFolder || creatingFolder) return;
+        const safeName = newFolderName.trim();
+        if (!safeName || /[<>:"/\\|?*]/.test(safeName) || [...safeName].some(character => character.charCodeAt(0) < 32) || /[. ]$/.test(safeName)) {
+            setCreateFolderError("Enter a valid folder name without path separators or reserved characters.");
+            return;
+        }
+        setCreatingFolder(true);
+        setCreateFolderError("");
+        try {
+            const requestedPath = `${newFolder.parent.replace(/[\\/]+$/, "")}\\${safeName}`;
             const response = await fetch(`${API_BASE_URL}/folders/create`, {method: "POST", headers: {"Content-Type": "application/json"}, credentials: "include", body: JSON.stringify({path: requestedPath})});
             const data = await response.json() as {path?: string; message?: string};
             if (!response.ok || !data.path) throw new Error(data.message ?? "Folder creation failed");
-            onUpdate(folder.id, {path: data.path, storage: "physical"});
-        } catch (error) { setMessage(error instanceof Error ? error.message : "Folder creation failed"); }
+            onUpdate(newFolder.id, {path: data.path, storage: "physical"});
+            setMessage(`Folder created and linked to ${newFolder.name}: ${data.path}`);
+            setNewFolder(null);
+        } catch (error) { setCreateFolderError(error instanceof Error ? error.message : "Folder creation failed"); }
+        finally { setCreatingFolder(false); }
     }
 
     function getPointerDropTarget(clientX: number, clientY: number) {
@@ -547,6 +557,16 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
     }
 
     return <main className="folderManagementPage">
+        {newFolder && <dialog ref={newFolderDialog} className="createFolderDialog" onCancel={event => { event.preventDefault(); if (!creatingFolder) setNewFolder(null); }} aria-labelledby="createFolderTitle">
+            <form onSubmit={event => { event.preventDefault(); void createAndLinkFolder(); }}>
+                <h2 id="createFolderTitle">New folder</h2>
+                <p>Create and link to <strong>{newFolder.name}</strong></p>
+                <small>{newFolder.parent}</small>
+                <label>Folder name<input autoFocus value={newFolderName} disabled={creatingFolder} onChange={event => setNewFolderName(event.target.value)}/></label>
+                {createFolderError && <p role="alert">{createFolderError}</p>}
+                <footer><button type="button" disabled={creatingFolder} onClick={() => setNewFolder(null)}>Cancel</button><button type="submit" disabled={creatingFolder || !newFolderName.trim()}>{creatingFolder ? "Creating…" : "Create and link"}</button></footer>
+            </form>
+        </dialog>}
         <section className="folderManagementLeft"><section className="folderTablePanel">
             <div className="folderTable" role="table">
                 <div className={orderingFolders ? "folderTableRow folderTableHead orderingHead" : "folderTableRow folderTableHead"} role="row">{orderingFolders && <span aria-label="Reorder folder"/>}<span aria-label="Delete folder"/><span>Name</span><span>Path</span><span>Description</span><span className="folderTableTopActions"><button type="button" className={orderingFolders ? "orderFoldersButton active" : "orderFoldersButton"} onClick={() => { setOrderingFolders(current => !current); setDraggedFolderId(null); setDropTarget(null); }} title={orderingFolders ? "Finish ordering folders" : "Reorder folders"} aria-label={orderingFolders ? "Finish ordering folders" : "Reorder folders"}><ListOrdered size={15}/></button><button type="button" className="addFolder" onClick={onAdd} title="Add folder" aria-label="Add folder">+</button></span></div>
@@ -554,7 +574,7 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
                     {orderingFolders && <span className="folderOrderHandle" role="button" tabIndex={0} onPointerDown={event => { event.preventDefault(); pointerDraggedFolderId.current = folder.id; setDraggedFolderId(folder.id); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (pointerDraggedFolderId.current !== folder.id) return; const target = getPointerDropTarget(event.clientX, event.clientY); setDropTarget(target && target.id !== folder.id ? target : null); }} onPointerUp={event => { const sourceId = pointerDraggedFolderId.current; const target = getPointerDropTarget(event.clientX, event.clientY); if (sourceId && target && sourceId !== target.id) onReorder(sourceId, target.id, target.placement); pointerDraggedFolderId.current = null; setDraggedFolderId(null); setDropTarget(null); }} onPointerCancel={() => { pointerDraggedFolderId.current = null; setDraggedFolderId(null); setDropTarget(null); }} title="Hold and drag to reorder"><GripVertical size={14}/></span>}
                     <button type="button" className={pendingDeleteId === folder.id ? "deleteFolder confirmDelete" : "deleteFolder"} onClick={() => requestDelete(folder.id)} title={pendingDeleteId === folder.id ? "Press again to delete" : "Delete folder"}>x</button>
                     <span className="folderNameInput"><input value={folder.name} onChange={event => onUpdate(folder.id, {name: event.target.value})} aria-label="Folder name"/></span>
-                    <span className="pathInput"><input value={folder.path} onChange={event => onUpdate(folder.id, {path: event.target.value.replace(/^"|"$/g, ""), storage: "physical"})} placeholder={folder.storage === "imaginary" ? "Imaginary folder" : "Folder path"} aria-label="Folder path" disabled={folder.storage === "imaginary"}/>{orderingFolders ? <button type="button" className="folderAppearanceButton" onClick={() => { setAppearanceDraft({...folder.appearance, shadow: false}); setAppearanceFolderId(folder.id); }}>Style</button> : <select aria-label="Path options" value={folder.storage === "imaginary" ? "imaginary" : "insert"} onChange={event => void choosePath(folder, event.target.value)}><option value="insert">Insert path</option><option value="new">New folder</option><option value="imaginary">Imaginary folder</option></select>}{appearanceFolderId === folder.id && <div className="folderAppearancePanel" role="dialog" aria-modal="true" aria-label={`Customise ${folder.name}`}><header><div><strong>Folder appearance</strong><span>Customise the dashboard block</span></div><button type="button" onClick={() => setAppearanceFolderId(null)}>×</button></header><div className="folderAppearanceControls"><label><span>Folder colour</span><input type="color" value={appearanceDraft.backgroundColor || "#ffffff"} onChange={event => setAppearanceDraft(current => ({...current, backgroundColor: event.target.value}))}/></label><label><span>Outline colour</span><input type="color" value={appearanceDraft.borderColor || "#c6d6e5"} onChange={event => setAppearanceDraft(current => ({...current, borderColor: event.target.value}))}/></label><label><span>Outline thickness</span><input type="range" min="0" max="8" value={appearanceDraft.borderWidth ?? 1} onChange={event => setAppearanceDraft(current => ({...current, borderWidth: Number(event.target.value)}))}/><b>{appearanceDraft.borderWidth ?? 1}px</b></label><div className="folderFontButtons"><span>Folder name</span><button type="button" className={appearanceDraft.bold ? "active" : ""} onClick={() => setAppearanceDraft(current => ({...current, bold: !current.bold}))}>Bold</button><button type="button" className={appearanceDraft.italic ? "active" : ""} onClick={() => setAppearanceDraft(current => ({...current, italic: !current.italic}))}>Italic</button><button type="button" className={appearanceDraft.underline ? "active" : ""} onClick={() => setAppearanceDraft(current => ({...current, underline: !current.underline}))}>Underline</button></div></div><section className="folderAppearancePreview"><span>Preview</span><div style={{background: appearanceDraft.backgroundColor || "#fff", borderColor: appearanceDraft.borderColor || "#c6d6e5", borderWidth: appearanceDraft.borderWidth ?? 1}}><strong style={{fontWeight: appearanceDraft.bold ? 800 : 600, fontStyle: appearanceDraft.italic ? "italic" : "normal", textDecoration: appearanceDraft.underline ? "underline" : "none"}}>{folder.name || "Folder name"}</strong><small>Drop files here</small></div></section><footer><button type="button" className="appearanceReset" onClick={() => setAppearanceDraft({})}>Reset folder color</button><button type="button" className="appearanceCancel" onClick={() => setAppearanceFolderId(null)}>Cancel</button><button type="button" className="appearanceConfirm" onClick={() => { onUpdate(folder.id, {appearance: {...appearanceDraft, shadow: false}}); setAppearanceFolderId(null); }}>OK</button></footer></div>}</span>
+                    <span className="pathInput"><input value={folder.path} onChange={event => onUpdate(folder.id, {path: event.target.value.replace(/^"|"$/g, ""), storage: "physical"})} placeholder={folder.storage === "imaginary" ? "Imaginary folder" : "Folder path"} aria-label="Folder path" disabled={folder.storage === "imaginary"}/>{orderingFolders ? <button type="button" className="folderAppearanceButton" onClick={() => { setAppearanceDraft({...folder.appearance, shadow: false}); setAppearanceFolderId(folder.id); }}>Style</button> : <select aria-label="Path options" value={folder.storage === "imaginary" ? "imaginary" : "insert"} onChange={event => void choosePath(folder, event.target.value)}><option value="insert">Insert</option><option value="new">New</option><option value="imaginary">Imaginary</option></select>}{appearanceFolderId === folder.id && <div className="folderAppearancePanel" role="dialog" aria-modal="true" aria-label={`Customise ${folder.name}`}><header><div><strong>Folder appearance</strong><span>Customise the dashboard block</span></div><button type="button" onClick={() => setAppearanceFolderId(null)}>×</button></header><div className="folderAppearanceControls"><label><span>Folder colour</span><input type="color" value={appearanceDraft.backgroundColor || "#ffffff"} onChange={event => setAppearanceDraft(current => ({...current, backgroundColor: event.target.value}))}/></label><label><span>Outline colour</span><input type="color" value={appearanceDraft.borderColor || "#c6d6e5"} onChange={event => setAppearanceDraft(current => ({...current, borderColor: event.target.value}))}/></label><label><span>Outline thickness</span><input type="range" min="0" max="8" value={appearanceDraft.borderWidth ?? 1} onChange={event => setAppearanceDraft(current => ({...current, borderWidth: Number(event.target.value)}))}/><b>{appearanceDraft.borderWidth ?? 1}px</b></label><label className="folderWorkGroup"><span>Join work folders</span><input list="folderWorkGroups" value={appearanceDraft.workGroup ?? folder.description} placeholder="Same project = shared colour and logo" onChange={event=>setAppearanceDraft(current=>({...current,workGroup:event.target.value}))}/><datalist id="folderWorkGroups">{[...new Set(folders.map(item=>(item.appearance?.workGroup ?? item.description).trim()).filter(Boolean))].map(group=><option key={group} value={group}/>)}</datalist><small>Choose an existing project or type a name. Empty separates this folder.</small></label><div className="folderFontButtons"><span>Folder name</span><button type="button" className={appearanceDraft.bold ? "active" : ""} onClick={() => setAppearanceDraft(current => ({...current, bold: !current.bold}))}>Bold</button><button type="button" className={appearanceDraft.italic ? "active" : ""} onClick={() => setAppearanceDraft(current => ({...current, italic: !current.italic}))}>Italic</button><button type="button" className={appearanceDraft.underline ? "active" : ""} onClick={() => setAppearanceDraft(current => ({...current, underline: !current.underline}))}>Underline</button></div></div><section className="folderAppearancePreview"><span>Preview</span><div style={{background: appearanceDraft.backgroundColor || "#fff", borderColor: appearanceDraft.borderColor || "#c6d6e5", borderWidth: appearanceDraft.borderWidth ?? 1}}><strong style={{fontWeight: appearanceDraft.bold ? 800 : 600, fontStyle: appearanceDraft.italic ? "italic" : "normal", textDecoration: appearanceDraft.underline ? "underline" : "none"}}>{folder.name || "Folder name"}</strong><small>Drop files here</small></div></section><footer><button type="button" className="appearanceReset" onClick={() => setAppearanceDraft({})}>Reset folder color</button><button type="button" className="appearanceCancel" onClick={() => setAppearanceFolderId(null)}>Cancel</button><button type="button" className="appearanceConfirm" onClick={() => { onUpdate(folder.id, {appearance: {...appearanceDraft, shadow: false}}); setAppearanceFolderId(null); }}>OK</button></footer></div>}</span>
                     <input value={folder.description} onChange={event => onUpdate(folder.id, {description: event.target.value})} placeholder="Description" aria-label="Folder description"/>
                     <span className="folderRowActions"><button type="button" className={openedFolderIds.includes(folder.id) && folder.id !== primaryOpenedId ? "toggleFolderViewButton active" : "toggleFolderViewButton"} onClick={() => toggleFolderInView(folder.id)} title={openedFolderIds.includes(folder.id) ? "Remove from current view" : "Add to current view"} aria-pressed={openedFolderIds.includes(folder.id) && folder.id !== primaryOpenedId}><Plus size={15}/></button><button type="button" className={folder.id === primaryOpenedId ? "openFolderButton active" : "openFolderButton"} onClick={() => openFolderOnly(folder.id)} title="Open only this folder" aria-pressed={folder.id === primaryOpenedId}><FolderOpen size={17}/></button></span>
                 </div>)}
@@ -564,7 +584,7 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
             <div className="folderInspectorTitle"><FolderOpen size={20}/><div><strong>{openedFolders.length > 1 ? `${openedFolders.length} folders open` : primaryOpened?.name ?? "No folder open"}</strong><small>{openedFolders.length > 1 ? openedFolders.map(folder => folder.name).join(" · ") : primaryOpened?.path || "Open a folder from the table"}</small></div></div>
             <div className="folderSearch"><input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {if (event.key === "Enter") void search();}} placeholder={aiSearchEnabled ? "Describe a file or its contents" : openedFolders.length > 1 ? "Search open folders" : "Search this folder"} disabled={!openedFolders.length}/>{aiEnabled && <button type="button" className={aiSearchEnabled ? "folderAiSearchToggle enabled" : "folderAiSearchToggle"} onClick={() => setAiSearchEnabled(current => !current)} title={aiSearchEnabled ? "AI Search Assistant is on" : "Turn on AI Search Assistant"} aria-pressed={aiSearchEnabled}><Sparkles size={14}/></button>}<button type="button" onClick={() => void search()} disabled={!openedFolders.length || !query.trim()} title={aiSearchEnabled ? "Search with AI assistance" : "Search files"}><Search size={17}/></button><button type="button" title="Clear search" onClick={() => { setQuery(""); setResults([]); setHasSearched(false); clearFileSelection(); }}>x</button></div><div className="inspectorSelectionActions"><button type="button" disabled={!selectedPaths.length} onClick={clearFileSelection}>Deselect all</button><button type="button" disabled={!selectedPaths.length} onClick={() => void openPaths(selectedPaths)}>Open files</button><button type="button" disabled={!results.length} onClick={() => { setResults([]); clearFileSelection(); }}>Clear all</button></div>
             {hasSearched && <><section className={results.length ? "inspectorList foundFilesPanel" : "inspectorList foundFilesPanel emptyResults"} style={results.length ? {height: foundFilesHeight} : undefined}><h3>Found files</h3>{results.length ? results.map(file => renderFile(file, `result-${file.path}`)) : <p>No search results.</p>}</section><button type="button" className={results.length ? "inspectorListsResizer" : "inspectorListsResizer disabled"} onPointerDown={startFoundFilesResize} title="Drag to resize file lists" aria-label="Resize Found files and Folder files" disabled={!results.length}><GripHorizontal size={14}/></button></>}
-            <section className="inspectorList folderFiles"><h3>Folder files</h3>{openedFolders.length ? openedFolders.map(folder => { const contents = folderContents[folderContentKey(folder)]; const isLoading = loadingDirectories.has(folderContentKey(folder)); const readFileCount = countReadFiles(folder); return <div className="folderTreeRoot" key={folder.id}><h4><FolderOpen size={15}/>{folder.name}{readFileCount !== null && <small className="folderFileCount" title="Files read in this folder">{readFileCount} files</small>}</h4>{isLoading && !contents ? <p>Loading folder...</p> : null}{!isLoading && !contents ? <p>{message || "Unable to load this folder."}</p> : null}{contents?.files.map(file => renderFile(file, `root-${folder.id}-${file.path}`))}{contents?.folders.map(directory => renderDirectory(directory, 1))}{contents && !contents.files.length && !contents.folders.length ? <p>This folder is empty.</p> : null}</div>; }) : <p>{message}</p>}</section>
+            <section className="inspectorList folderFiles"><h3>Folder files<select className="folderFilesFormatSelect" aria-label="Filter open folder files by format" value={fileFormat} onChange={event => setFileFormat(event.target.value)}><option value="all">All formats ({fileTypeCounts.reduce((sum, [, count]) => sum + count, 0)})</option>{fileTypeCounts.map(([type, count]) => <option key={type} value={type}>{type.toUpperCase()} ({count})</option>)}</select></h3>{openedFolders.length ? openedFolders.map(folder => { const contents = folderContents[folderContentKey(folder)]; const isLoading = loadingDirectories.has(folderContentKey(folder)); const readFileCount = countReadFiles(folder); return <div className="folderTreeRoot" key={folder.id}><h4><FolderOpen size={15}/>{folder.name}{readFileCount !== null && <small className="folderFileCount" title="Files read in this folder">{readFileCount} files</small>}</h4>{isLoading && !contents ? <p>Loading folder...</p> : null}{!isLoading && !contents ? <p>{message || "Unable to load this folder."}</p> : null}{contents?.files.map(file => renderFile(file, `root-${folder.id}-${file.path}`))}{contents?.folders.map(directory => renderDirectory(directory, 1))}{contents && !contents.files.length && !contents.folders.length ? <p>This folder is empty.</p> : null}</div>; }) : <p>{message}</p>}</section>
         </aside>
     </main>;
 }

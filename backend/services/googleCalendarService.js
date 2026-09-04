@@ -4,7 +4,7 @@ const {getConnection, removeConnection, saveConnection} = require("./emailTokenS
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 const CALENDAR_API = "https://www.googleapis.com/calendar/v3";
-const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly https://www.googleapis.com/auth/drive.readonly";
+const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/drive.readonly";
 const authorizations = new Map();
 const connections = new Map();
 
@@ -59,13 +59,14 @@ async function refresh(userId, blockId) {
     save(userId, blockId, current);
 }
 
-async function calendarFetch(userId, resource, blockId) {
+async function calendarFetch(userId, resource, blockId, options = {}) {
     let current = connectionFor(userId, blockId);
     if (!current) throw new Error("Google Calendar is not connected.");
     if (Date.now() >= Number(current.expiresAt || 0) - 60_000) await refresh(userId, blockId);
     current = connectionFor(userId, blockId);
-    let response = await fetch(`${CALENDAR_API}${resource}`, {headers: {Authorization: `Bearer ${current.accessToken}`}});
-    if (response.status === 401) { await refresh(userId, blockId); current = connectionFor(userId, blockId); response = await fetch(`${CALENDAR_API}${resource}`, {headers: {Authorization: `Bearer ${current.accessToken}`}}); }
+    const request = token => ({...options,headers:{...(options.headers||{}),Authorization:`Bearer ${token}`}});
+    let response = await fetch(`${CALENDAR_API}${resource}`, request(current.accessToken));
+    if (response.status === 401) { await refresh(userId, blockId); current = connectionFor(userId, blockId); response = await fetch(`${CALENDAR_API}${resource}`, request(current.accessToken)); }
     if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data?.error?.message || "Google Calendar could not be read."); }
     return response;
 }
@@ -82,6 +83,11 @@ async function listEvents(userId, blockId, options = {}) {
     const query = new URLSearchParams({singleEvents: "true", orderBy: "startTime", timeMin: range.start.toISOString(), timeMax: range.end.toISOString(), maxResults: "60", fields: "items(id,summary,start,end,location,htmlLink,hangoutLink,conferenceData(entryPoints(entryPointType,uri,label)),attachments(fileId,fileUrl,title,mimeType))"});
     const data = await (await calendarFetch(userId, `/calendars/primary/events?${query}`, blockId)).json();
     return (data.items || []).map(item => ({id: String(item.id || ""), title: String(item.summary || "Untitled event"), start: item.start?.dateTime || item.start?.date || "", end: item.end?.dateTime || item.end?.date || "", location: String(item.location || ""), link: "", meetingLink: String(item.hangoutLink || item.conferenceData?.entryPoints?.find(point => point.entryPointType === "video")?.uri || ""), attachments: Array.isArray(item.attachments) ? item.attachments.map(a => ({fileId: String(a.fileId || ""), url: String(a.fileUrl || ""), name: String(a.title || "Calendar attachment"), mimeType: String(a.mimeType || "")})).filter(a => a.fileId && a.url) : []}));
+}
+async function createEvent(userId, blockId, {title,start,end}) {
+    const response=await calendarFetch(userId,"/calendars/primary/events",blockId,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({summary:title,start:{dateTime:start},end:{dateTime:end}})});
+    const item=await response.json();
+    return {id:String(item.id||""),title:String(item.summary||title),start:item.start?.dateTime||start,end:item.end?.dateTime||end,location:String(item.location||""),attachments:[]};
 }
 
 async function downloadAttachment(userId, blockId, fileId) {
@@ -101,4 +107,4 @@ function getStatus(userId, blockId) {
     return {connected: Boolean(connectionFor(userId, blockId)), configured};
 }
 function disconnect(userId, blockId) { connections.delete(key(userId, blockId)); removeConnection("calendar", userId, blockId); }
-module.exports = {disconnect, downloadAttachment, exchangeAuthorizationCode, getAuthorizationUrl, getStatus, hasPendingAuthorization, listEvents};
+module.exports = {createEvent, disconnect, downloadAttachment, exchangeAuthorizationCode, getAuthorizationUrl, getStatus, hasPendingAuthorization, listEvents};

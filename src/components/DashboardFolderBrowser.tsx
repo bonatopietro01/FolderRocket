@@ -1,7 +1,8 @@
-import {ChevronLeft, ChevronRight, Home} from "lucide-react";
+import {ChevronLeft, ChevronRight, Home, Search} from "lucide-react";
 import {useEffect, useRef, useState} from "react";
 import {API_BASE_URL} from "../api";
 import FileDropZone from "./FileDropZone";
+import {watchFolderDragHover} from "../folderDragHover";
 
 interface Entry {
     name: string;
@@ -45,12 +46,12 @@ export default function DashboardFolderBrowser({
     storageScope = "",
     aiEnabled = false
 }: Props) {
+    const [query, setQuery] = useState("");
     const [history, setHistory] = useState([{path: initialPath, name: initialName}]);
     const [index, setIndex] = useState(0);
     const [contents, setContents] = useState<Contents>({files: [], folders: []});
     const [loading, setLoading] = useState(true);
     const [verified, setVerified] = useState(false);
-    const hoverTimer = useRef<number | null>(null);
     const onHomeRef = useRef(onHome);
     const current = history[index];
     const availableSourceFolderPaths = sourceFolderPaths.length ? sourceFolderPaths : [initialPath];
@@ -71,13 +72,7 @@ export default function DashboardFolderBrowser({
         return () => { active = false; };
     }, [current.path, index]);
 
-    function cancelHover() {
-        if (hoverTimer.current !== null) window.clearTimeout(hoverTimer.current);
-        hoverTimer.current = null;
-    }
-
     async function openIfNested(entry: Entry) {
-        cancelHover();
         const data = await readFolder(entry.path);
         if (!data?.folders.length) return;
         setHistory(previous => [...previous.slice(0, index + 1), {path: entry.path, name: entry.name}]);
@@ -85,34 +80,30 @@ export default function DashboardFolderBrowser({
         setContents(data);
     }
 
-    function startHover(entry: Entry, event: React.DragEvent) {
-        event.preventDefault();
-        if (hoverTimer.current !== null) return;
-        hoverTimer.current = window.setTimeout(() => {
-            hoverTimer.current = null;
-            void openIfNested(entry);
-        }, 2000);
-    }
+    useEffect(() => watchFolderDragHover(".dashboardFolderGrid .folderDropZone[data-folder-id]", async (block, isCurrent) => {
+        const folder = contents.folders.find(entry => `dashboard-subfolder:${entry.path}` === block.dataset.folderId);
+        if (!folder) return;
+        const data = await readFolder(folder.path);
+        if (!isCurrent() || !data?.folders.length) return;
+        setHistory(previous => [...previous.slice(0, index + 1), folder]);
+        setIndex(index + 1);
+        setContents(data);
+    }), [contents.folders, index]);
 
     if (!verified) return null;
 
     return <div className="dashboardFolderBrowser">
         <header>
+            <label className="dashboardFolderSearch"><Search size={14}/><input type="search" aria-label="Search subfolders" placeholder="Search…" value={query} onChange={event => setQuery(event.target.value)}/></label>
             <button type="button" onClick={() => setIndex(value => Math.max(0, value - 1))} disabled={index === 0} title="Previous folder"><ChevronLeft/></button>
             <button type="button" onClick={() => setIndex(value => Math.min(history.length - 1, value + 1))} disabled={index === history.length - 1} title="Next folder"><ChevronRight/></button>
             <button type="button" onClick={onHome} title="Dashboard folders"><Home/></button>
             <div><strong>{current.name}</strong><small>{current.path}</small></div>
         </header>
         <section className="dashboardFolderGrid">
-            {contents.folders.map(folder => <div
+            {contents.folders.filter(folder => folder.name.toLowerCase().includes(query.trim().toLowerCase())).map(folder => <div
                 className="dashboardSubfolderBlock"
                 key={folder.path}
-                onDragEnterCapture={event => startHover(folder, event)}
-                onDragOverCapture={event => event.preventDefault()}
-                onDragLeave={event => {
-                    if (!event.currentTarget.contains(event.relatedTarget as Node | null)) cancelHover();
-                }}
-                onDropCapture={cancelHover}
             >
                 <FileDropZone
                     id={`dashboard-subfolder:${folder.path}`}
@@ -125,6 +116,7 @@ export default function DashboardFolderBrowser({
                     aiEnabled={aiEnabled}
                 />
             </div>)}
+            {!loading && query.trim() && !contents.folders.some(folder => folder.name.toLowerCase().includes(query.trim().toLowerCase())) && <p className="dashboardFolderStatus">No matching folders.</p>}
             {loading ? <p className="dashboardFolderStatus">Loading subfolders…</p> : null}
         </section>
     </div>;

@@ -94,9 +94,8 @@ async function moveToTrash(
         trashModule.default;
 
 
-    await trash([
-        normalizedPath
-    ]);
+    // Paths are literal filenames, never glob patterns (e.g. report[1].pdf).
+    await trash([normalizedPath], {glob: false});
 
 
     console.log(

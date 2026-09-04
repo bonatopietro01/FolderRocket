@@ -1,4 +1,5 @@
-import { useEffect, useState, type SetStateAction } from "react";
+import {additionalFileIcon} from './AdditionalFileIcons';
+import { useEffect, useState, useSyncExternalStore, type SetStateAction } from "react";
 
 import {
     Flame,
@@ -12,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { API_BASE_URL } from "../api";
+import {recordDailyActivity} from "../dailyActivity";
 import { SEARCH_RESULT_TYPE } from "./SearchWorkspace";
 
 
@@ -145,6 +147,9 @@ interface FireMountainItem {
 
 function FileKindIcon({name}: {name: string}) {
     const extension = name.split(".").pop()?.toLowerCase() ?? "";
+    const additional = additionalFileIcon(extension, 15);
+    if (additional) return additional;
+    if (["ppt", "pptx", "pptm", "pps", "ppsx", "ppsm", "pot", "potx", "potm", "odp"].includes(extension)) return <span className="fileKindIcon powerpoint" title="PowerPoint presentation" aria-label="PowerPoint"><b>P</b></span>;
     if (extension === "pdf") return <span className="fileKindIcon pdf"><FileText size={15}/></span>;
     if (["doc", "docx", "odt"].includes(extension)) return <span className="fileKindIcon word"><FileText size={15}/></span>;
     if (["xls", "xlsx", "csv", "ods"].includes(extension)) return <span className="fileKindIcon excel"><FileSpreadsheet size={15}/></span>;
@@ -157,28 +162,44 @@ function FileKindIcon({name}: {name: string}) {
 function formatSize(size: number) { return size ? `${Math.max(1, Math.round(size / 1024))} KB` : "Size unavailable"; }
 
 let sharedQueue: FireMountainItem[] = [];
-const sharedQueueListeners = new Set<(items: FireMountainItem[]) => void>();
+let sharedSendInProgress = false;
+const sharedQueueListeners = new Set<() => void>();
+const subscribeToQueue = (listener: () => void) => {
+    sharedQueueListeners.add(listener);
+    return () => { sharedQueueListeners.delete(listener); };
+};
+const readSharedQueue = () => sharedQueue;
+const readSendingState = () => sharedSendInProgress;
+function setSendingToFire(sending: boolean) {
+    sharedSendInProgress = sending;
+    sharedQueueListeners.forEach(listener => listener());
+}
 
 function updateSharedQueue(update: SetStateAction<FireMountainItem[]>) {
     sharedQueue = typeof update === "function"
         ? (update as (current: FireMountainItem[]) => FireMountainItem[])(sharedQueue)
         : update;
-    sharedQueueListeners.forEach(listener => listener(sharedQueue));
+    sharedQueueListeners.forEach(listener => listener());
+}
+
+// Shared imperative entry point used by file lists that live outside this component.
+// eslint-disable-next-line react-refresh/only-export-components
+export function enqueueFireMountainFiles(files: Array<{name: string; path: string; size?: number; createdAt?: string}>) {
+    updateSharedQueue(current => {
+        const known = new Set(current.map(item => item.sourcePath).filter(Boolean));
+        return [...current, ...files.filter(file => file.path && !known.has(file.path)).map(file => ({
+            id: crypto.randomUUID(), name: file.name, size: file.size ?? 0,
+            lastModified: file.createdAt ? new Date(file.createdAt).getTime() : Date.now(), sourcePath: file.path
+        }))];
+    });
 }
 
 
 function FireMountain() {
 
     // File attualmente presenti nella lista
-    const [queuedFiles, setLocalQueuedFiles] =
-        useState<FireMountainItem[]>(sharedQueue);
+    const queuedFiles = useSyncExternalStore(subscribeToQueue, readSharedQueue);
     const setQueuedFiles = (update: SetStateAction<FireMountainItem[]>) => updateSharedQueue(update);
-
-    useEffect(() => {
-        const listener = (items: FireMountainItem[]) => setLocalQueuedFiles(items);
-        sharedQueueListeners.add(listener);
-        return () => { sharedQueueListeners.delete(listener); };
-    }, []);
 
     useEffect(() => {
         window.dispatchEvent(new CustomEvent("folderrocket-fire-paths", {
@@ -212,23 +233,29 @@ function FireMountain() {
 
 
     // Spostamento in corso
-    const [sendingToFire, setSendingToFire] =
-        useState(false);
+    const sendingToFire = useSyncExternalStore(subscribeToQueue, readSendingState);
 
     useEffect(() => {
         function addSearchResults(event: Event) {
             const results = (event as CustomEvent<Array<{name: string; path: string; size?: number}>>).detail;
             if (!Array.isArray(results)) return;
-            setQueuedFiles(current => [
+            setQueuedFiles(current => {
+                const seen = new Set(current.map(item => item.sourcePath));
+                return [
                 ...current,
-                ...results.filter(result => !current.some(item => item.sourcePath === result.path)).map(result => ({
+                ...results.filter(result => {
+                    if (!result.path || seen.has(result.path)) return false;
+                    seen.add(result.path);
+                    return true;
+                }).map(result => ({
                     id: `${result.path}-${crypto.randomUUID()}`,
                     name: result.name,
                     size: result.size ?? 0,
                     lastModified: Date.now(),
                     sourcePath: result.path
                 }))
-            ]);
+                ];
+            });
         }
         window.addEventListener("folderrocket-add-to-fire", addSearchResults);
         return () => window.removeEventListener("folderrocket-add-to-fire", addSearchResults);
@@ -859,6 +886,7 @@ function FireMountain() {
         e successivamente elimina gli originali.
     */
     async function sendToFireMountain() {
+        if (sharedSendInProgress) return;
 
         if (
             queuedFiles.length === 0
@@ -875,11 +903,7 @@ function FireMountain() {
 
         const confirmed =
             window.confirm(
-                `Vuoi inviare ${queuedFiles.length} ${
-                    queuedFiles.length === 1
-                        ? "file"
-                        : "file"
-                } a Fire Mountain?`
+                `Vuoi inviare ${queuedFiles.length} file a Fire Mountain?`
             );
 
 
@@ -891,14 +915,10 @@ function FireMountain() {
 
 
         try {
-
             setSendingToFire(true);
 
 
-            const selectedDirectory =
-                trashDirectory
-                ??
-                await chooseTrashDirectory();
+            let selectedDirectory = trashDirectory;
 
 
             const completedIds:
@@ -925,6 +945,7 @@ function FireMountain() {
                                 `${API_BASE_URL}/trash-file`,
                                 {
                                     method: "POST",
+                                    credentials: "include",
                                     headers: {
                                         "Content-Type": "application/json"
                                     },
@@ -955,6 +976,7 @@ function FireMountain() {
 
                     }
 
+                    selectedDirectory ??= await chooseTrashDirectory();
                     const destinationName =
                         await copyFileToTrash(
                             item,
@@ -1041,8 +1063,9 @@ function FireMountain() {
 
 
             alert(
-                `${completedIds.length} file spostati nella cartella-cestino`
+                `${completedIds.length} file spostati nel cestino`
             );
+            recordDailyActivity({kind:"fire",summary:`Deleted ${completedIds.length} file${completedIds.length===1?"":"s"}`,files:queuedFiles.filter(item=>completedIds.includes(item.id)).map(item=>item.name)});
 
         }
 
@@ -1063,7 +1086,6 @@ function FireMountain() {
         }
 
         finally {
-
             setSendingToFire(false);
 
         }
@@ -1218,9 +1240,6 @@ function FireMountain() {
             </div>
 
 
-            {
-                true && (
-
                     <div className="fireMountainSummary">
 
                         <span>
@@ -1257,9 +1276,6 @@ function FireMountain() {
                         </button>
 
                     </div>
-
-                )
-            }
 
         </section>
 

@@ -1,4 +1,4 @@
-import {useEffect, useState} from "react";
+import {useState} from "react";
 import {BookmarkPlus, Clock3, Star, Trash2} from "lucide-react";
 
 export type EmailAlertKind = "ai" | "sender";
@@ -48,7 +48,7 @@ export default function EmailAlertBuilder({providerLabel, rules, favorites, onCh
     const [editingId, setEditingId] = useState<string | null>(null);
     const [pendingDelete, setPendingDelete] = useState<string | null>(null);
     const [showSavedAlerts, setShowSavedAlerts] = useState(false);
-    useEffect(() => { if (!allowAi && draft.kind === "ai") setDraft(makeDraft(false)); }, [allowAi, draft.kind]);
+    if (!allowAi && draft.kind === "ai") setDraft(makeDraft(false));
     const hasValidWindow = draft.filter.mode === "hours"
         ? Number(draft.filter.hours) >= 1
         : Boolean(draft.filter.startAt && draft.filter.endAt && draft.filter.startAt <= draft.filter.endAt);

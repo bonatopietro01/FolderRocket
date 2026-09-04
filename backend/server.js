@@ -1,3 +1,4 @@
+require("./services/hostFilesystem");
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
@@ -28,11 +29,12 @@ const {getEmailAlertSettings, normalizeProviderBlock, saveEmailAlertSettings} = 
 const {startEmailAlertScheduler} = require("./services/emailAlertScheduler");
 const {migrateLegacyConnections} = require("./services/emailTokenStore");
 const {addAuditEvent, listAuditEvents} = require("./services/auditLogService");
-const {analyzeDomainPage, analyzeProjection, downloadDomainFile, listDomainDownloads} = require("./services/projectionAnalysisService");
+const {analyzeDomainPage, analyzeProjection, downloadDomainFile, listDomainDownloads, readDomainPreview} = require("./services/projectionAnalysisService");
 const {createStickyNote} = require("./services/stickyNoteAiService");
 const {integrationStatus, saveIntegrationConfiguration} = require("./services/desktopIntegrationConfigService");
 const {createBrowserBridgeToken, resolveBrowserDrop, stageBrowserDrop} = require("./services/browserBridgeService");
 const {
+    createEvent: createGoogleCalendarEvent,
     authenticateRequest,
     createEmergencyRecoveryCode,
     createInvite,
@@ -232,13 +234,19 @@ function sendLocalEmailView(res, message) {
     res.type("html").send(`<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${subject}</title><style>body{margin:0;background:#f4f8fc;color:#182536;font:15px/1.55 Segoe UI,Arial,sans-serif}.mail{max-width:900px;margin:32px auto;background:#fff;border:1px solid #cbd9e7;border-radius:14px;box-shadow:0 10px 32px #17365d18;overflow:hidden}.head{padding:22px 28px;border-bottom:1px solid #dbe6ef;background:#f9fcff}.head h1{margin:0 0 9px;font-size:22px}.meta{color:#5f6d7d;font-size:13px}.body{padding:28px;white-space:pre-wrap;word-break:break-word}</style></head><body><article class="mail"><header class="head"><h1>${subject}</h1><div class="meta"><strong>From:</strong> ${sender}</div><div class="meta"><strong>Received:</strong> ${receivedAt}</div></header><main class="body">${text}</main></article></body></html>`);
 }
 
-function openWithDefaultApp(filePath) {
+async function openWithDefaultApp(filePath) {
     if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
         throw new Error("File non trovato");
     }
-    const command = process.platform === "win32" ? "explorer.exe" : "xdg-open";
-    const child = spawn(command, [filePath], {detached: true, stdio: "ignore"});
-    child.unref();
+    const command = process.platform === "win32" ? "powershell.exe" : process.platform === "darwin" ? "open" : "xdg-open";
+    const args = process.platform === "win32"
+        ? ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", "Start-Process -FilePath $args[0]", filePath]
+        : [filePath];
+    await new Promise((resolve, reject) => {
+        const child = spawn(command, args, {detached: true, stdio: "ignore", windowsHide: true});
+        child.once("error", reject);
+        child.once("spawn", () => { child.unref(); resolve(); });
+    });
 }
 
 function chooseParentFolderOnHost() {
@@ -718,6 +726,14 @@ app.post("/domain/analyze", requireAuthenticated, async (req, res) => {
     }
 });
 
+app.post("/domain/preview", requireAuthenticated, async (req, res) => {
+    try { res.json(await readDomainPreview(req.body?.url)); }
+    catch (error) {
+        const message=error instanceof Error?error.message:"Unable to read this public page.";
+        res.status(/valid page address|public http|private network|readable text|too large/i.test(message)?400:502).json({message});
+    }
+});
+
 // The file picker reads only links declared by the loaded public page.  The
 // download route repeats that check, so a client cannot use this as a generic
 // network fetcher for arbitrary URLs.
@@ -819,6 +835,18 @@ app.get("/calendar/google/events", requireAuthenticated, async (req, res) => {
     } catch (error) {
         res.status(400).json({message: error instanceof Error ? error.message : "Unable to read Google Calendar."});
     }
+});
+
+app.post("/calendar/google/events", requireAuthenticated, async (req,res)=>{
+    try {
+        const blockId=readAlertBlockId(req);
+        const title=typeof req.body?.title==="string"?req.body.title.trim():"";
+        const start=new Date(req.body?.start),end=new Date(req.body?.end);
+        if(!title||title.length>200||Number.isNaN(start.getTime())||Number.isNaN(end.getTime())||end<=start)throw new Error("Enter a title and a valid start and end time.");
+        const event=await createGoogleCalendarEvent(req.user.id,blockId,{title,start:start.toISOString(),end:end.toISOString()});
+        addAuditEvent({user:req.user,action:"google_calendar_event_created",details:{title,start:event.start,end:event.end}});
+        res.json({event});
+    } catch(error){res.status(400).json({message:error instanceof Error?error.message:"Unable to create the Calendar event."});}
 });
 
 // Calendar attachments use the read-only Drive permission attached to the
@@ -1475,30 +1503,74 @@ app.post("/search-files", async (req, res) => {
     }
 });
 
+app.post("/files/recent", requireAuthenticated, requireAdministrator, async (req, res) => {
+    try {
+        const {recentFiles, defaultRecentRoots} = require("./services/recentFilesService");
+        const extra = (Array.isArray(req.body?.folders) ? req.body.folders : []).slice(0, 60).map(folder => assertUserPath(req.user, folder, {allowMissing: true}));
+        res.json(await recentFiles([...defaultRecentRoots(), ...extra], {hours: req.body?.hours}));
+    } catch (error) { res.status(400).json({message: error.message}); }
+});
+
+app.get("/devices/phone", requireAuthenticated, requireAdministrator, async (_req, res) => {
+    try { res.json(await require("./services/windowsTask").windowsTask("phone-files.ps1", {action: "devices"})); }
+    catch (error) { res.status(400).json({message: error.message}); }
+});
+
+app.post("/devices/phone/:action", requireAuthenticated, requireAdministrator, async (req, res) => {
+    try {
+        const {deviceId, segments = [], name} = req.body || {};
+        if (!["files", "copy", "recent"].includes(req.params.action) || typeof deviceId !== "string" || !Array.isArray(segments) || segments.length > 30 || segments.some(value => typeof value !== "string" || value.length > 255)) throw new Error("Invalid phone location.");
+        const job = {action: req.params.action, deviceId, segments};
+        if (job.action === "recent") { job.hours=Math.max(0.1,Math.min(87600,Number(req.body?.hours)||24));job.category=["all","image","file"].includes(req.body?.category)?req.body.category:"all"; }
+        if (job.action === "copy") {
+            if (typeof name !== "string" || !name || /[\\/\x00]/.test(name) || name === "." || name === "..") throw new Error("Invalid file name.");
+            job.name = name;
+            job.destination = path.join(userWorkspace(req.user), ".phone-imports", crypto.randomUUID());
+            await fs.promises.mkdir(job.destination, {recursive: true});
+        }
+        res.json(await require("./services/windowsTask").windowsTask("phone-files.ps1", job, ["copy","recent"].includes(job.action) ? 125000 : 45000));
+    } catch (error) { res.status(400).json({message: error.message}); }
+});
+
+app.post("/applications/open", requireAuthenticated, requireAdministrator, async (req, res) => {
+    try {
+        if (typeof req.body?.name !== "string" || !req.body.name.trim() || req.body.name.length > 120) throw new Error("Invalid application name.");
+        res.json(await require("./services/windowsTask").windowsTask("open-application.ps1", {name: req.body.name}));
+    } catch (error) { res.status(400).json({message: error.message || "Unable to open application."}); }
+});
+
 app.post("/applications/discover", requireAuthenticated, requireAdministrator, async (req, res) => {
     try {
+        const appId = String(req.body?.appId || "");
+        if (!/^[a-zA-Z0-9_-]{1,120}$/.test(appId)) throw new Error("Invalid application identifier.");
         const extensions = [...new Set((Array.isArray(req.body?.extensions) ? req.body.extensions : []).map(value => String(value).replace(/^\./, "").toLowerCase()).filter(value => /^[a-z0-9]{1,12}$/.test(value)))];
         if (!extensions.length) throw new Error("Select at least one file type for this application.");
-        const roots = [];
-        if (process.platform === "win32") for (let code = 67; code <= 90; code += 1) { const root = `${String.fromCharCode(code)}:\\`; if (fs.existsSync(root)) roots.push(root); }
-        else roots.push(os.homedir());
-        const excluded = new Set(["windows","program files","program files (x86)","programdata","$recycle.bin","system volume information","node_modules",".git","appdata"]);
-        const pending = [...roots]; const results = []; const folders = new Map(); let inspected = 0;
-        while (pending.length && inspected < 50_000 && results.length < 1_000) {
-            const current = pending.pop(); let entries;
-            try { entries = await fs.promises.readdir(current, {withFileTypes:true}); } catch { continue; }
-            for (const entry of entries) {
-                if (entry.isDirectory()) { if (!excluded.has(entry.name.toLowerCase())) pending.push(path.join(current,entry.name)); continue; }
-                if (!entry.isFile()) continue; inspected += 1;
-                const extension = path.extname(entry.name).slice(1).toLowerCase(); if (!extensions.includes(extension)) continue;
-                const filePath = path.join(current,entry.name); let stats; try { stats=await fs.promises.stat(filePath); } catch { continue; }
-                results.push({name:entry.name,path:filePath,size:stats.size,createdAt:stats.birthtime.toISOString(),extension}); folders.set(current,(folders.get(current)||0)+1);
-                if (results.length >= 1_000) break;
-            }
-            if (inspected % 500 === 0) await new Promise(resolve => setImmediate(resolve));
+        const roots = [os.homedir(), process.env.OneDrive, process.env.OneDriveCommercial, process.env.OneDriveConsumer].filter(Boolean);
+        if (process.platform === "win32") for (let code = 65; code <= 90; code += 1) {
+            const root = String.fromCharCode(code) + ":\\";
+            if (fs.existsSync(root)) roots.push(root);
         }
-        res.json({files:results,folders:[...folders.entries()].map(([folder,count])=>({path:folder,count})).sort((a,b)=>b.count-a.count),inspected,truncated:Boolean(pending.length)});
+        const controller = new AbortController();
+        const cancel = () => controller.abort();
+        res.on("close", cancel);
+        try {
+            const cache = require("./services/applicationDiscoveryCache");
+            const previous = cache.read(req.user.id, appId, extensions);
+            const result = await require("./services/applicationDiscoveryService").discoverApplicationFiles(roots, extensions, {signal:controller.signal, previous});
+            cache.write(req.user.id, appId, extensions, result);
+            const {directories, ...response} = result;
+            if (!res.destroyed) res.json(response);
+        } finally { res.off("close", cancel); }
     } catch (error) { res.status(400).json({message:error instanceof Error?error.message:"Unable to scan application files."}); }
+});
+
+app.delete("/applications/discover", requireAuthenticated, requireAdministrator, (req, res) => {
+    try {
+        const appId = String(req.body?.appId || "");
+        if (!/^[a-zA-Z0-9_-]{1,120}$/.test(appId)) throw new Error("Invalid application identifier.");
+        require("./services/applicationDiscoveryCache").remove(req.user.id, appId);
+        res.json({ok:true});
+    } catch (error) { res.status(400).json({message:error instanceof Error?error.message:"Unable to clear the application cache."}); }
 });
 
 app.post("/sticky-notes/ai", async (req, res) => {
@@ -1707,7 +1779,11 @@ app.post("/files/copy", (req, res) => {
 // ==================================================
 
 function cargoShipDirectory(user) {
-    const directory = path.join(userWorkspace(user), "Cargo Ship");
+    const directory = path.join(userWorkspace(user), "CargoRocket");
+    const legacy = path.join(userWorkspace(user), "Cargo Ship");
+    if (!fs.existsSync(directory) && fs.existsSync(legacy)) {
+        try { fs.renameSync(legacy, directory); } catch { /* Keep legacy data in place if another process has it open. */ }
+    }
     fs.mkdirSync(directory, {recursive: true});
     return directory;
 }
@@ -1731,7 +1807,7 @@ app.post("/cargo-ship/text-file", requireAuthenticated, async (req, res) => {
         const text = typeof req.body?.text === "string" ? req.body.text : "";
         const enteredName = typeof req.body?.name === "string" ? req.body.name.trim() : "";
         if (!text.trim()) throw new Error("Add some text before creating the file.");
-        if (text.length > 500000) throw new Error("The text is too large for Cargo Ship.");
+        if (text.length > 500000) throw new Error("The text is too large for CargoRocket.");
         const baseName = path.basename(enteredName || "FolderRocket note", path.extname(enteredName || ""));
         const targetPath = nextAvailableFilePath(cargoShipDirectory(req.user), `${baseName || "FolderRocket note"}.${format}`);
         if (format === "pdf") writeTextPdf(targetPath, baseName || "FolderRocket note", text);
@@ -1741,7 +1817,7 @@ app.post("/cargo-ship/text-file", requireAuthenticated, async (req, res) => {
         addAuditEvent({user: req.user, action: "cargo_text_file_created", details: {fileName: path.basename(targetPath)}});
         res.json({file: {name: path.basename(targetPath), path: targetPath, size: stats.size}});
     } catch (error) {
-        res.status(400).json({message: error instanceof Error ? error.message : "Unable to create the Cargo Ship file."});
+        res.status(400).json({message: error instanceof Error ? error.message : "Unable to create the CargoRocket file."});
     }
 });
 
@@ -1750,7 +1826,7 @@ app.post("/cargo-ship/lens-screenshot", requireAuthenticated, (req, res) => {
         const imageDataUrl = typeof req.body?.imageDataUrl === "string" ? req.body.imageDataUrl : "";
         const match = imageDataUrl.match(/^data:image\/png;base64,([a-z0-9+/=\s]+)$/i);
         if (!match) throw new Error("A valid PNG screenshot is required.");
-        if (imageDataUrl.length > 5_500_000) throw new Error("The lens screenshot is too large. Resize Cargo Ship and try again.");
+        if (imageDataUrl.length > 5_500_000) throw new Error("The lens screenshot is too large. Resize CargoRocket and try again.");
         const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
         const targetPath = nextAvailableFilePath(cargoShipDirectory(req.user), `Lens screenshot ${timestamp}.png`);
         fs.writeFileSync(targetPath, Buffer.from(match[1].replace(/\s/g, ""), "base64"));
@@ -1777,7 +1853,7 @@ app.post("/cargo-ship/stage-files", requireAuthenticated, upload.array("files"),
         addAuditEvent({user: req.user, action: "cargo_files_staged", details: {count: staged.length}});
         res.json({files: staged});
     } catch (error) {
-        res.status(400).json({message: error instanceof Error ? error.message : "Unable to stage local Cargo Ship files."});
+        res.status(400).json({message: error instanceof Error ? error.message : "Unable to stage local CargoRocket files."});
     }
 });
 
@@ -1849,15 +1925,49 @@ app.get("/search-files/download", (req, res) => {
     res.download(targetPath, path.basename(targetPath));
 });
 
-app.post("/search-files/open", (req, res) => {
+app.post("/files/open-location", requireAuthenticated, requireAdministrator, async (req, res) => {
+    try {
+        const target = assertUserPath(req.user, req.body?.path);
+        const stats = await fs.promises.stat(target);
+        const folder = stats.isDirectory() ? target : path.dirname(target);
+        const command = process.platform === "win32" ? "explorer.exe" : process.platform === "darwin" ? "open" : "xdg-open";
+        await new Promise((resolve, reject) => {
+            const child = spawn(command, [folder], {detached:true, stdio:"ignore", windowsHide:true});
+            child.once("error", reject);
+            child.once("spawn", () => { child.unref(); resolve(); });
+        });
+        res.json({path:folder});
+    } catch (error) { res.status(400).json({message:error.message || "Unable to open containing folder."}); }
+});
+
+app.post("/files/keep", requireAuthenticated, requireAdministrator, async (req, res) => {
+    try {
+        const target = assertUserPath(req.user, req.body?.path);
+        const stats = await fs.promises.stat(target);
+        if (!stats.isFile()) throw new Error("The converted item is not a file.");
+        res.json({name: path.basename(target), path: target, folder: path.dirname(target), size: stats.size});
+    } catch (error) { res.status(400).json({message: error instanceof Error ? error.message : "Unable to keep this file."}); }
+});
+
+app.post("/search-files/open", async (req, res) => {
     try {
         if (!isAdmin(req.user)) throw new Error("For security, files can be opened on the host computer only by the administrator. Download the file instead.");
         const targetPath = assertUserPath(req.user, req.body?.path);
-        openWithDefaultApp(targetPath);
+        await openWithDefaultApp(targetPath);
         res.json({message: "File aperto"});
     } catch (error) {
         res.status(400).json({message: error instanceof Error ? error.message : "Impossibile aprire il file"});
     }
+});
+
+app.post("/files/change-format", requireAuthenticated, requireAdministrator, async (req, res) => {
+    try {
+        const mother = assertUserPath(req.user, req.body?.mother);
+        const children = (Array.isArray(req.body?.children) ? req.body.children : []).map(file => assertUserPath(req.user, file));
+        for (const file of [mother, ...children]) if (!(await fs.promises.stat(file)).isFile()) throw new Error("Choose files, not folders.");
+        const result = await require("./services/changeFormatService").changeFormat(mother, children, req.body?.options || {}, userWorkspace(req.user));
+        res.json(result);
+    } catch (error) { res.status(400).json({message:error.message || "Unable to apply the mother format. Microsoft Word is required for documents."}); }
 });
 
 app.post("/convert-files", async (req, res) => {
@@ -2069,7 +2179,7 @@ app.post("/email/gmail/attachments/open", async (req, res) => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "folderrocket-"));
         const targetPath = path.join(directory, path.basename(name).replaceAll('"', ""));
         fs.writeFileSync(targetPath, content);
-        openWithDefaultApp(targetPath);
+        await openWithDefaultApp(targetPath);
         res.json({message: "Allegato aperto"});
     } catch (error) {
         res.status(400).json({message: error instanceof Error ? error.message : "Impossibile aprire l'allegato"});
@@ -2167,7 +2277,7 @@ app.post("/email/outlook/attachments/open", async (req, res) => {
         const directory = fs.mkdtempSync(path.join(os.tmpdir(), "folderrocket-"));
         const targetPath = path.join(directory, path.basename(name).replaceAll('"', ""));
         fs.writeFileSync(targetPath, content);
-        openWithDefaultApp(targetPath);
+        await openWithDefaultApp(targetPath);
         res.json({message: "Attachment opened"});
     } catch (error) { res.status(400).json({message: error instanceof Error ? error.message : "Unable to open Outlook attachment"}); }
 });

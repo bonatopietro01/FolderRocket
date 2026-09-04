@@ -51,7 +51,7 @@ app.on("second-instance", (_event, commandLine) => {
 app.on("open-url", (event, url) => { event.preventDefault(); handleFolderRocketProtocol(url); });
 
 function cargoShipState() {
-    return {open: Boolean(cargoWindow && !cargoWindow.isDestroyed()), expanded: cargoShipExpanded};
+    return {open: Boolean(cargoWindow && !cargoWindow.isDestroyed() && cargoWindow.isVisible()), expanded: cargoShipExpanded};
 }
 
 function notifyCargoShipState() {
@@ -233,9 +233,20 @@ function startBackend() {
 }
 
 function createWindow(loadApplication = true) {
+    const statePath = path.join(app.getPath("userData"), "window-state.json");
+    let savedState = null;
+    try { savedState = JSON.parse(fs.readFileSync(statePath, "utf8")); } catch { /* First launch or stale state. */ }
+    const usableBounds = savedState && ["x", "y", "width", "height"].every(key => Number.isFinite(savedState[key]))
+        ? savedState : null;
+    const visibleBounds = usableBounds && screen.getAllDisplays().some(display => {
+        const area = display.workArea;
+        return usableBounds.x < area.x + area.width && usableBounds.x + usableBounds.width > area.x
+            && usableBounds.y < area.y + area.height && usableBounds.y + usableBounds.height > area.y;
+    }) ? usableBounds : null;
     mainWindow = new BrowserWindow({
-        width: 1440,
-        height: 940,
+        width: visibleBounds?.width ?? 1440,
+        height: visibleBounds?.height ?? 940,
+        ...(visibleBounds ? {x: visibleBounds.x, y: visibleBounds.y} : {}),
         minWidth: 640,
         minHeight: 700,
         show: false,
@@ -250,6 +261,14 @@ function createWindow(loadApplication = true) {
             sandbox: true
         }
     });
+    if (savedState?.maximized) mainWindow.maximize();
+    const saveWindowState = () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        const maximized = mainWindow.isMaximized();
+        const bounds = maximized ? mainWindow.getNormalBounds() : mainWindow.getBounds();
+        try { fs.writeFileSync(statePath, JSON.stringify({...bounds, maximized})); } catch (error) { console.error("Unable to save window size", error); }
+    };
+    mainWindow.on("close", saveWindowState);
 
     mainWindow.webContents.setWindowOpenHandler(({url}) => {
         if (/^(https?:|mailto:)/i.test(url)) void shell.openExternal(url);
@@ -274,10 +293,9 @@ function createWindow(loadApplication = true) {
     else void mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><html><head><meta charset="utf-8"><title>FolderRocket</title><style>html,body{height:100%;margin:0}body{display:grid;place-items:center;background:#0e1424;color:#eef5ff;font:14px system-ui}.loader{text-align:center}.rocket{font-size:42px;animation:pulse 1.1s ease-in-out infinite}.loader strong{display:block;margin-top:12px;font-size:18px}.loader small{display:block;margin-top:7px;color:#9eb0c7}@keyframes pulse{50%{transform:translateY(-6px);opacity:.7}}</style></head><body><div class="loader"><div class="rocket">🚀</div><strong>FolderRocket is starting</strong><small>Preparing your local workspace…</small></div></body></html>`)}`);
 }
 
-function createCargoShipWindow() {
+function createCargoShipWindow(showWhenReady = true) {
     if (cargoWindow && !cargoWindow.isDestroyed()) {
-        cargoWindow.show();
-        cargoWindow.focus();
+        if (showWhenReady) { cargoWindow.show(); cargoWindow.focus(); }
         return cargoWindow;
     }
     const previousBounds = cargoShipLastBounds
@@ -301,7 +319,7 @@ function createCargoShipWindow() {
         skipTaskbar: true,
         hasShadow: false,
         backgroundColor: "#00000000",
-        title: "FolderRocket Cargo Ship",
+        title: "CargoRocket",
         icon: applicationIconPath(),
         webPreferences: {
             preload: path.join(__dirname, "preload.cjs"),
@@ -324,7 +342,7 @@ function createCargoShipWindow() {
         if (!cargoWindow?.isDestroyed()) {
             cargoShipLastBounds = clampCargoShipBounds(cargoWindow.getBounds());
             cargoWindow.setBounds(cargoShipLastBounds);
-            cargoWindow.show();
+            if (showWhenReady) cargoWindow.show();
         }
     });
     cargoWindow.on("move", () => {
@@ -338,7 +356,14 @@ function createCargoShipWindow() {
         cargoShipExpanded = false;
         notifyCargoShipState();
     });
-    void cargoWindow.loadURL(`${APP_ORIGIN}/?folderrocketCargoShip=1`);
+    const openingWindow = cargoWindow;
+    void openingWindow.loadURL(`${APP_ORIGIN}/?folderrocketCargoShip=1`).then(() => {
+        if (showWhenReady && !openingWindow.isDestroyed() && !openingWindow.isVisible()) openingWindow.show();
+    }).catch(error => {
+        console.error("[FolderRocket CargoRocket] Unable to load window:", error);
+        if (!openingWindow.isDestroyed()) openingWindow.destroy();
+    });
+    if (showWhenReady) setTimeout(() => { if (!openingWindow.isDestroyed() && !openingWindow.isVisible()) openingWindow.show(); }, 1200);
     notifyCargoShipState();
     return cargoWindow;
 }
@@ -474,7 +499,7 @@ app.whenReady().then(async () => {
     ipcMain.handle("folderrocket:capture-behind-cargo-ship", async (event, options) => {
         const requestingWindow = BrowserWindow.fromWebContents(event.sender);
         if (event.sender.getURL().startsWith(APP_ORIGIN) === false || !requestingWindow || requestingWindow !== cargoWindow || !mainWindow || mainWindow.isDestroyed() || !cargoWindow || cargoWindow.isDestroyed()) {
-            throw new Error("Cargo Ship must be open over the FolderRocket window to use Lens.");
+            throw new Error("CargoRocket must be open over the FolderRocket window to use Lens.");
         }
         const cargoBounds = cargoWindow.getBounds();
         const mainBounds = mainWindow.getContentBounds();
@@ -487,9 +512,9 @@ app.whenReady().then(async () => {
         const top = Math.max(0, sourceY);
         const right = Math.min(mainBounds.width, sourceRight);
         const bottom = Math.min(mainBounds.height, sourceBottom);
-        if (right <= left || bottom <= top) throw new Error("Move Cargo Ship over FolderRocket before using Lens.");
+        if (right <= left || bottom <= top) throw new Error("Move CargoRocket over FolderRocket before using Lens.");
         const image = await mainWindow.webContents.capturePage({x: left, y: top, width: right - left, height: bottom - top});
-        if (image.isEmpty()) throw new Error("FolderRocket could not capture the area behind Cargo Ship.");
+        if (image.isEmpty()) throw new Error("FolderRocket could not capture the area behind CargoRocket.");
         return image.toDataURL();
     });
     ipcMain.handle("folderrocket:navigation-state", event => {
@@ -503,7 +528,7 @@ app.whenReady().then(async () => {
     });
     ipcMain.handle("folderrocket:set-zoom-factor", (event, factor) => {
         // Only the main window controls the workspace zoom. A secondary
-        // Cargo Ship renderer must never alter it through the shared origin.
+        // CargoRocket renderer must never alter it through the shared origin.
         if (event.sender.getURL().startsWith(APP_ORIGIN) === false || event.sender.id !== mainWindow?.webContents.id) return 1;
         const requested = Number(factor);
         const next = Number.isFinite(requested) ? Math.max(.75, Math.min(1.5, requested)) : 1;
@@ -517,8 +542,10 @@ app.whenReady().then(async () => {
     ipcMain.handle("folderrocket:toggle-cargo-ship-window", event => {
         if (event.sender.getURL().startsWith(APP_ORIGIN) === false) return {open: false, expanded: false};
         if (cargoWindow && !cargoWindow.isDestroyed()) {
-            cargoWindow.close();
-            return {open: false, expanded: false};
+            if (cargoWindow.isVisible()) { cargoWindow.hide(); cargoShipExpanded=false; }
+            else { cargoWindow.show(); cargoWindow.focus(); }
+            notifyCargoShipState();
+            return cargoShipState();
         }
         createCargoShipWindow();
         return cargoShipState();
@@ -530,7 +557,9 @@ app.whenReady().then(async () => {
     });
     ipcMain.handle("folderrocket:close-cargo-ship-window", event => {
         if (event.sender.getURL().startsWith(APP_ORIGIN) === false || !cargoWindow || cargoWindow.isDestroyed() || cargoWindow.webContents.id !== event.sender.id) return false;
-        cargoWindow.close();
+        cargoWindow.hide();
+        cargoShipExpanded = false;
+        notifyCargoShipState();
         return true;
     });
     ipcMain.handle("folderrocket:set-cargo-ship-expanded", (event, expanded) => {
@@ -631,6 +660,9 @@ app.whenReady().then(async () => {
         return;
     }
     await mainWindow?.loadURL(APP_ORIGIN);
+    // Preload the transparent CargoRocket renderer while the main window is
+    // already usable. The first click can then show it without a cold start.
+    createCargoShipWindow(false);
     const initialProtocolUrl = process.argv.find(value => value.startsWith(`${FOLDERROCKET_PROTOCOL}://`));
     if (initialProtocolUrl) handleFolderRocketProtocol(initialProtocolUrl);
 });
