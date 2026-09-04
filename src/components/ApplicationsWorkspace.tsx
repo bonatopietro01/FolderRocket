@@ -186,8 +186,18 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
         setMessage("Searching…");
         const collections = await Promise.all(active.map(async app => files[app.id] || discover(app)));
         const lowered = query.trim().toLowerCase();
-        setResults(collections.flat().filter(file => file.name.toLowerCase().includes(lowered)));
-        setMessage("");
+        const matchLimit = 250;
+        const matches: FileEntry[] = [];
+        let limited = false;
+        searchCollections: for (const collection of collections) {
+            for (const file of collection) {
+                if (!file.name.toLowerCase().includes(lowered)) continue;
+                if (matches.length >= matchLimit) { limited = true; break searchCollections; }
+                matches.push(file);
+            }
+        }
+        setResults(matches);
+        setMessage(limited ? `Showing the first ${matchLimit} results. Refine the file name to see fewer items.` : "");
     }
 
     async function openFile(path: string, containingFolder = false) {
