@@ -240,7 +240,7 @@ async function openWithDefaultApp(filePath) {
     }
     const command = process.platform === "win32" ? "powershell.exe" : process.platform === "darwin" ? "open" : "xdg-open";
     const args = process.platform === "win32"
-        ? ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", "Start-Process -FilePath $args[0]", filePath]
+        ? ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", "& { param($target) Invoke-Item -LiteralPath $target }", filePath]
         : [filePath];
     await new Promise((resolve, reject) => {
         const child = spawn(command, args, {detached: true, stdio: "ignore", windowsHide: true});
@@ -843,7 +843,8 @@ app.post("/calendar/google/events", requireAuthenticated, async (req,res)=>{
         const title=typeof req.body?.title==="string"?req.body.title.trim():"";
         const start=new Date(req.body?.start),end=new Date(req.body?.end);
         if(!title||title.length>200||Number.isNaN(start.getTime())||Number.isNaN(end.getTime())||end<=start)throw new Error("Enter a title and a valid start and end time.");
-        const event=await createGoogleCalendarEvent(req.user.id,blockId,{title,start:start.toISOString(),end:end.toISOString()});
+        const attendees=(Array.isArray(req.body?.attendees)?req.body.attendees:[]).filter(value=>typeof value==="string"&&/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)).slice(0,50);
+        const event=await createGoogleCalendarEvent(req.user.id,blockId,{title,start:start.toISOString(),end:end.toISOString(),attendees});
         addAuditEvent({user:req.user,action:"google_calendar_event_created",details:{title,start:event.start,end:event.end}});
         res.json({event});
     } catch(error){res.status(400).json({message:error instanceof Error?error.message:"Unable to create the Calendar event."});}

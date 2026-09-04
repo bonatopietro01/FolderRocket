@@ -84,8 +84,8 @@ async function listEvents(userId, blockId, options = {}) {
     const data = await (await calendarFetch(userId, `/calendars/primary/events?${query}`, blockId)).json();
     return (data.items || []).map(item => ({id: String(item.id || ""), title: String(item.summary || "Untitled event"), start: item.start?.dateTime || item.start?.date || "", end: item.end?.dateTime || item.end?.date || "", location: String(item.location || ""), link: "", meetingLink: String(item.hangoutLink || item.conferenceData?.entryPoints?.find(point => point.entryPointType === "video")?.uri || ""), attachments: Array.isArray(item.attachments) ? item.attachments.map(a => ({fileId: String(a.fileId || ""), url: String(a.fileUrl || ""), name: String(a.title || "Calendar attachment"), mimeType: String(a.mimeType || "")})).filter(a => a.fileId && a.url) : []}));
 }
-async function createEvent(userId, blockId, {title,start,end}) {
-    const response=await calendarFetch(userId,"/calendars/primary/events",blockId,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({summary:title,start:{dateTime:start},end:{dateTime:end}})});
+async function createEvent(userId, blockId, {title,start,end,attendees=[]}) {
+    const response=await calendarFetch(userId,"/calendars/primary/events?sendUpdates=all",blockId,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({summary:title,start:{dateTime:start},end:{dateTime:end},attendees:attendees.map(email=>({email}))})});
     const item=await response.json();
     return {id:String(item.id||""),title:String(item.summary||title),start:item.start?.dateTime||start,end:item.end?.dateTime||end,location:String(item.location||""),attachments:[]};
 }

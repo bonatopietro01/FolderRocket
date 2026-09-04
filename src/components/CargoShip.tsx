@@ -109,6 +109,7 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, st
     const [calendarDay, setCalendarDay] = useState(() => new Date().toISOString().slice(0, 10));
     const [activeReminder, setActiveReminder] = useState<CargoReminder | null>(null);
     const [showToolMenu, setShowToolMenu] = useState(false);
+    useEffect(()=>{if(!showToolMenu)return;const close=(event:PointerEvent)=>{if(!(event.target as Element).closest(".cargoShipLauncherWrap"))setShowToolMenu(false);};document.addEventListener("pointerdown",close);return()=>document.removeEventListener("pointerdown",close);},[showToolMenu]);
     const [enabledTools, setEnabledTools] = useState<string[]>(() => { try { const value = JSON.parse(localStorage.getItem(`folderrocket-cargo-tools-${storageScope}`) || "null"); return Array.isArray(value) ? value : ["transport", "calendar", "text", "email", "convert", "lens"]; } catch { return ["transport", "calendar", "text", "email", "convert", "lens"]; } });
     const shipScale = 1;
 

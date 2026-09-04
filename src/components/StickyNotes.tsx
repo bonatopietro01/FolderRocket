@@ -15,7 +15,10 @@ function defaultNoteLayout(index: number): Pick<StickyNote, "x" | "y" | "width" 
 function readNotes(scope: string): StickyNote[] {
     try {
         const value = JSON.parse(localStorage.getItem(storageKey(scope)) || "[]");
-        return Array.isArray(value) ? value.filter(note => note && typeof note.id === "string" && typeof note.text === "string").map((note, index) => ({...defaultNoteLayout(index), ...note})) : [];
+        return Array.isArray(value) ? value.filter(note => note && typeof note.id === "string" && typeof note.text === "string").map((note, index) => {
+            const expired=note.reminder&&note.reminderAt&&new Date(note.reminderAt).getTime()<=Date.now();
+            return {...defaultNoteLayout(index),...note,...(expired?{hidden:false,color:"orange" as NoteColor}:{})};
+        }) : [];
     } catch { return []; }
 }
 function createNote(index: number, color: NoteColor, text = "", relatedFiles: string[] = []): StickyNote {
