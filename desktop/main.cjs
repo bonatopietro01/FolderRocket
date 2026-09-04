@@ -269,6 +269,16 @@ function createWindow(loadApplication = true) {
         try { fs.writeFileSync(statePath, JSON.stringify({...bounds, maximized})); } catch (error) { console.error("Unable to save window size", error); }
     };
     mainWindow.on("close", saveWindowState);
+    mainWindow.on("closed", () => {
+        mainWindow = null;
+        if (process.platform === "darwin") return;
+        app.isQuitting = true;
+        for (const window of BrowserWindow.getAllWindows()) {
+            if (!window.isDestroyed()) window.destroy();
+        }
+        if (backendProcess && !backendProcess.killed) backendProcess.kill();
+        app.quit();
+    });
 
     mainWindow.webContents.setWindowOpenHandler(({url}) => {
         if (/^(https?:|mailto:)/i.test(url)) void shell.openExternal(url);
