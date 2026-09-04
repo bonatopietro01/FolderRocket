@@ -3,14 +3,25 @@ const path = require('node:path');
 
 // Read metadata only: cloud placeholders need not be downloaded. Resolve directory
 // junctions and symlinks, and visit each physical directory once to avoid cycles.
-async function discoverApplicationFiles(roots, extensions, {signal, previous} = {}) {
+async function discoverApplicationFiles(roots, extensions, {signal, previous, onProgress} = {}) {
     const pending = [...roots];
     const visited = new Set(), found = new Set(), folders = new Map();
     const wanted = new Set(extensions);
     let files = [], directories = [];
     const repositoryCache = new Map();
     let inspected = 0, skipped = 0;
+    let progressFiles = [], lastProgressAt = 0;
+    const ignoredDirectories = new Set(['$recycle.bin', 'system volume information', 'windows', 'program files', 'program files (x86)', 'programdata', 'appdata', 'node_modules', '.git', '.cache']);
     const keyOf = value => process.platform === 'win32' ? value.toLowerCase() : value;
+    function reportProgress(force = false) {
+        if (typeof onProgress !== 'function') return;
+        const now = Date.now();
+        if (!force && progressFiles.length < 25 && now - lastProgressAt < 180) return;
+        const batch = progressFiles;
+        progressFiles = [];
+        lastProgressAt = now;
+        onProgress({inspected, directoriesScanned:directories.length, queuedDirectories:pending.filter(Boolean).length, found:files.length, skipped, files:batch});
+    }
     async function sensitivityOf(directory) {
         const normalized = directory.replaceAll('/', '\\').toLowerCase();
         if (/\\windows\\/.test(normalized)) return 'system';
@@ -69,7 +80,10 @@ async function discoverApplicationFiles(roots, extensions, {signal, previous} = 
             let stats;
             try {
                 if (entry.isSymbolicLink()) stats = await fs.stat(filePath);
-                if (entry.isDirectory() || stats?.isDirectory()) { pending.push(filePath); continue; }
+                if (entry.isDirectory() || stats?.isDirectory()) {
+                    if (!ignoredDirectories.has(entry.name.toLowerCase())) pending.push(filePath);
+                    continue;
+                }
                 if (!entry.isFile() && !stats?.isFile()) continue;
                 inspected++;
                 const extension = path.extname(entry.name).slice(1).toLowerCase();
@@ -78,12 +92,17 @@ async function discoverApplicationFiles(roots, extensions, {signal, previous} = 
                 if (found.has(key) || retainedFileKeys.has(key)) continue;
                 stats ||= await fs.stat(filePath);
                 found.add(key);
-                files.push({name:entry.name, path:filePath, size:stats.size, createdAt:stats.birthtime.toISOString(), extension, sensitivity:await sensitivityOf(directory)});
+                const discovered = {name:entry.name, path:filePath, size:stats.size, createdAt:stats.birthtime.toISOString(), extension, sensitivity:await sensitivityOf(directory)};
+                files.push(discovered);
+                progressFiles.push(discovered);
                 folders.set(directory, (folders.get(directory) || 0) + 1);
+                reportProgress();
             } catch { skipped++; }
         }
+        reportProgress();
         await new Promise(resolve => setImmediate(resolve));
     }
+    reportProgress(true);
     folders.clear();
     for (const file of files) { const folder=path.dirname(file.path); folders.set(folder,(folders.get(folder)||0)+1); }
     const before = new Set((previous?.files || []).map(file => keyOf(file.path)));

@@ -1547,7 +1547,7 @@ app.post("/applications/discover", requireAuthenticated, requireAdministrator, a
         const extensions = [...new Set((Array.isArray(req.body?.extensions) ? req.body.extensions : []).map(value => String(value).replace(/^\./, "").toLowerCase()).filter(value => /^[a-z0-9]{1,12}$/.test(value)))];
         if (!extensions.length) throw new Error("Select at least one file type for this application.");
         const roots = [os.homedir(), process.env.OneDrive, process.env.OneDriveCommercial, process.env.OneDriveConsumer].filter(Boolean);
-        if (process.platform === "win32") for (let code = 65; code <= 90; code += 1) {
+        if (process.platform === "win32") for (let code = 68; code <= 90; code += 1) {
             const root = String.fromCharCode(code) + ":\\";
             if (fs.existsSync(root)) roots.push(root);
         }
@@ -1555,14 +1555,24 @@ app.post("/applications/discover", requireAuthenticated, requireAdministrator, a
         const cancel = () => controller.abort();
         res.on("close", cancel);
         try {
+            res.status(200);
+            res.setHeader("Content-Type", "application/x-ndjson; charset=utf-8");
+            res.setHeader("Cache-Control", "no-store");
+            res.flushHeaders();
+            const send = payload => { if (!res.destroyed && !res.writableEnded) res.write(`${JSON.stringify(payload)}\n`); };
             const cache = require("./services/applicationDiscoveryCache");
             const previous = cache.read(req.user.id, appId, extensions);
-            const result = await require("./services/applicationDiscoveryService").discoverApplicationFiles(roots, extensions, {signal:controller.signal, previous});
+            const result = await require("./services/applicationDiscoveryService").discoverApplicationFiles(roots, extensions, {signal:controller.signal, previous, onProgress:progress => send({type:"progress", ...progress})});
             cache.write(req.user.id, appId, extensions, result);
             const {directories, ...response} = result;
-            if (!res.destroyed) res.json(response);
+            send({type:"complete", result:response});
+            if (!res.destroyed && !res.writableEnded) res.end();
         } finally { res.off("close", cancel); }
-    } catch (error) { res.status(400).json({message:error instanceof Error?error.message:"Unable to scan application files."}); }
+    } catch (error) {
+        const message=error instanceof Error?error.message:"Unable to scan application files.";
+        if (res.headersSent) { if (!res.destroyed && !res.writableEnded) res.end(`${JSON.stringify({type:"error",message})}\n`); }
+        else res.status(400).json({message});
+    }
 });
 
 app.delete("/applications/discover", requireAuthenticated, requireAdministrator, (req, res) => {

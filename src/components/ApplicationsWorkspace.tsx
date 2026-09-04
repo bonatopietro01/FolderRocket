@@ -19,6 +19,7 @@ interface LinkedApp {
 }
 
 interface Props { storageScope: string; folders: ManagedFolder[]; onVirtualFilesAdd: (folderId: string, files: VirtualFile[]) => void }
+interface DiscoveryProgress { inspected:number; directoriesScanned:number; queuedDirectories:number; found:number; skipped:number; latest:string[] }
 
 const PRESETS: Record<string, {icon: string; extensions: string[]}> = {
     Word: {icon: "📄", extensions: ["doc", "docx", "odt", "rtf"]},
@@ -90,8 +91,10 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
     const [appQueries, setAppQueries] = useState<Record<string, string>>({});
     const [fileWindowId, setFileWindowId] = useState<string | null>(null);
     const [scanning, setScanning] = useState<Record<string, boolean>>({});
+    const [scanProgress, setScanProgress] = useState<Record<string, DiscoveryProgress>>({});
     const [scanErrors, setScanErrors] = useState<Record<string, string>>({});
     const scansInFlight = useRef(new Map<string, Promise<FileEntry[]>>());
+    const scanControllers = useRef(new Map<string, AbortController>());
     const automaticallyScanned = useRef(new Set<string>());
     const fileWindowApp = apps.find(app => app.id === fileWindowId);
     const [query, setQuery] = useState("");
@@ -131,30 +134,39 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
         setScanning(current => ({...current, [app.id]: true}));
         setScanErrors(current => ({...current, [app.id]: ""}));
         if (options.reveal !== false) setExpanded(current => current.includes(app.id) ? current : [...current, app.id]);
+        const controller = new AbortController();
+        scanControllers.current.set(app.id, controller);
         const request = (async () => {
             try {
                 const response = await fetch(`${API_BASE_URL}/applications/discover`, {
                     method: "POST", credentials: "include", headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({appId: app.id, extensions: app.extensions})
+                    body: JSON.stringify({appId: app.id, extensions: app.extensions}), signal:controller.signal
                 });
-                const data = await response.json().catch(() => ({})) as {files?: FileEntry[]; folders?: {path: string; count: number}[]; message?: string; skipped?: number};
-                if (!response.ok) throw new Error(data.message || "Scan failed.");
+                if (!response.ok) { const failed=await response.json().catch(()=>({})) as {message?:string};throw new Error(failed.message||"Scan failed."); }
+                let data:{files?:FileEntry[];folders?:{path:string;count:number}[];message?:string;skipped?:number}={};
+                const reader=response.body?.getReader();
+                if(!reader)throw new Error("Live scan is not available.");
+                const decoder=new TextDecoder();let buffered="";
+                while(true){const {done,value}=await reader.read();buffered+=decoder.decode(value||new Uint8Array(),{stream:!done});const lines=buffered.split("\n");buffered=lines.pop()||"";for(const line of lines){if(!line.trim())continue;const event=JSON.parse(line) as {type:string;message?:string;result?:typeof data;files?:FileEntry[];inspected?:number;directoriesScanned?:number;queuedDirectories?:number;found?:number;skipped?:number};if(event.type==="error")throw new Error(event.message||"Scan failed.");if(event.type==="complete")data=event.result||{};if(event.type==="progress"){const batch=event.files||[];setScanProgress(current=>({...current,[app.id]:{inspected:event.inspected||0,directoriesScanned:event.directoriesScanned||0,queuedDirectories:event.queuedDirectories||0,found:event.found||0,skipped:event.skipped||0,latest:batch.slice(-3).map(file=>file.name)}}));if(batch.length)setFiles(current=>{const merged=new Map((current[app.id]||[]).map(file=>[file.path,file]));for(const file of batch)merged.set(file.path,file);return {...current,[app.id]:[...merged.values()].slice(0,5000)};});}}if(done)break;}
                 const found = data.files || [];
                 if (data.skipped) setScanErrors(current => ({...current, [app.id]: `${data.skipped} locations or files could not be accessed. Cloud files must be visible in a mounted or synced folder.`}));
                 setFiles(current => ({...current, [app.id]: found.slice(0, 5000)}));
                 setApps(current => current.map(item => item.id === app.id ? {...item, folders: (data.folders || []).map(folder => folder.path)} : item));
                 return found;
             } catch (error) {
-                setScanErrors(current => ({...current, [app.id]: error instanceof Error ? error.message : "Scan failed. Please retry."}));
+                const stopped=error instanceof DOMException&&error.name==="AbortError";
+                setScanErrors(current => ({...current, [app.id]: stopped ? "Scan stopped. Files found so far have been kept." : error instanceof Error ? `${error.message} Files found so far have been kept.` : "Scan failed. Files found so far have been kept."}));
                 return [];
             } finally {
                 setScanning(current => ({...current, [app.id]: false}));
                 scansInFlight.current.delete(app.id);
+                scanControllers.current.delete(app.id);
             }
         })();
         scansInFlight.current.set(app.id, request);
         return request;
     }
+    function stopDiscovery(appId:string){scanControllers.current.get(appId)?.abort();}
 
     useEffect(() => {
         let cancelled = false;
@@ -284,7 +296,7 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
         const selectedVisibleFiles = visibleFiles.filter(file => selectedFilePaths.includes(file.path));
         return <div className="applicationFiles" aria-busy={Boolean(scanning[app.id])}>
             <label className="applicationTypeFilter"><span>File format</span><select aria-label={`${app.name} file format${windowView ? " in window" : ""}`} value={filter} onChange={event => setAppFilters(current => ({...current, [app.id]: event.target.value}))}><option value="all">All ({appFiles.length})</option>{Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)).map(([type, count]) => <option value={type} key={type}>{type.toUpperCase()} ({count})</option>)}</select></label>
-            {scanning[app.id] && <p role="status">Scanning computer…</p>}
+            {scanning[app.id] && <div className="applicationScanProgress" role="status"><span><strong>Finding files… {scanProgress[app.id]?.found || 0} found</strong><small>{scanProgress[app.id]?.directoriesScanned || 0} folders checked · {scanProgress[app.id]?.inspected || 0} files inspected</small>{scanProgress[app.id]?.latest?.map(name=><em key={name}>{name}</em>)}</span><button type="button" onClick={()=>stopDiscovery(app.id)}>Stop</button></div>}
             {scanErrors[app.id] && <p role="alert">{scanErrors[app.id]}</p>}
             {windowView && !!visibleFiles.length && <div className="applicationBulkToolbar"><button type="button" onClick={() => setSelectedFilePaths(current => [...new Set([...current, ...visibleFiles.map(file => file.path)])])}>Select all</button><button type="button" disabled={!selectedVisibleFiles.length} onClick={() => setSelectedFilePaths(current => current.filter(path => !selectedVisibleFiles.some(file => file.path === path)))}>Deselect</button><button className="applicationOpenAction fileActionPulse" type="button" disabled={!selectedVisibleFiles.length} onClick={() => void openFiles(selectedVisibleFiles)}><ExternalLink size={13}/>Open files</button><button className="applicationFireAction fileActionPulse" type="button" disabled={!selectedVisibleFiles.length} onClick={() => sendToFire(selectedVisibleFiles)}><Flame size={13}/>Fire Mountain</button></div>}
             {groupApplicationFiles(visibleFiles).map(([folder, folderFiles]) => <section className="applicationFolderGroup" key={folder}>

@@ -3151,6 +3151,12 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .applicationFolderGroup { display:grid; min-width:0; overflow:hidden; border:1px solid #dbe5ed; border-radius:7px; background:#fbfdff; }
 .applicationFolderGroup > header { display:grid; grid-template-columns:16px minmax(0,1fr) auto; align-items:center; gap:5px; min-width:0; padding:5px 6px; background:#eef5fa; color:#496177; }
 .applicationFolderGroup > header strong { overflow:hidden; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+.applicationScanProgress { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; padding:8px; border:1px solid #9fc9e8; border-radius:7px; background:#edf8ff; color:#315c7b; }
+.applicationScanProgress > span { display:grid; min-width:0; gap:2px; }
+.applicationScanProgress strong { font-size:11px; }
+.applicationScanProgress small,.applicationScanProgress em { min-width:0; overflow:hidden; font-size:9px; font-style:normal; text-overflow:ellipsis; white-space:nowrap; }
+.applicationScanProgress em { color:#5b768b; }
+.applicationScanProgress button { flex:0 0 auto; padding:4px 7px; border:1px solid #d79085; border-radius:5px; background:#fff3f1; color:#a43e34; cursor:pointer; font-size:9px; font-weight:850; }
 .applicationFolderGroup > header small { font-size:9px; }
 .applicationFolderGroup > .inspectorFile { margin:0; border-radius:0; background:#fff; padding:5px 6px; }
 .applicationFolderGroup > .inspectorFile strong { font-size:11px; }
