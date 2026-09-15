@@ -13,8 +13,8 @@ import type {
 import {
     Archive,
     LoaderCircle,
-    MoreHorizontal,
     Pencil,
+    SlidersHorizontal,
     X
 } from "lucide-react";
 
@@ -81,11 +81,7 @@ interface DeadlineFileResult {
         |
         null;
 
-    status:
-        | "urgent"
-        | "watch"
-        | "ok"
-        | "missing";
+    status: string;
 
     source:
         string
@@ -95,6 +91,13 @@ interface DeadlineFileResult {
     reason:
         string;
 
+}
+
+interface DeadlineLevel {
+    id: string;
+    label: string;
+    days: number;
+    color: string;
 }
 
 
@@ -127,6 +130,11 @@ const DEFAULT_ARCHIVE_CONFIG: ArchiveColumn[] = [
     {key: "skills", header: "Skills", enabled: true, instruction: "Extract at most 5 short skills, separated by commas."},
     {key: "experience", header: "Experience", enabled: true, instruction: "Summarise at most 5 short experience points, separated by |."},
     {key: "date", header: "Date", enabled: true, instruction: "Extract the relevant document date, if present."}
+];
+
+const DEFAULT_DEADLINE_LEVELS: DeadlineLevel[] = [
+    {id: "urgent", label: "Urgentissimo", days: 7, color: "#e53935"},
+    {id: "watch", label: "Sotto controllo", days: 30, color: "#e6a700"}
 ];
 
 
@@ -209,6 +217,7 @@ function FileDropZone({
     const [syncingArchive, setSyncingArchive] =
         useState(false);
     const [archiveMenuOpen, setArchiveMenuOpen] = useState(false);
+    const [folderSettingsOpen, setFolderSettingsOpen] = useState(false);
     const [renameMenuOpen, setRenameMenuOpen] = useState(false);
     const [archiveColumnPendingRemoval, setArchiveColumnPendingRemoval] = useState<string | null>(null);
     const [archiveColumns, setArchiveColumns] = useState<ArchiveColumn[]>(() => {
@@ -230,20 +239,19 @@ function FileDropZone({
     const [deadlineMenuOpen, setDeadlineMenuOpen] =
         useState(false);
 
-
     const [
         deadlineCheckEnabled,
         setDeadlineCheckEnabled
-    ] =
-        useState(false);
+    ] = useState(() => localStorage.getItem(`folderrocket-deadlines-${storageScope}-${name}`) === "true");
 
-
-    const [watchDays, setWatchDays] =
-        useState(30);
-
-
-    const [urgentDays, setUrgentDays] =
-        useState(7);
+    const [deadlineLevels, setDeadlineLevels] = useState<DeadlineLevel[]>(() => {
+        try {
+            const saved = JSON.parse(localStorage.getItem(`folderrocket-deadline-levels-${storageScope}-${name}`) ?? "null");
+            return Array.isArray(saved) && saved.length ? saved : DEFAULT_DEADLINE_LEVELS;
+        } catch {
+            return DEFAULT_DEADLINE_LEVELS;
+        }
+    });
 
 
     const [urgentCount, setUrgentCount] =
@@ -264,6 +272,15 @@ function FileDropZone({
     ] =
         useState(false);
 
+    const [manualDeadlineLabel, setManualDeadlineLabel] =
+        useState("");
+
+    const [manualDeadlineDate, setManualDeadlineDate] =
+        useState("");
+
+    const [creatingManualDeadline, setCreatingManualDeadline] =
+        useState(false);
+
 
     const [
         deadlineResults,
@@ -272,17 +289,27 @@ function FileDropZone({
         useState<DeadlineFileResult[]>([]);
 
 
-    const [
-        visibleDeadlineStatus,
-        setVisibleDeadlineStatus
-    ] =
-        useState<
-            "urgent"
-            |
-            "watch"
-            |
-            null
-        >(null);
+    const [visibleDeadlineStatus, setVisibleDeadlineStatus] =
+        useState<string | null>(null);
+
+    const sortedDeadlineLevels = [...deadlineLevels]
+        .filter(level => level.label.trim() && Number.isFinite(level.days) && level.days >= 0)
+        .sort((first, second) => first.days - second.days);
+
+    function addDeadlineLevel() {
+        setDeadlineLevels(current => [
+            ...current,
+            {id: `level_${Date.now()}`, label: "Nuova gravità", days: (Math.max(0, ...current.map(level => level.days)) + 7), color: "#5b8def"}
+        ]);
+    }
+
+    function updateDeadlineLevel(id: string, update: Partial<DeadlineLevel>) {
+        setDeadlineLevels(current => current.map(level => level.id === id ? {...level, ...update} : level));
+    }
+
+    function removeDeadlineLevel(id: string) {
+        setDeadlineLevels(current => current.length > 1 ? current.filter(level => level.id !== id) : current);
+    }
 
 
     // ==================================================
@@ -316,10 +343,25 @@ function FileDropZone({
     }, [archiveColumns, name, storageScope]);
 
     useEffect(() => {
+        localStorage.setItem(`folderrocket-deadlines-${storageScope}-${name}`, String(deadlineCheckEnabled));
+    }, [deadlineCheckEnabled, name, storageScope]);
+
+    useEffect(() => {
+        localStorage.setItem(`folderrocket-deadline-levels-${storageScope}-${name}`, JSON.stringify(deadlineLevels));
+    }, [deadlineLevels, name, storageScope]);
+
+    useEffect(() => {
+        if (!aiEnabled) return;
+        setArchiveEnabled(true);
+        setDeadlineCheckEnabled(true);
+    }, [aiEnabled]);
+
+    useEffect(() => {
         function closeArchiveMenu(event: globalThis.MouseEvent) {
             const target = event.target;
-            if (target instanceof Element && !target.closest(".archiveControlArea")) {
+            if (target instanceof Element && !target.closest(".archiveControlArea, .renameControlArea")) {
                 setArchiveMenuOpen(false);
+                setFolderSettingsOpen(false);
                 setRenameMenuOpen(false);
                 setArchiveColumnPendingRemoval(null);
             }
@@ -544,19 +586,18 @@ function FileDropZone({
     // ==================================================
 
     async function checkFolderDeadlines(
-        event: MouseEvent<HTMLButtonElement>
+        event?: MouseEvent<HTMLButtonElement>,
+        silent = false
     ) {
 
-        event.stopPropagation();
+        event?.stopPropagation();
 
         if (imaginary) return;
 
 
         if (!deadlineCheckEnabled) {
 
-            alert(
-                "Prima attiva il controllo delle scadenze"
-            );
+            if (!silent) alert("Prima attiva il controllo delle scadenze");
 
             return;
 
@@ -565,42 +606,16 @@ function FileDropZone({
 
         if (!path.trim()) {
 
-            alert(
-                "Inserisci prima il percorso della cartella"
-            );
+            if (!silent) alert("Inserisci prima il percorso della cartella");
 
             return;
 
         }
 
 
-        if (
-            !Number.isFinite(watchDays)
-            ||
-            !Number.isFinite(urgentDays)
-            ||
-            watchDays <= 0
-            ||
-            urgentDays < 0
-        ) {
-
-            alert(
-                "Inserisci soglie valide"
-            );
-
+        if (!sortedDeadlineLevels.length) {
+            if (!silent) alert("Aggiungi almeno un livello di gravità valido");
             return;
-
-        }
-
-
-        if (urgentDays >= watchDays) {
-
-            alert(
-                "Urgentissimo deve avere meno giorni di Sotto controllo"
-            );
-
-            return;
-
         }
 
 
@@ -625,9 +640,9 @@ function FileDropZone({
                             path:
                                 path.trim(),
 
-                            watchDays,
-
-                            urgentDays
+                            watchDays: Math.max(...sortedDeadlineLevels.map(level => level.days)),
+                            urgentDays: Math.min(...sortedDeadlineLevels.map(level => level.days)),
+                            levels: sortedDeadlineLevels
 
                         })
 
@@ -684,14 +699,10 @@ function FileDropZone({
 
             setVisibleDeadlineStatus(null);
 
-            setDeadlineMenuOpen(false);
+            if (!silent) setDeadlineMenuOpen(false);
 
 
-            alert(
-                data.message
-                ??
-                "Controllo completato"
-            );
+            if (!silent) alert(data.message ?? "Controllo completato");
 
         }
 
@@ -703,11 +714,7 @@ function FileDropZone({
             );
 
 
-            alert(
-                error instanceof Error
-                    ? error.message
-                    : "Errore durante il controllo delle scadenze"
-            );
+            if (!silent) alert(error instanceof Error ? error.message : "Errore durante il controllo delle scadenze");
 
         }
 
@@ -717,6 +724,88 @@ function FileDropZone({
 
         }
 
+    }
+
+    async function createManualDeadline(
+        event: MouseEvent<HTMLButtonElement>
+    ) {
+        event.stopPropagation();
+
+        const label = manualDeadlineLabel.trim();
+
+        if (imaginary || !path.trim()) {
+            alert("Inserisci prima il percorso della cartella");
+            return;
+        }
+
+        if (!label || !manualDeadlineDate) {
+            alert("Scrivi cosa cercare e scegli la data della scadenza");
+            return;
+        }
+
+        if (!sortedDeadlineLevels.length) {
+            alert("Aggiungi almeno un livello di gravità valido");
+            return;
+        }
+
+        try {
+            setCreatingManualDeadline(true);
+
+            const response = await fetch(
+                `${API_BASE_URL}/deadlines/manual`,
+                {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({
+                        path: path.trim(),
+                        label,
+                        expirationDate: manualDeadlineDate,
+                        watchDays: Math.max(...sortedDeadlineLevels.map(level => level.days)),
+                        urgentDays: Math.min(...sortedDeadlineLevels.map(level => level.days)),
+                        levels: sortedDeadlineLevels
+                    })
+                }
+            );
+
+            const data = await readJsonResponse<{
+                message?: string;
+                result?: DeadlineFileResult;
+            }>(response);
+
+            if (!response.ok || !data.result) {
+                throw new Error(data.message ?? "Errore durante la creazione della scadenza");
+            }
+
+            const nextResults = [
+                ...deadlineResults.filter(result => result.fileName !== data.result!.fileName),
+                data.result
+            ];
+
+            setDeadlineResults(nextResults);
+            setUrgentCount(nextResults.filter(result => result.status === "urgent").length);
+            setWatchCount(nextResults.filter(result => result.status === "watch").length);
+            setMissingCount(0);
+            setManualDeadlineLabel("");
+            setManualDeadlineDate("");
+            setVisibleDeadlineStatus(
+                sortedDeadlineLevels.some(level => level.id === data.result!.status)
+                    ? data.result.status
+                    : null
+            );
+            setDeadlineMenuOpen(false);
+        }
+
+        catch (error) {
+            alert(
+                error instanceof Error
+                    ? error.message
+                    : "Errore durante la creazione della scadenza"
+            );
+        }
+
+        finally {
+            setCreatingManualDeadline(false);
+        }
     }
 
 
@@ -1657,6 +1746,7 @@ function FileDropZone({
                     ]
                 );
                 recordDailyActivity({kind:pendingDailySource,summary:`Transferred ${uploadedNames.length} file${uploadedNames.length===1?"":"s"}`,files:uploadedNames,destination:path.trim()});
+                if (deadlineCheckEnabled) void checkFolderDeadlines(undefined, true);
 
             }
 
@@ -1836,40 +1926,26 @@ function FileDropZone({
 
                     type="button"
 
-                    className="deadlineButton deadlineCompact archiveButton archiveCompact"
+                    className={`folderUtilityButton deadlineToggle${deadlineCheckEnabled ? " isActive" : ""}`}
 
-                    title="Impostazioni scadenze"
+                    title={deadlineCheckEnabled ? "Disattiva aggiornamento scadenze" : "Attiva aggiornamento scadenze"}
 
                     onClick={(event) => {
 
                         event.stopPropagation();
 
                         setVisibleDeadlineStatus(null);
-
-                        setDeadlineMenuOpen(
-                            currentValue =>
-                                !currentValue
-                        );
+                        setDeadlineCheckEnabled(currentValue => !currentValue);
 
                     }}
 
                     style={{
 
-                        border:
-                            urgentCount > 0
-                            ||
-                            watchCount > 0
-                                ? "2px solid #e0a000"
-                                : "1px solid #aab4c0",
+                        border: deadlineCheckEnabled ? "2px solid #e0a000" : "1px solid #aab4c0",
 
                         borderRadius: "10px",
 
-                        background:
-                            urgentCount > 0
-                            ||
-                            watchCount > 0
-                                ? "#fff8d7"
-                                : "white",
+                        background: deadlineCheckEnabled ? "#fff8d7" : "white",
 
                         color: "#102341",
 
@@ -1880,7 +1956,6 @@ function FileDropZone({
                 >
                     ⚠️
                 </button>
-
 
                 {
                     urgentCount > 0 && (
@@ -1999,6 +2074,8 @@ function FileDropZone({
 
                         <div
 
+                            className="deadlineSettingsMenu"
+
                             onClick={(event) =>
                                 event.stopPropagation()
                             }
@@ -2007,7 +2084,7 @@ function FileDropZone({
 
                                 position: "absolute",
 
-                                bottom: "42px",
+                                bottom: "38px",
 
                                 left: "0",
 
@@ -2085,123 +2162,24 @@ function FileDropZone({
 
                                 />
 
-                                Controlla scadenze
+                                Aggiorna ad ogni file inserito
 
                             </label>
 
-
-                            <label
-
-                                style={{
-
-                                    display: "grid",
-
-                                    gridTemplateColumns:
-                                        "1fr 70px",
-
-                                    alignItems: "center",
-
-                                    gap: "10px",
-
-                                    marginBottom: "12px",
-
-                                    fontSize: "13px"
-
-                                }}
-
-                            >
-
-                                <span>
-                                    🟡 Sotto controllo
-                                </span>
-
-
-                                <input
-
-                                    type="number"
-
-                                    min="1"
-
-                                    value={
-                                        watchDays
-                                    }
-
-                                    onChange={(event) =>
-                                        setWatchDays(
-                                            Number(
-                                                event.target.value
-                                            )
-                                        )
-                                    }
-
-                                    style={{
-
-                                        width: "70px",
-
-                                        padding: "5px"
-
-                                    }}
-
-                                />
-
-                            </label>
-
-
-                            <label
-
-                                style={{
-
-                                    display: "grid",
-
-                                    gridTemplateColumns:
-                                        "1fr 70px",
-
-                                    alignItems: "center",
-
-                                    gap: "10px",
-
-                                    marginBottom: "12px",
-
-                                    fontSize: "13px"
-
-                                }}
-
-                            >
-
-                                <span>
-                                    🔴 Urgentissimo
-                                </span>
-
-
-                                <input
-
-                                    type="number"
-
-                                    min="0"
-
-                                    value={
-                                        urgentDays
-                                    }
-
-                                    onChange={(event) =>
-                                        setUrgentDays(
-                                            Number(
-                                                event.target.value
-                                            )
-                                        )
-                                    }
-
-                                    style={{
-
-                                        width: "70px",
-
-                                        padding: "5px"
-
-                                    }}
-
-                                />
-
-                            </label>
+                            <div className="deadlineLevelsEditor">
+                                <strong>Livelli di gravità</strong>
+                                <small>Il primo è il più grave. Scegli soglia e colore per ogni livello.</small>
+                                {sortedDeadlineLevels.map(level => (
+                                    <div className="deadlineLevelRow" key={level.id}>
+                                        <input type="color" value={level.color} aria-label={`Colore ${level.label}`} onChange={event => updateDeadlineLevel(level.id, {color: event.target.value})} />
+                                        <input type="text" value={level.label} aria-label="Nome gravità" onChange={event => updateDeadlineLevel(level.id, {label: event.target.value})} />
+                                        <input type="number" min="0" value={level.days} aria-label="Giorni" onChange={event => updateDeadlineLevel(level.id, {days: Number(event.target.value)})} />
+                                        <span>gg</span>
+                                        <button type="button" title="Rimuovi livello" disabled={deadlineLevels.length === 1} onClick={() => removeDeadlineLevel(level.id)}>−</button>
+                                    </div>
+                                ))}
+                                <button type="button" className="deadlineAddLevel" onClick={addDeadlineLevel}>+ Aggiungi gravità</button>
+                            </div>
 
 
                             {
@@ -2231,6 +2209,43 @@ function FileDropZone({
                                 )
                             }
 
+                            <div className="manualDeadlineForm">
+                                <strong>Crea una scadenza</strong>
+                                <label>
+                                    Cosa vuoi controllare?
+                                    <input
+                                        type="text"
+                                        value={manualDeadlineLabel}
+                                        onChange={event => setManualDeadlineLabel(event.target.value)}
+                                        placeholder="Es. Rinnovo assicurazione"
+                                    />
+                                </label>
+                                <label>
+                                    Data della scadenza
+                                    <input
+                                        type="date"
+                                        value={manualDeadlineDate}
+                                        onChange={event => setManualDeadlineDate(event.target.value)}
+                                    />
+                                </label>
+                                <button
+                                    type="button"
+                                    onClick={createManualDeadline}
+                                    disabled={creatingManualDeadline}
+                                >
+                                    {creatingManualDeadline ? "Creazione..." : "Crea in scadenze.xlsx"}
+                                </button>
+                            </div>
+
+
+                            <div className="deadlineStatusChoices">
+                                {sortedDeadlineLevels.map(level => {
+                                    const count = deadlineResults.filter(result => result.status === level.id).length;
+                                    return <button type="button" key={level.id} disabled={!count} style={{borderColor: level.color, color: level.color}} onClick={(event) => { event.stopPropagation(); setDeadlineMenuOpen(false); setVisibleDeadlineStatus(level.id); }}>
+                                        {level.label} {count}
+                                    </button>;
+                                })}
+                            </div>
 
                             <button
 
@@ -2457,66 +2472,12 @@ function FileDropZone({
                 ARCHIVIO — ALTO A DESTRA
             ========================================== */}
 
-            <button
-
+            {!imaginary && <button
                 type="button"
-
-                className="archiveButton archiveCompact archiveControlArea"
-
-                onClick={
-                    toggleArchive
-                }
-
-                disabled={
-                    syncingArchive
-                }
-
-                title={
-                    archiveEnabled
-                        ? "Archivio attivo"
-                        : "Crea o aggiorna archivio.xlsx"
-                }
-
-                style={{
-
-                    position: "absolute",
-
-                    top: "7px",
-
-                    right: "7px",
-
-                    zIndex: 10,
-
-                    border:
-                        archiveEnabled
-                            ? "2px solid #1684e8"
-                            : "1px solid #aab4c0",
-
-                    borderRadius: "10px",
-
-                    display: imaginary ? "none" : "flex",
-
-                    justifyContent: "center",
-
-                    alignItems: "center",
-
-                    background:
-                        archiveEnabled
-                            ? "#dceeff"
-                            : "white",
-
-                    color:
-                        archiveEnabled
-                            ? "#1684e8"
-                            : "#5c6570",
-
-                    cursor:
-                        syncingArchive
-                            ? "wait"
-                            : "pointer"
-
-                }}
-
+                className={`folderUtilityButton archiveControlButton archiveControlArea${archiveEnabled ? " isActive" : ""}`}
+                onClick={toggleArchive}
+                disabled={syncingArchive}
+                title={archiveEnabled ? "Disattiva aggiornamento archivio" : "Attiva e crea archivio.xlsx"}
             >
 
                 {
@@ -2543,36 +2504,36 @@ function FileDropZone({
                         )
                 }
 
-            </button>
-
-            {!imaginary && archiveEnabled && (
-                <button
-                    type="button"
-                    className="archiveControlArea"
-                    title="Edit archive columns and rename"
-                    onClick={event => { event.stopPropagation(); setArchiveMenuOpen(current => !current); }}
-                    style={{position: "absolute", top: "43px", right: "7px", zIndex: 11, width: "34px", height: "13px", border: "1px solid #b9d6ed", borderRadius: "5px", background: "#f4faff", color: "#1684e8", cursor: "pointer", padding: 0, lineHeight: 0}}
-                >
-                    <MoreHorizontal size={13}/>
-                </button>
-            )}
+            </button>}
 
             <>
-                    <button type="button" className="archiveButton archiveCompact archiveControlArea" title="Add rename" onClick={event => { event.stopPropagation(); setRenameMenuOpen(current => !current); }} style={{position: "absolute", top: "58px", right: "7px", zIndex: 11, border: renameMenuOpen ? "2px solid #1684e8" : "1px solid #aab4c0", borderRadius: "10px", background: renameMenuOpen ? "#dceeff" : "white", color: renameMenuOpen ? "#1684e8" : "#5c6570", cursor: "pointer"}}>
-                        <Pencil size={15}/>
-                    </button>
-                    {renameMenuOpen && <select className="renameMenu archiveControlArea" aria-label="Add a rename part" autoFocus onClick={event => event.stopPropagation()} onChange={event => { addRenamePart(event.target.value); event.target.value = ""; setRenameMenuOpen(false); }} style={{position: "absolute", top: "99px", right: "7px", zIndex: 14, width: "126px", height: "25px", fontSize: "10px", border: "1px solid #b9d6ed", borderRadius: "5px", background: "white", color: "#1684e8", cursor: "pointer"}}><option value="">Choose an item</option><option value="originalName">Original file name</option><option value="fixed">Fixed text</option><option value="date">Current date</option><option value="company">Company</option><option value="delete">Delete last item</option></select>}
+                <button type="button" className={`folderUtilityButton folderSettingsButton archiveControlArea${folderSettingsOpen ? " isActive" : ""}`} title="Impostazioni Archivio e Scadenze" onClick={event => { event.stopPropagation(); setFolderSettingsOpen(current => !current); setArchiveMenuOpen(false); setDeadlineMenuOpen(false); }}>
+                    <SlidersHorizontal size={14}/>
+                </button>
+                {folderSettingsOpen && <div className="folderSettingsMenu archiveControlArea" onClick={event => event.stopPropagation()}>
+                    <button type="button" onClick={() => { setFolderSettingsOpen(false); setDeadlineMenuOpen(false); setArchiveMenuOpen(true); }}>Archivio</button>
+                    <button type="button" onClick={() => { setFolderSettingsOpen(false); setArchiveMenuOpen(false); setDeadlineMenuOpen(true); }}>Scadenze</button>
+                </div>}
+                <button type="button" className={`folderUtilityButton renameControlButton renameControlArea${renameMenuOpen ? " isActive" : ""}`} title="Add rename" onClick={event => { event.stopPropagation(); setRenameMenuOpen(current => !current); }}>
+                    <Pencil size={15}/>
+                </button>
+                {renameMenuOpen && <select className="renameMenu renameControlArea" aria-label="Add a rename part" autoFocus onClick={event => event.stopPropagation()} onChange={event => { addRenamePart(event.target.value); event.target.value = ""; setRenameMenuOpen(false); }} style={{position: "absolute", top: "98px", right: "7px", zIndex: 652, width: "160px", height: "31px", fontSize: "12px", border: "1px solid #b9d6ed", borderRadius: "6px", background: "white", color: "#1684e8", cursor: "pointer"}}><option value="">Choose an item</option><option value="originalName">Original file name</option><option value="fixed">Fixed text</option><option value="date">Current date</option><option value="company">Company</option><option value="delete">Delete last item</option></select>}
             </>
 
             {!imaginary && archiveMenuOpen && (
-                <section className="archiveControlArea" onClick={event => event.stopPropagation()} style={{position: "absolute", top: "99px", right: "7px", zIndex: 12, width: "270px", maxHeight: "360px", overflowY: "auto", padding: "10px", border: "1px solid #bfd3e8", borderRadius: "9px", background: "white", boxShadow: "0 7px 18px #18314a2b", textAlign: "left"}}>
-                    <strong style={{fontSize: "12px"}}>Archive columns</strong>
-                    <p style={{margin: "3px 0 7px", fontSize: "10px"}}>File name is always included.</p>
+                <section className="archiveControlArea archiveSettingsMenu" onClick={event => event.stopPropagation()}>
+                    <strong>Archive columns</strong>
+                    <p>File name is always included. Set the values you want AI to find in every file.</p>
+                    <label className="continuousUpdateToggle">
+                        <input type="checkbox" checked={archiveEnabled} onChange={event => setArchiveEnabled(event.target.checked)} />
+                        Aggiorna ad ogni file inserito
+                    </label>
+                    {!archiveEnabled && <button type="button" className="archiveCreateAction" onClick={event => void toggleArchive(event)} disabled={syncingArchive}>{syncingArchive ? "Creating archive…" : "Create archive.xlsx"}</button>}
                     {archiveColumns.map(column => (
                         <div key={column.key} style={{display: "grid", gridTemplateColumns: "1fr 24px", gap: "5px", alignItems: "start", marginBottom: "7px"}}>
                             <div style={{display: "grid", gap: "4px"}}>
                                 <input value={column.header} onChange={event => updateArchiveColumn(column.key, {header: event.target.value})} placeholder="Column name" aria-label={`${column.key} column title`} />
-                                <input value={column.instruction ?? DEFAULT_ARCHIVE_CONFIG.find(item => item.key === column.key)?.instruction ?? ""} onChange={event => updateArchiveColumn(column.key, {instruction: event.target.value})} placeholder="Describe what AI should extract" aria-label="AI instruction for this column" style={{fontSize: "10px"}} />
+                                <input value={column.instruction ?? DEFAULT_ARCHIVE_CONFIG.find(item => item.key === column.key)?.instruction ?? ""} onChange={event => updateArchiveColumn(column.key, {instruction: event.target.value})} placeholder="Describe what AI should extract" aria-label="AI instruction for this column" />
                             </div>
                             <button type="button" title={archiveColumnPendingRemoval === column.key ? "Press again to remove" : "Remove column"} onClick={() => removeArchiveColumn(column.key)} style={{height: "25px", border: "none", borderRadius: "5px", background: archiveColumnPendingRemoval === column.key ? "#8d2030" : "#e9eef4", color: archiveColumnPendingRemoval === column.key ? "white" : "#526171", cursor: "pointer"}}>−</button>
                         </div>

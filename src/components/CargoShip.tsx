@@ -1,5 +1,5 @@
 import {useEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type RefObject} from "react";
-import {CalendarDays, ChevronLeft, ChevronRight, FilePlus2, FileText, MailPlus, Minus, Rocket, RotateCw, ScanSearch, Send, Settings2, SlidersHorizontal, Trash2, X, Zap} from "lucide-react";
+import {CalendarDays, ChevronLeft, ChevronRight, FilePlus2, FileText, MailPlus, Minus, Rocket, RotateCw, ScanSearch, Send, Settings2, SlidersHorizontal, StickyNote, Trash2, X, Zap} from "lucide-react";
 import {API_BASE_URL} from "../api";
 import {browserBridgeDropId, resolveBrowserBridgeDrop} from "../browserBridge";
 import {EMAIL_ATTACHMENT_TYPE} from "./GmailSourcePanel";
@@ -12,9 +12,19 @@ type CargoFile = {id: string; kind: "file"; file: File; name: string; size: numb
 type CargoPath = {id: string; kind: "path"; name: string; path: string; size?: number};
 type CargoAttachment = {id: string; kind: "attachment"; provider: "gmail" | "outlook"; name: string; size?: number; attachmentId: string; messageId: string; mimeType: string; sourceBlockId?: string};
 type CargoItem = CargoFile | CargoPath | CargoAttachment;
-type CargoMode = "transport" | "calendar" | "text" | "email" | "convert" | "lens";
+type CargoMode = "transport" | "calendar" | "note" | "text" | "email" | "convert" | "lens";
 type CargoCalendarEvent = {title: string; start: string; end: string; location: string; attachments: string[]};
 type CargoReminder = {id: string; text: string; reminderAt: string};
+
+const CARGO_TOOL_KEYS = ["transport", "calendar", "note", "text", "email", "convert", "lens"] as const;
+function normaliseCargoTools(value: unknown): string[] {
+    if (!Array.isArray(value)) return [...CARGO_TOOL_KEYS];
+    const tools = [...new Set(value.filter((tool): tool is string => typeof tool === "string" && CARGO_TOOL_KEYS.includes(tool as typeof CARGO_TOOL_KEYS[number])))];
+    return tools.length ? tools : ["transport"];
+}
+function sameCargoTools(left: string[], right: string[]) {
+    return left.length === right.length && left.every((tool, index) => tool === right[index]);
+}
 
 interface RemoteAttachment { attachmentId: string; messageId: string; mimeType: string; name: string; size?: number; sourceBlockId?: string; }
 interface PathItem {name: string; path: string; size?: number}
@@ -25,6 +35,7 @@ function cargoId() { return crypto.randomUUID(); }
 function formatSize(bytes?: number) { return !bytes ? "" : bytes < 1024 * 1024 ? `${Math.max(1, Math.round(bytes / 1024))} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`; }
 function readPayload<T>(value: string): T[] { try { const parsed = JSON.parse(value); return Array.isArray(parsed) ? parsed as T[] : []; } catch { return []; } }
 function layoutKey(scope: string) { return `folderrocket-cargo-ship-layout-${scope}`; }
+function noteDraftKey(scope: string) { return `folderrocket-cargo-note-draft-${scope}`; }
 const DEFAULT_CARGO_SIZE = {width: 250, height: 230};
 const MINIMUM_CARGO_SIZE = {width: 250, height: 230};
 const MAXIMUM_CARGO_SIZE = {width: 880, height: 760};
@@ -71,6 +82,9 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, st
     const [dropActive, setDropActive] = useState(false);
     const [text, setText] = useState("");
     const [fileName, setFileName] = useState("FolderRocket note");
+    const [noteTitle, setNoteTitle] = useState(() => { try { return String(JSON.parse(localStorage.getItem(noteDraftKey(storageScope)) || "{}").title || ""); } catch { return ""; } });
+    const [noteText, setNoteText] = useState(() => { try { return String(JSON.parse(localStorage.getItem(noteDraftKey(storageScope)) || "{}").text || ""); } catch { return ""; } });
+    const [noteColor, setNoteColor] = useState<"yellow" | "purple" | "blue" | "green">(() => { try { const color = JSON.parse(localStorage.getItem(noteDraftKey(storageScope)) || "{}").color; return ["yellow", "purple", "blue", "green"].includes(color) ? color : "yellow"; } catch { return "yellow"; } });
     const [textFormat, setTextFormat] = useState<"note" | "txt" | "pdf" | "docx">("txt");
     const [recipient, setRecipient] = useState("");
     const [emailSubject, setEmailSubject] = useState("FolderRocket note");
@@ -110,7 +124,7 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, st
     const [activeReminder, setActiveReminder] = useState<CargoReminder | null>(null);
     const [showToolMenu, setShowToolMenu] = useState(false);
     useEffect(()=>{if(!showToolMenu)return;const close=(event:PointerEvent)=>{if(!(event.target as Element).closest(".cargoShipLauncherWrap"))setShowToolMenu(false);};document.addEventListener("pointerdown",close);return()=>document.removeEventListener("pointerdown",close);},[showToolMenu]);
-    const [enabledTools, setEnabledTools] = useState<string[]>(() => { try { const value = JSON.parse(localStorage.getItem(`folderrocket-cargo-tools-${storageScope}`) || "null"); return Array.isArray(value) ? value : ["transport", "calendar", "text", "email", "convert", "lens"]; } catch { return ["transport", "calendar", "text", "email", "convert", "lens"]; } });
+    const [enabledTools, setEnabledTools] = useState<string[]>(() => { try { return normaliseCargoTools(JSON.parse(localStorage.getItem(`folderrocket-cargo-tools-${storageScope}`) || "null")); } catch { return [...CARGO_TOOL_KEYS]; } });
     const shipScale = 1;
 
     useEffect(() => {
@@ -151,7 +165,35 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, st
     useEffect(() => {
         localStorage.setItem(layoutKey(storageScope), JSON.stringify({x: position.x, y: position.y, ...shipSize}));
     }, [position, shipSize, storageScope]);
-    useEffect(() => { localStorage.setItem(`folderrocket-cargo-tools-${storageScope}`, JSON.stringify(enabledTools)); }, [enabledTools, storageScope]);
+    useEffect(() => {
+        const key = `folderrocket-cargo-tools-${storageScope}`;
+        localStorage.setItem(key, JSON.stringify(enabledTools));
+        const channel = "BroadcastChannel" in window ? new BroadcastChannel("folderrocket-cargo-tools") : null;
+        channel?.postMessage({storageScope, tools: enabledTools});
+        channel?.close();
+    }, [enabledTools, storageScope]);
+    useEffect(() => {
+        const key = `folderrocket-cargo-tools-${storageScope}`;
+        const apply = (value: unknown) => setEnabledTools(current => {
+            const next = normaliseCargoTools(value);
+            return sameCargoTools(current, next) ? current : next;
+        });
+        const receiveStorage = (event: StorageEvent) => {
+            if (event.key !== key || !event.newValue) return;
+            try { apply(JSON.parse(event.newValue)); } catch { /* Ignore malformed saved settings. */ }
+        };
+        const channel = "BroadcastChannel" in window ? new BroadcastChannel("folderrocket-cargo-tools") : null;
+        if (channel) channel.onmessage = event => {
+            const data = event.data as {storageScope?: string; tools?: unknown};
+            if (data?.storageScope === storageScope) apply(data.tools);
+        };
+        window.addEventListener("storage", receiveStorage);
+        return () => { window.removeEventListener("storage", receiveStorage); channel?.close(); };
+    }, [storageScope]);
+    useEffect(() => {
+        if (!enabledTools.includes(mode)) setMode(enabledTools[0] as CargoMode);
+    }, [enabledTools, mode]);
+    useEffect(() => { localStorage.setItem(noteDraftKey(storageScope), JSON.stringify({title:noteTitle, text:noteText, color:noteColor})); }, [noteColor, noteText, noteTitle, storageScope]);
 
     useEffect(() => {
         if (!open) return;
@@ -284,6 +326,21 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, st
             setMessage(`${data.file.name} is ready in CargoRocket.`);
         } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to create the file."); }
         finally { setWorking(false); }
+    }
+
+    function createPostIt() {
+        const body = noteText.trim();
+        if (!body) return;
+        const detail = {storageScope, title:noteTitle.trim(), text:body, color:noteColor};
+        window.dispatchEvent(new CustomEvent("folderrocket:create-sticky-note", {detail}));
+        if ("BroadcastChannel" in window) {
+            const channel = new BroadcastChannel("folderrocket-sticky-notes");
+            channel.postMessage(detail);
+            channel.close();
+        }
+        setNoteTitle("");
+        setNoteText("");
+        setMessage("Post-it added to the workspace.");
     }
 
     async function createEmailDraft() {
@@ -542,12 +599,13 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, st
     const shipPanelStyle = standalone
         ? undefined
         : {left: position.x, top: position.y, width: shipSize.width, height: shipSize.height, transform: `scale(${shipScale})`, transformOrigin: "top left"};
-    const toolsMenu = showToolMenu && <div className="cargoToolsMenu cargoLauncherToolsMenu"><strong>CargoRocket tools</strong>{[["transport","Files"],["calendar","One-day calendar"],["text","Text"],["email","Email"],["convert","Convert"],...(aiEnabled ? [["lens","Lens"]] : [])].map(([key,label]) => <label key={key}><input type="checkbox" checked={enabledTools.includes(key)} onChange={event => setEnabledTools(current => event.target.checked ? [...new Set([...current,key])] : current.filter(item => item !== key))}/>{label}</label>)}</div>;
+    const toolsMenu = showToolMenu && <div className="cargoToolsMenu cargoLauncherToolsMenu"><strong>CargoRocket tools</strong>{[["transport","Files"],["calendar","One-day calendar"],["note","Post-it"],["text","Text"],["email","Email"],["convert","Convert"],...(aiEnabled ? [["lens","Lens"]] : [])].map(([key,label]) => <label key={key}><input type="checkbox" checked={enabledTools.includes(key)} onChange={event => setEnabledTools(current => normaliseCargoTools(event.target.checked ? [...current, key] : current.filter(item => item !== key)))}/>{label}</label>)}</div>;
     const shipPanel = <section ref={shipRef} className={`${dragging ? "cargoShip moving" : "cargoShip"}${standalone ? " cargoShipStandalone" : ""}${lensCapturing ? " lensCapturing" : ""}`} style={shipPanelStyle} onDragOver={mode === "email" ? event => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } : undefined} onDrop={mode === "email" ? event => void handleDrop(event) : undefined}>
         <header className="cargoShipHeader" onPointerDown={standalone ? undefined : startDrag}><span><Rocket size={15} />CargoRocket <small>{items.length} on board</small></span><button type="button" className="cargoCalendarHeaderButton" title="One-day calendar" onPointerDown={event => event.stopPropagation()} onClick={() => setMode("calendar")}><CalendarDays size={14}/></button><span className="cargoShipHeaderActions"><button type="button" title="Minimize to a movable bubble" onClick={minimizeShip}><Minus size={14} /></button><button type="button" className="cargoShipClose" title="Close CargoRocket" onClick={closeShip}><X size={14} /></button></span></header>
+        <div className="cargoShipModes" role="tablist">{enabledTools.includes("transport") && <button type="button" className={mode === "transport" ? "active" : ""} onClick={() => setMode("transport")}>Files</button>}{enabledTools.includes("calendar") && <button type="button" className={mode === "calendar" ? "active" : ""} onClick={() => setMode("calendar")}><CalendarDays size={11}/>Day</button>}{enabledTools.includes("note") && <button type="button" className={mode === "note" ? "active" : ""} onClick={() => setMode("note")}><StickyNote size={11}/>Note</button>}{enabledTools.includes("text") && <button type="button" className={mode === "text" ? "active" : ""} onClick={() => setMode("text")}><FilePlus2 size={11} />Text</button>}{enabledTools.includes("email") && <button type="button" className={mode === "email" ? "active" : ""} onClick={() => setMode("email")}><MailPlus size={11} />Email</button>}{enabledTools.includes("convert") && <button type="button" className={mode === "convert" ? "active" : ""} onClick={() => setMode("convert")}><RotateCw size={11} />Convert</button>}{aiEnabled && enabledTools.includes("lens") && <button type="button" className={mode === "lens" ? "active" : ""} onClick={() => setMode("lens")}><ScanSearch size={11} />Lens</button>}</div>
         {mode === "calendar" && <div className="cargoDayCalendar"><div className="cargoDayNavigation"><button type="button" onClick={() => setCalendarDay(current => { const day = new Date(`${current}T12:00:00`); day.setDate(day.getDate() - 1); return day.toISOString().slice(0, 10); })} title="Previous day"><ChevronLeft size={15}/></button><input type="date" value={calendarDay} onChange={event => setCalendarDay(event.target.value)}/><button type="button" onClick={() => setCalendarDay(current => { const day = new Date(`${current}T12:00:00`); day.setDate(day.getDate() + 1); return day.toISOString().slice(0, 10); })} title="Next day"><ChevronRight size={15}/></button></div><div>{calendarEvents.filter(event => event.start.slice(0, 10) === calendarDay).map((event, index) => <article key={`${event.start}-${event.title}-${index}`}><strong>{event.title}</strong><small>{new Date(event.start).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})}{event.location ? ` · ${event.location}` : ""}</small>{event.attachments.map(file => <span key={file}><FileText size={11}/>{file}</span>)}</article>)}{!calendarEvents.some(event => event.start.slice(0, 10) === calendarDay) && <p>No events or files for this day.</p>}</div></div>}
-        <div className="cargoShipModes" role="tablist">{enabledTools.includes("transport") && <button type="button" className={mode === "transport" ? "active" : ""} onClick={() => setMode("transport")}>Files</button>}{enabledTools.includes("calendar") && <button type="button" className={mode === "calendar" ? "active" : ""} onClick={() => setMode("calendar")}><CalendarDays size={11}/>Day</button>}{enabledTools.includes("text") && <button type="button" className={mode === "text" ? "active" : ""} onClick={() => setMode("text")}><FilePlus2 size={11} />Text</button>}{enabledTools.includes("email") && <button type="button" className={mode === "email" ? "active" : ""} onClick={() => setMode("email")}><MailPlus size={11} />Email</button>}{enabledTools.includes("convert") && <button type="button" className={mode === "convert" ? "active" : ""} onClick={() => setMode("convert")}><RotateCw size={11} />Convert</button>}{aiEnabled && enabledTools.includes("lens") && <button type="button" className={mode === "lens" ? "active" : ""} onClick={() => setMode("lens")}><ScanSearch size={11} />Lens</button>}</div>
         {mode === "transport" && <div className={dropActive ? "cargoDropArea active" : "cargoDropArea"} onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setDropActive(true); }} onDragLeave={() => setDropActive(false)} onDrop={handleDrop}><p>{targetFolderId ? (instantDelivery ? `Instant delivery: ${folders.find(folder => folder.id === targetFolderId)?.name ?? "selected folder"}.` : "Delivery is manual.") : "Choose a FolderRocket folder."}</p><div className="cargoItemList">{items.length ? items.map(item => <div className="cargoItem" draggable key={item.id} onDragStart={event => handleItemDrag(event, item)}><FileText size={14} /><span title={item.name}>{item.name}</span><small>{formatSize(item.size)}</small><button type="button" title="Remove from CargoRocket" onClick={() => setItems(current => current.filter(currentItem => currentItem.id !== item.id))}><Trash2 size={13} /></button></div>) : <em>Drop files here.</em>}</div><div className="cargoFolderSend"><select value={targetFolderId} onChange={event => setTargetFolderId(event.target.value)}><option value="">Choose FolderRocket folder…</option>{folders.map(folder => <option key={folder.id} value={folder.id}>{folder.storage === "imaginary" ? "◇ " : ""}{folder.name}</option>)}</select><button type="button" className={instantDelivery ? "cargoInstantToggle active" : "cargoInstantToggle"} onClick={() => setInstantDelivery(current => !current)} disabled={!targetFolderId} aria-pressed={instantDelivery} title="Toggle instant delivery"><Zap size={13}/>{instantDelivery ? "Instant ON" : "Instant"}</button><button type="button" onClick={() => void sendToFolder()} disabled={!targetFolderId || !items.length || working}>Organise</button></div><button type="button" className="cargoClear" onClick={() => setItems([])}>Clear cargo</button></div>}
+        {mode === "note" && <div className={`cargoPostIt ${noteColor}`}><input value={noteTitle} onChange={event => setNoteTitle(event.target.value)} placeholder="Post-it title" maxLength={80}/><textarea value={noteText} onChange={event => setNoteText(event.target.value)} placeholder="Write a quick note…" /><div className="cargoPostItActions"><span>{(["yellow", "purple", "blue", "green"] as const).map(color => <button type="button" key={color} className={color === noteColor ? `color-${color} active` : `color-${color}`} onClick={() => setNoteColor(color)} title={`${color} post-it`} aria-label={`${color} post-it`}/>)}</span><button type="button" onClick={createPostIt} disabled={!noteText.trim()}><StickyNote size={14}/>Add post-it</button></div><small>The draft stays in CargoRocket until you add it.</small></div>}
         {mode === "text" && <div className="cargoForm"><input value={fileName} onChange={event => setFileName(event.target.value)} placeholder="File name or note title" /><textarea value={text} onChange={event => setText(event.target.value)} placeholder="Paste or write text here…" /><div><select value={textFormat} onChange={event => setTextFormat(event.target.value as "note" | "txt" | "pdf" | "docx")}><option value="note">Post-it note</option><option value="txt">TXT file</option><option value="pdf">PDF file</option><option value="docx">Word document</option></select><button type="button" onClick={() => void createTextFile()} disabled={!text.trim() || working}><FilePlus2 size={14} />{textFormat === "note" ? "Create note" : "Create"}</button></div></div>}
         {mode === "email" && <div className="cargoForm cargoEmailForm"><select value={emailSourceKey} onChange={event => setEmailSourceKey(event.target.value)} disabled={!emailSources.length}><option value="">{emailSources.length ? "Choose connected mailbox" : "No connected mailbox"}</option>{emailSources.map(source => <option key={`${source.provider}:${source.blockId}`} value={`${source.provider}:${source.blockId}`}>{source.label}</option>)}</select><input value={recipient} onChange={event => setRecipient(event.target.value)} placeholder="To: name@example.com" /><input value={emailSubject} onChange={event => setEmailSubject(event.target.value)} placeholder="Email subject" /><textarea value={text} onChange={event => setText(event.target.value)} placeholder="Write the email text here…" /><div className="cargoEmailAttachments">{items.length ? items.map(item=><span key={item.id}><FileText size={12}/>{item.name}<button type="button" onClick={()=>setItems(current=>current.filter(value=>value.id!==item.id))}>×</button></span>):<em>Drop files here to attach them to the draft.</em>}</div><button type="button" onClick={() => void createEmailDraft()} disabled={!emailSources.length || !text.trim() || working}><Send size={14} />{working ? "Saving draft…" : "Save draft with attachments"}</button></div>}
         {mode === "convert" && <div className="cargoConvert"><p>Convert files on this PC.</p><select value={convertFormat} onChange={event => setConvertFormat(event.target.value)}><option value="pdf">PDF</option><option value="txt">TXT</option><option value="xlsx">XLSX</option><option value="csv">CSV</option></select><button type="button" onClick={() => void convertItems()} disabled={working}><RotateCw className={working ? "cargoSpin" : ""} size={15} />{working ? "Converting…" : "Convert cargo"}</button><button type="button" className="cargoStudioLink" onClick={onOpenFileStudio}><SlidersHorizontal size={14} />Open File Studio</button></div>}

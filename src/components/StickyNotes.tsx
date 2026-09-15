@@ -167,16 +167,17 @@ export default function StickyNotes({storageScope, folders, aiEnabled, floatingS
 
     useEffect(() => {
         const createCargoNote = (event: Event) => {
-            const detail = (event as CustomEvent<{storageScope?: string; text?: string}>).detail;
+            const detail = (event as CustomEvent<{storageScope?: string; title?: string; text?: string; color?: NoteColor}>).detail;
             if (detail?.storageScope && detail.storageScope !== storageScope) return;
             const text = String(detail?.text || "").trim();
-            if (text) addNote("yellow", text);
+            const color = colors.includes(detail?.color as NoteColor) ? detail.color as NoteColor : "yellow";
+            if (text) setNotes(current => [{...createNote(current.length, color, text), title:String(detail?.title || "").trim().slice(0, 80)}, ...current]);
         };
         window.addEventListener("folderrocket:create-sticky-note", createCargoNote);
         const channel = "BroadcastChannel" in window ? new BroadcastChannel("folderrocket-sticky-notes") : null;
         if (channel) channel.onmessage = event => createCargoNote(new CustomEvent("folderrocket:create-sticky-note", {detail: event.data}));
         return () => { window.removeEventListener("folderrocket:create-sticky-note", createCargoNote); channel?.close(); };
-    }, [addNote, storageScope]);
+    }, [storageScope]);
 
     useEffect(() => {
         const createAiNote = (event: Event) => {

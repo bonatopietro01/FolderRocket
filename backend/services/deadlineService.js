@@ -9,7 +9,8 @@ const analyzeDeadline =
 
 const {
     getDeadlineArchiveData,
-    updateDeadlineInfo
+    updateDeadlineInfo,
+    addManualDeadline
 } = require(
     "../database/deadlineExcelManager"
 );
@@ -248,6 +249,23 @@ function normalizeExpirationDate(
 
 }
 
+function normalizeDeadlineLevels(levels, watchDays, urgentDays) {
+    const fallback = [
+        {id: "urgent", label: "Urgentissimo", days: urgentDays, color: "#e53935"},
+        {id: "watch", label: "Sotto controllo", days: watchDays, color: "#e6a700"}
+    ];
+    const source = Array.isArray(levels) && levels.length ? levels : fallback;
+    const seen = new Set();
+    const normalized = source.map((level, index) => ({
+        id: String(level?.id || `level_${index}`).replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 48),
+        label: String(level?.label || `Gravità ${index + 1}`).trim().slice(0, 80),
+        days: Number(level?.days),
+        color: /^#[0-9a-f]{6}$/i.test(String(level?.color)) ? String(level.color) : "#5b8def"
+    })).filter(level => level.id && level.label && Number.isFinite(level.days) && level.days >= 0 && !seen.has(level.id) && (seen.add(level.id) || true));
+    if (!normalized.length) throw new Error("Inserisci almeno un livello di gravità valido");
+    return normalized.sort((first, second) => first.days - second.days);
+}
+
 
 /*
     Calcola i giorni mancanti
@@ -267,8 +285,7 @@ function normalizeExpirationDate(
 */
 function calculateDeadlineStatus(
     expirationDate,
-    watchDays,
-    urgentDays
+    levels
 ) {
 
     const normalizedDate =
@@ -339,40 +356,8 @@ function calculateDeadlineStatus(
         già scaduti, perché avranno
         daysRemaining negativo.
     */
-    if (
-        daysRemaining <= urgentDays
-    ) {
-
-        return {
-
-            expirationDate:
-                normalizedDate,
-
-            daysRemaining,
-
-            status: "urgent"
-
-        };
-
-    }
-
-
-    if (
-        daysRemaining <= watchDays
-    ) {
-
-        return {
-
-            expirationDate:
-                normalizedDate,
-
-            daysRemaining,
-
-            status: "watch"
-
-        };
-
-    }
+    const matchingLevel = levels.find(level => daysRemaining <= level.days);
+    if (matchingLevel) return {expirationDate: normalizedDate, daysRemaining, status: matchingLevel.id};
 
 
     return {
@@ -396,7 +381,8 @@ function calculateDeadlineStatus(
 function validateDeadlineRequest(
     folderPath,
     watchDays,
-    urgentDays
+    urgentDays,
+    levels
 ) {
 
     if (!folderPath) {
@@ -473,15 +459,7 @@ function validateDeadlineRequest(
     }
 
 
-    if (
-        urgentDays >= watchDays
-    ) {
-
-        throw new Error(
-            "Urgentissimo deve avere meno giorni di Sotto controllo"
-        );
-
-    }
+    normalizeDeadlineLevels(levels, watchDays, urgentDays);
 
 }
 
@@ -627,14 +605,18 @@ async function getDeadlineForFile(
 async function checkFolderDeadlines(
     folderPath,
     watchDays,
-    urgentDays
+    urgentDays,
+    levels
 ) {
 
     validateDeadlineRequest(
         folderPath,
         watchDays,
-        urgentDays
+        urgentDays,
+        levels
     );
+
+    const deadlineLevels = normalizeDeadlineLevels(levels, watchDays, urgentDays);
 
 
     const fileNames =
@@ -700,8 +682,7 @@ async function checkFolderDeadlines(
         const statusData =
             calculateDeadlineStatus(
                 deadlineData.expirationDate,
-                watchDays,
-                urgentDays
+                deadlineLevels
             );
 
 
@@ -767,7 +748,8 @@ async function checkFolderDeadlines(
     */
     await updateDeadlineInfo(
         folderPath,
-        results
+        results,
+        Object.fromEntries(deadlineLevels.map(level => [level.id, level.color]))
     );
 
 
@@ -775,18 +757,9 @@ async function checkFolderDeadlines(
         Contatori separati inviati
         al frontend.
     */
-    const urgentCount =
-        results.filter(
-            result =>
-                result.status === "urgent"
-        ).length;
-
-
-    const watchCount =
-        results.filter(
-            result =>
-                result.status === "watch"
-        ).length;
+    const levelCounts = Object.fromEntries(deadlineLevels.map(level => [level.id, results.filter(result => result.status === level.id).length]));
+    const urgentCount = levelCounts.urgent ?? 0;
+    const watchCount = levelCounts.watch ?? 0;
 
 
     const missingCount =
@@ -832,6 +805,8 @@ async function checkFolderDeadlines(
         totalFiles:
             results.length,
 
+        levelCounts,
+        levels: deadlineLevels,
         results
 
     };
@@ -841,6 +816,7 @@ async function checkFolderDeadlines(
 
 module.exports = {
 
-    checkFolderDeadlines
+    checkFolderDeadlines,
+    addManualDeadline
 
 };

@@ -89,7 +89,7 @@ function formatGridDay(value: Date) {
 }
 
 function formatSelectedDay(value: Date) {
-    return value.toLocaleDateString("en-GB", {weekday: "long", day: "numeric", month: "long"});
+    return value.toLocaleDateString("en-GB", {day: "numeric", month: "long", year: "numeric"});
 }
 
 function FileKindIcon({name}: {name: string}) {
@@ -194,10 +194,15 @@ export default function GoogleCalendarSourcePanel({alertBlockId, weekStart, onWe
         return () => document.removeEventListener("pointerdown", closeConnectionOptions);
     }, []);
 
-    function moveWeek(direction: -1 | 1) {
-        const next = new Date(activeWeekStart);
-        next.setDate(next.getDate() + direction * 7);
-        onWeekStartChange(dateKey(next));
+    function moveDay(direction: -1 | 1) {
+        const next = new Date(`${selectedDay.key}T12:00:00`);
+        next.setDate(next.getDate() + direction);
+        setSelectedDayKey(dateKey(next));
+
+        const nextWeekStart = startOfWeek(next);
+        if (dateKey(nextWeekStart) !== activeWeekKey) {
+            onWeekStartChange(dateKey(nextWeekStart));
+        }
     }
 
     function startAttachmentDrag(event: React.DragEvent<HTMLElement>, attachment: CalendarAttachment) {
@@ -235,15 +240,21 @@ export default function GoogleCalendarSourcePanel({alertBlockId, weekStart, onWe
 
     async function createCalendarEvent(){
         const start=new Date(eventStart),end=new Date(start.getTime()+Math.max(.25,eventHours)*3600000);
-        if(!eventTitle.trim()||Number.isNaN(start.getTime())){setError("Enter the meeting title, date and time.");return;}
+        if(!eventTitle.trim()||Number.isNaN(start.getTime())||!Number.isFinite(eventHours)||eventHours<=0){setError("Enter the meeting title, date and time.");return;}
         setLoading(true);setError("");
         try{const response=await fetch(calendarUrl("/events"),{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({title:eventTitle.trim(),start:start.toISOString(),end:end.toISOString(),attendees:eventGuests.split(/[,;\s]+/).filter(Boolean)})});const data=await response.json().catch(()=>({})) as {event?:CalendarEvent;message?:string};if(!response.ok||!data.event)throw new Error(data.message||"Unable to create the event.");setEvents(current=>[...current,data.event!].sort((a,b)=>a.start.localeCompare(b.start)));setCreating(false);setEventTitle("");setEventGuests("");}
         catch(reason){setError(reason instanceof Error?reason.message:"Unable to create the event.");}finally{setLoading(false);}
     }
 
     return <section className="sourceCard calendarSourceCard">
-        <div className="sourceHeader calendarSourceHeader"><CalendarDays className="calendarPanelIcon" size={27}/>{connected ? <span className="emailConnectionControls calendarConnectionControls"><button type="button" className="sourceTitle emailConnectionTitle" onClick={() => { setShowDisconnect(current => !current); setDisconnectArmed(false); }} title="Google Calendar connection options">Google Calendar</button>{showDisconnect && <button type="button" className={disconnectArmed ? "emailDisconnectButton armed" : "emailDisconnectButton"} onClick={() => { if (disconnectArmed) void disconnectCalendar(); else setDisconnectArmed(true); }} title={disconnectArmed ? "Press again to disconnect Google Calendar" : "Disconnect Google Calendar"}>{disconnectArmed ? "Confirm" : "Disconnect"}</button>}</span> : <span className="sourceTitle">Google Calendar</span>}{connected&&<button type="button" className="calendarCreateToggle" title="Create meeting" onClick={()=>{setCreating(value=>!value);if(!eventStart)setEventStart(`${selectedDay.key}T09:00`);}}>{creating?<X size={14}/>:<Plus size={14}/>}</button>}{connected && <button type="button" className="calendarHeaderRefresh" onClick={() => void refresh()} disabled={loading} title="Refresh calendar" aria-label="Refresh calendar"><RefreshCw className={loading ? "spin" : ""} size={14}/></button>}{connected && <div className="calendarHeaderNavigation"><button type="button" onClick={() => moveWeek(-1)} disabled={loading} title="Previous week" aria-label="Previous week"><ChevronLeft size={14}/></button><strong title={formatWeekRange(activeWeekStart)}>{formatWeekRange(activeWeekStart)}</strong><button type="button" onClick={() => moveWeek(1)} disabled={loading} title="Next week" aria-label="Next week"><ChevronRight size={14}/></button></div>}</div>
-        {connected&&creating&&<div className="calendarCreateForm"><input value={eventTitle} onChange={event=>setEventTitle(event.target.value)} placeholder="Meeting title"/><input type="datetime-local" value={eventStart} onChange={event=>setEventStart(event.target.value)}/><label><input type="number" min="0.25" step="0.25" value={eventHours} onChange={event=>setEventHours(Number(event.target.value)||1)}/> hours</label><input value={eventGuests} onChange={event=>setEventGuests(event.target.value)} placeholder="Participant emails"/><button type="button" disabled={loading} onClick={()=>void createCalendarEvent()}>Create</button></div>}
+        <div className="sourceHeader calendarSourceHeader"><CalendarDays className="calendarPanelIcon" size={27}/>{connected ? <span className="emailConnectionControls calendarConnectionControls"><button type="button" className="sourceTitle emailConnectionTitle" onClick={() => { setShowDisconnect(current => !current); setDisconnectArmed(false); }} title="Google Calendar connection options">Google Calendar</button>{showDisconnect && <button type="button" className={disconnectArmed ? "emailDisconnectButton armed" : "emailDisconnectButton"} onClick={() => { if (disconnectArmed) void disconnectCalendar(); else setDisconnectArmed(true); }} title={disconnectArmed ? "Press again to disconnect Google Calendar" : "Disconnect Google Calendar"}>{disconnectArmed ? "Confirm" : "Disconnect"}</button>}</span> : <span className="sourceTitle">Google Calendar</span>}{connected && <div className="calendarHeaderNavigation"><button type="button" onClick={() => moveDay(-1)} disabled={loading} title="Previous day" aria-label="Previous day"><ChevronLeft size={14}/></button><strong title={formatSelectedDay(selectedDay.date)}>{formatSelectedDay(selectedDay.date)}</strong><button type="button" onClick={() => moveDay(1)} disabled={loading} title="Next day" aria-label="Next day"><ChevronRight size={14}/></button></div>}{connected&&<button type="button" className="calendarCreateToggle" title={creating ? "Close event form" : "Create event"} aria-label={creating ? "Close event form" : "Create event"} aria-expanded={creating} onClick={()=>{setCreating(value=>!value);if(!eventStart)setEventStart(`${selectedDay.key}T09:00`);}}>{creating?<X size={16}/>:<Plus size={16}/>}</button>}{connected && <button type="button" className="calendarHeaderRefresh" onClick={() => void refresh()} disabled={loading} title="Refresh calendar" aria-label="Refresh calendar"><RefreshCw className={loading ? "spin" : ""} size={14}/></button>}</div>
+        {connected && creating && <form className="calendarCreateForm" onSubmit={event => { event.preventDefault(); void createCalendarEvent(); }}>
+            <label className="calendarFormWide">Event title<input required value={eventTitle} onChange={event => setEventTitle(event.target.value)} placeholder="Add a title"/></label>
+            <label>Date and time<input required type="datetime-local" value={eventStart} onChange={event => setEventStart(event.target.value)}/></label>
+            <label>Duration (hours)<input required type="number" min="0.25" step="0.25" value={eventHours} onChange={event => setEventHours(Number(event.target.value))}/></label>
+            <label className="calendarFormWide">Participants (optional)<input value={eventGuests} onChange={event => setEventGuests(event.target.value)} placeholder="Emails separated by commas"/></label>
+            <div className="calendarFormActions"><button type="button" className="calendarPermissionButton" onClick={() => void connectCalendar()} disabled={authorizationPending}>{authorizationPending ? "Authorizing…" : "Authorize event creation"}</button><button type="submit" disabled={loading}>{loading ? "Creating…" : "Create event"}</button></div>
+        </form>}
         {!connected && <div className="emailConnectArea"><p>{!configured ? "Add the Gmail client ID and secret in Account settings first." : authorizationPending ? "Finish the Google approval in your browser. FolderRocket is waiting…" : "Connect the private Google Calendar for this block."}</p><button type="button" className="emailConnectButton" onClick={() => void connectCalendar()} disabled={authorizationPending || !configured}>{authorizationPending ? "Connecting…" : "Connect Google Calendar"}</button></div>}
         {error && <p className="calendarError">{error}</p>}
         {connected && <div className="calendarEventList">

@@ -139,7 +139,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .cargoShipHeaderActions { color: #eee7f9; }
 .cargoShipHeaderActions button { display: inline-grid; width: 20px; height: 20px; place-items: center; border: 0; border-radius: 5px; background: rgba(255,255,255,.17); color: #fff; cursor: pointer; }
 .cargoShipHeaderActions button:hover { background: rgba(255,255,255,.3); }
-.cargoShipModes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 2px; padding: 4px 5px; border-bottom: 1px solid #d9d9ed; background: rgba(255,255,255,.7); }
+.cargoShipModes { display: grid; grid-template-columns: repeat(auto-fit,minmax(38px,1fr)); gap: 2px; padding: 4px 5px; border-bottom: 1px solid #d9d9ed; background: rgba(255,255,255,.7); }
 .cargoShipModes button { display: inline-flex; align-items: center; justify-content: center; gap: 2px; min-width: 0; border: 0; border-radius: 5px; background: transparent; color: #5d6b7d; cursor: pointer; font: inherit; font-size: 9px; font-weight: 800; padding: 4px 1px; }
 .cargoShipModes button.active { background: #e5d5f6; color: #57367c; }
 .cargoFolderSend { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:5px; margin-top:7px; }.cargoFolderSend select { min-width:0; border:1px solid #cbbcdc; border-radius:6px; background:#fff; color:#523b6a; font:inherit; font-size:10px; padding:6px; }.cargoFolderSend button { display:inline-flex; align-items:center; justify-content:center; gap:3px; border:0; border-radius:6px; background:#6d4994; color:#fff; cursor:pointer; font-size:10px; font-weight:800; padding:6px 8px; }.cargoFolderSend button:disabled { cursor:not-allowed; opacity:.55; }.cargoFolderSend .cargoInstantToggle { background:#e7eef5; color:#56697d; border:1px solid #c4d0dc; }.cargoFolderSend .cargoInstantToggle.active { background:linear-gradient(180deg,#ffdb78,#e9a82e); border-color:#be7e08; color:#543500; }
@@ -162,6 +162,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .cargoForm > div select { flex: 1; }
 .cargoForm button, .cargoConvert > button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 0; border-radius: 6px; background: #6d4899; color: #fff; cursor: pointer; font: inherit; font-size: 10px; font-weight: 800; padding: 7px 9px; }
 .cargoForm button:disabled, .cargoConvert > button:disabled { cursor: wait; opacity: .58; }
+.cargoPostIt { display:grid; min-height:0; flex:1 1 auto; gap:7px; padding:8px; overflow:auto; }.cargoPostIt.yellow { background:#fff6bd; }.cargoPostIt.purple { background:#eee2ff; }.cargoPostIt.blue { background:#dff2ff; }.cargoPostIt.green { background:#e1f6df; }.cargoPostIt input,.cargoPostIt textarea { width:100%; min-width:0; box-sizing:border-box; border:0; border-radius:5px; background:rgba(255,255,255,.62); color:#3e3a31; font:inherit; padding:6px; }.cargoPostIt input { font-size:11px; font-weight:800; }.cargoPostIt textarea { min-height:66px; resize:vertical; font-size:11px; line-height:1.35; }.cargoPostItActions { display:flex; align-items:center; justify-content:space-between; gap:6px; }.cargoPostItActions > span { display:flex; gap:5px; }.cargoPostItActions > span button { width:17px; height:17px; padding:0; border:1px solid rgba(72,62,35,.28); border-radius:50%; cursor:pointer; }.cargoPostItActions .color-yellow { background:#ffdc4d; }.cargoPostItActions .color-purple { background:#c49eea; }.cargoPostItActions .color-blue { background:#7fc8ee; }.cargoPostItActions .color-green { background:#77c777; }.cargoPostItActions > span button.active { box-shadow:0 0 0 2px #fff,0 0 0 3px #77632e; }.cargoPostItActions > button { display:inline-flex; align-items:center; gap:4px; border:0; border-radius:6px; background:#6d4899; color:#fff; cursor:pointer; font-size:10px; font-weight:800; padding:7px 9px; }.cargoPostItActions > button:disabled { cursor:default; opacity:.5; }.cargoPostIt small { color:#695d38; font-size:9px; }
 .cargoConvert { grid-template-columns: 1fr auto; align-items: center; }
 .cargoConvert p { grid-column: 1 / -1; margin: 0; color: #6b788a; font-size: 10px; line-height: 1.3; }
 .cargoConvert > button { white-space: nowrap; }
@@ -3292,8 +3293,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .changeFormatSettings label + label { margin-top:8px; }
 .changeFormatSettings input { flex-shrink:0; margin:2px 0 0; accent-color:#884bb5; }
 .applyMotherFormat { padding:9px; border:1px solid #b697d2; border-radius:7px; background:#e9d9f8; color:#644287; font-weight:700; cursor:pointer; }.applyMotherFormat:disabled{opacity:.5;cursor:default;}.formatReport { white-space:pre-wrap; max-height:180px; overflow:auto; }
-.formatCompletionBackdrop { position:fixed; inset:0; z-index:10000; display:grid; place-items:center; background:#19344c66; }.formatCompletion { width:min(480px,90vw); padding:24px; background:#fff; border-radius:14px; box-shadow:0 20px 65px #15314b40; color:#344e66; }.formatCompletion h2{margin-top:0;}.formatCompletion>div { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }.formatCompletion button { border:1px solid #b6cadd; background:#edf5fc; border-radius:7px; padding:9px; cursor:pointer; }
-
 /* Compact folder grouping and shared source / conversion presentation. */
 .dashboard > .foldersColumn { padding-left:4px; padding-right:4px; }
 .dashboardProjectGroup .folderOrderItem { min-width:0; width:100%; }
@@ -3391,3 +3390,1177 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .folderTableRow { grid-template-columns:34px 1fr 1.9fr .75fr 62px; }
 .folderTableRow.orderingFolder,.folderTableRow.orderingHead { grid-template-columns:20px 38px 1fr 1.9fr .75fr 38px; }
 @media(max-width:850px){.calendarCreateForm{grid-template-columns:1fr 1fr}.dailyActivityRow{grid-template-columns:90px 1fr!important}.dailyActivityRow>*:nth-child(n+3){grid-column:2}}
+
+/* Readable section titles and explicit actions. */
+.sourceBlock-gmail .sourceHeader { flex-wrap:nowrap; height:auto; min-height:38px; overflow:visible; gap:3px; }
+.sourceBlock-gmail .emailConnectionControls { flex:0 0 auto; }
+.sourceBlock-gmail .sourceHeader .emailConnectionTitle { width:auto; min-width:52px; max-width:none; overflow:visible; color:#202b38; font-size:15px; line-height:1.4; }
+.dailyJobPage h2.dailySectionTitle { gap:12px; font-size:23px; color:#193b57; margin-bottom:15px; }
+.dailySectionLogo { display:inline-flex; align-items:center; justify-content:center; width:46px; height:46px; flex:0 0 46px; border-radius:13px; }
+.dailySectionLogo.priorities { background:#fff0cd; color:#946000; }
+.dailySectionLogo.work { background:#dceeff; color:#1464ac; }
+.dailyPriorities { border-top:4px solid #dca42e; }
+.dailySummary { border-top:4px solid #378bd0; }
+.studioRenameSelect { display:inline-flex; align-items:center; gap:6px; width:max-content; color:#176fa9; }
+.studioRenameSelect select { border:0; background:transparent; color:#176fa9; cursor:pointer; font-size:15px; font-weight:800; outline:0; }
+.dashboardSourceBlock .sourceHeader .sourceTitle,.dashboardSourceBlock .resultsHeader strong { font-size:16px; }
+.applicationRemoveButton.armed { border-color:#c6372e!important; background:#c6372e!important; color:#fff!important; box-shadow:0 0 0 3px #f7c9c6; }
+.dailyActivityActions { display:flex; flex-wrap:wrap; gap:5px; grid-column:1/-1; margin-top:3px; }
+.dailyActivityActions button { border:1px solid #b7cddd; border-radius:5px; background:#fff; color:#276b99; cursor:pointer; font-size:10px; font-weight:800; padding:4px 7px; }
+.dailyActivityActions .dailyUndoLog { border-color:#e5b4af; color:#a63e36; }
+.processingPage { font-size:17px; grid-template-columns:300px minmax(440px,1fr) minmax(360px,1.15fr); }
+.processingPage .conversionStack { min-width:0; }
+.processingPage .conversionPanel,.processingPage .convertedRenamePanel,.processingPage .fireMountainCard { font-size:14px; }
+/* AI folder controls: each button owns its own readable menu. */
+.deadlineControls > button:not(:first-child) { display:none!important; }
+.deadlineStatusChoices { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:0 0 12px; }
+.deadlineStatusChoices button { min-height:32px; border:1px solid #d1c28c; border-radius:7px; background:#fff8dc; color:#765700; cursor:pointer; font-size:12px; font-weight:800; }
+.deadlineStatusChoices button:first-child { border-color:#e7b5b0; background:#fff0ef; color:#b2332b; }
+.deadlineStatusChoices button:disabled { cursor:default; opacity:.48; }
+.archiveSettingsMenu { position:absolute; top:43px; right:7px; z-index:14; width:min(390px,calc(100vw - 38px)); max-height:480px; overflow-y:auto; padding:16px; border:1px solid #9fc4df; border-radius:11px; background:#fff; box-shadow:0 12px 30px #18314a36; text-align:left; }
+.archiveSettingsMenu > strong { display:block; color:#175f91; font-size:16px; }
+.archiveSettingsMenu > p { margin:5px 0 13px; color:#567187; font-size:12px; line-height:1.35; }
+.archiveSettingsMenu input { min-height:31px; box-sizing:border-box; border:1px solid #b9cfe0; border-radius:6px; padding:6px 8px; color:#274b68; font-size:12px; }
+.archiveSettingsMenu > button { min-height:31px; margin-top:7px; font-size:12px; font-weight:800; }
+.archiveCreateAction { width:100%; min-height:36px!important; margin:0 0 12px!important; border:0!important; border-radius:7px!important; background:#1684e8!important; color:#fff!important; }
+/* The two AI menus are overlays: they never take layout space or sit behind files. */
+.folderDropZone:has(.deadlineControls),.folderDropZone:has(.archiveSettingsMenu) { overflow:visible!important; }
+.folderDropZone:has(.deadlineControls:has(> div)),.folderDropZone:has(.archiveSettingsMenu) { z-index:600!important; }
+.deadlineControls > div { z-index:650!important; }
+.archiveSettingsMenu { top:7px; right:47px; z-index:650!important; }
+/* Final dashboard and File Studio proportions. */
+.sourcesColumnHeader { min-height:30px; padding:4px 2px; font-size:13px; letter-spacing:.045em; }
+.sourcesColumnHeader > span { font-size:13px; }
+.dashboardProjectLabel { font-size:14px; font-weight:800; }
+.processingPage { grid-template-columns:310px minmax(0,1fr) 320px; }
+.processingPage .conversionStack > .conversionPanel { min-height:215px; }
+.processingPage .conversionStack > .convertedRenamePanel { min-height:125px; }
+.processingPage .conversionStack > .fireMountainCard { min-height:155px; }
+/* Calendar title, week switcher, new-event and refresh stay on one calm bar. */
+.calendarSourceCard .calendarSourceHeader { flex-wrap:nowrap; min-height:48px; gap:6px; padding:8px 38px 8px 10px; overflow:hidden; }
+.calendarSourceHeader .calendarConnectionControls { flex:1 1 auto; min-width:0; }
+.calendarSourceHeader .calendarHeaderNavigation { flex:0 0 auto; width:auto; max-width:116px; margin:0; padding:0; border:0; position:static; transform:none; }
+.calendarSourceHeader .calendarHeaderNavigation strong { max-width:64px; font-size:10px; }
+.calendarSourceHeader .calendarHeaderNavigation button { width:24px; height:24px; }
+.calendarSourceHeader .calendarCreateToggle { flex:0 0 auto; width:auto; height:28px; min-height:28px; padding:4px 7px; }
+.calendarSourceHeader .calendarHeaderRefresh { flex:0 0 25px; width:25px; height:25px; margin:0!important; }
+@container (max-width:420px) {
+  .calendarSourceCard .calendarSourceHeader { overflow-x:auto; }
+  .calendarSourceHeader .calendarHeaderNavigation { max-width:102px; }
+  .calendarSourceHeader .calendarHeaderNavigation strong { max-width:52px; }
+  .calendarSourceHeader .calendarCreateToggle span { display:none; }
+  .calendarSourceHeader .calendarCreateToggle { width:28px; padding:4px; justify-content:center; }
+}
+/* Calendar header: fixed four-part layout, never a wrapped flex row. */
+.calendarSourceCard .calendarSourceHeader { display:grid!important; grid-template-columns:minmax(0,1fr) auto auto auto; align-items:center; flex-wrap:nowrap!important; column-gap:6px; row-gap:0; min-height:47px; height:47px; padding:7px 38px 7px 9px; overflow:hidden; }
+.calendarSourceCard .calendarConnectionControls { min-width:0; width:100%; overflow:hidden; }
+.calendarSourceCard .calendarHeaderNavigation { grid-column:2; grid-row:1; display:flex; width:auto; min-width:0; max-width:none; margin:0!important; padding:0!important; border:0!important; }
+.calendarSourceCard .calendarCreateToggle { grid-column:3; grid-row:1; margin:0; }
+.calendarSourceCard .calendarHeaderRefresh { grid-column:4; grid-row:1; margin:0!important; }
+@container (max-width:420px) { .calendarSourceCard .calendarSourceHeader { grid-template-columns:minmax(0,1fr) auto 28px 25px; column-gap:4px; } }
+/* Calendar keeps all of its controls on one stable header bar. */
+.calendarSourceCard { container-type:inline-size; }
+.calendarSourceCard .calendarSourceHeader { display:flex; flex-wrap:nowrap; align-items:center; min-height:46px; gap:5px; padding:7px 38px 7px 9px; overflow:hidden; }
+.calendarSourceHeader .calendarConnectionControls { min-width:0; flex:1 1 auto; }
+.calendarSourceHeader .sourceTitle { display:block; min-width:0; overflow:hidden; font-size:14px; text-overflow:ellipsis; white-space:nowrap; }
+.calendarSourceHeader .calendarCreateToggle { flex:0 0 auto; height:27px; min-height:27px; padding:4px 7px; }
+.calendarSourceHeader .calendarHeaderRefresh { flex:0 0 25px; width:25px; height:25px; margin:0!important; }
+.calendarSourceHeader .calendarHeaderNavigation { position:static; flex:0 0 auto; width:auto; max-width:124px; margin:0; padding:0; transform:none; border:0; gap:2px; }
+.calendarSourceHeader .calendarHeaderNavigation strong { max-width:70px; font-size:9px; }
+.calendarSourceHeader .calendarHeaderNavigation button { width:22px; height:22px; }
+@container (max-width:420px) {
+  .calendarSourceHeader .sourceTitle { font-size:0; }
+  .calendarSourceHeader .sourceTitle::before { content:"Calendar"; font-size:13px; }
+  .calendarSourceHeader .calendarCreateToggle span { display:none; }
+  .calendarSourceHeader .calendarCreateToggle { width:27px; padding:4px; justify-content:center; }
+  .calendarSourceHeader { overflow-x:auto!important; scrollbar-width:thin; }
+  .calendarSourceHeader .calendarHeaderNavigation { max-width:103px; }
+  .calendarSourceHeader .calendarHeaderNavigation strong { max-width:52px; }
+}
+.calendarSourceHeader { flex-wrap:wrap; height:auto; }
+.calendarSourceHeader .calendarCreateToggle { display:inline-flex; flex:0 0 auto; width:auto; height:30px; gap:5px; padding:5px 9px; font-weight:800; }
+.calendarPermissionButton { align-self:flex-start; margin:4px 7px; padding:4px 7px; border:1px solid #bed1e1; border-radius:5px; background:#fff; color:#276a99; cursor:pointer; font-size:11px; }
+.calendarCreateForm { grid-template-columns:repeat(auto-fit,minmax(145px,1fr)); }
+.calendarCreateForm input,.calendarCreateForm label,.calendarCreateForm button { font-size:12px; }
+
+/* Reserve space for the Gmail title and Virtual toggle on one row. */
+.sourceBlock-gmail .emailAlertSlots { flex:0 1 auto; width:auto; min-width:0; margin-left:2px; padding:0; }
+.sourceBlock-gmail .emailHeaderReading { flex:0 0 auto; margin-left:2px; }
+.sourceBlock-gmail .emailHeaderStatus { margin-left:auto; }
+
+/* Calendar: separate the title/actions from week navigation. */
+.calendarSourceCard .calendarSourceHeader { display:flex; flex-wrap:wrap; align-items:center; gap:7px; padding:9px 35px 9px 10px; }
+.calendarSourceHeader .calendarConnectionControls { flex:1 1 auto; }
+.calendarSourceHeader .sourceTitle { font-size:14px; white-space:nowrap; }
+.calendarSourceHeader .calendarHeaderNavigation { position:static; transform:none; flex:1 0 100%; width:100%; max-width:none; margin:3px 0 0; justify-content:space-between; padding-top:7px; border-top:1px solid #dce5ed; }
+.calendarSourceHeader .calendarHeaderNavigation strong { max-width:none; font-size:12px; text-align:center; }
+.calendarSourceHeader .calendarHeaderNavigation button { width:27px; height:27px; }
+.calendarSourceCard .calendarWeekGrid { width:100%; min-width:0!important; grid-template-columns:repeat(7,minmax(0,1fr)); }
+.calendarSourceCard .calendarWeekGrid .calendarDayCell { width:100%; height:auto; min-width:0; min-height:84px; padding:0; display:grid; grid-template-rows:23px 30px minmax(25px,auto); }
+.calendarSourceCard .calendarDayCell > strong { font-size:19px; }
+
+/* Final layout rules for the controls added to the Folder Studio panels. */
+.archiveSettingsMenu { display:block!important; visibility:visible!important; opacity:1!important; pointer-events:auto!important; position:absolute!important; top:7px!important; right:47px!important; z-index:700!important; }
+.folderDropZone:has(.archiveSettingsMenu) { overflow:visible!important; z-index:700!important; }
+.manualDeadlineForm { display:grid; gap:6px; margin:0 0 12px; padding:10px; border:1px solid #bfd6e8; border-radius:8px; background:#f5faff; }
+.manualDeadlineForm > strong { color:#175f91; font-size:13px; }
+.manualDeadlineForm label { display:grid; gap:3px; color:#45647c; font-size:11px; font-weight:700; }
+.manualDeadlineForm input { min-width:0; height:31px; box-sizing:border-box; border:1px solid #b7cfe2; border-radius:5px; padding:5px 7px; background:#fff; color:#284d69; font:inherit; }
+.manualDeadlineForm button { min-height:32px; border:0; border-radius:6px; background:#1679ce; color:#fff; cursor:pointer; font-size:12px; font-weight:800; }
+.manualDeadlineForm button:disabled { cursor:wait; opacity:.65; }
+
+/* Calendar title, week arrows, new event and refresh share exactly one row. */
+.calendarSourceCard .calendarSourceHeader { display:grid!important; grid-template-columns:27px minmax(0,1fr) auto auto auto; align-items:center; height:47px; min-height:47px; column-gap:5px; row-gap:0; padding:7px 38px 7px 9px; overflow:hidden!important; }
+.calendarSourceCard .calendarPanelIcon { grid-column:1; grid-row:1; }
+.calendarSourceCard .calendarConnectionControls,.calendarSourceCard .calendarSourceHeader > .sourceTitle { grid-column:2; grid-row:1; min-width:0; width:100%; overflow:hidden; }
+.calendarSourceCard .calendarHeaderNavigation { grid-column:3; grid-row:1; position:static; display:flex; flex:0 0 auto; width:auto; max-width:124px; margin:0!important; padding:0!important; transform:none; border:0!important; }
+.calendarSourceCard .calendarCreateToggle { grid-column:4; grid-row:1; display:inline-flex; flex:0 0 auto; width:auto; height:27px; min-height:27px; margin:0!important; padding:4px 7px; }
+.calendarSourceCard .calendarHeaderRefresh { grid-column:5; grid-row:1; flex:0 0 25px; width:25px; height:25px; margin:0!important; }
+@container (max-width:420px) { .calendarSourceCard .calendarSourceHeader { grid-template-columns:25px minmax(20px,1fr) auto 28px 25px; column-gap:4px; } .calendarSourceCard .calendarCreateToggle span { display:none; } .calendarSourceCard .calendarCreateToggle { width:28px; padding:4px; justify-content:center; } .calendarSourceCard .calendarHeaderNavigation strong { max-width:52px; } }
+
+/* File Studio occupies the full column; only individual content areas may scroll. */
+.processingPage .conversionStack { height:100%; min-height:0; overflow:hidden!important; }
+.processingPage .conversionStack > .conversionPanel { flex:1 1 auto; min-height:0; }
+.processingPage .conversionStack > .convertedRenamePanel { flex:0 0 auto; min-height:0; }
+.processingPage .conversionStack > .fireMountainCard { flex:0 0 auto; min-height:0; margin-top:0; }
+.calendarSourceCard .calendarWeekGridScroll { padding:7px; overflow-x:hidden; }
+.calendarSourceCard .calendarCreateForm { flex:0 0 auto; grid-template-columns:minmax(0,2fr) minmax(0,1fr); gap:10px; margin:0; padding:12px; }
+.calendarSourceCard .calendarCreateForm label { display:flex; flex-direction:column; align-items:stretch; gap:5px; min-width:0; font-size:11px; font-weight:700; }
+.calendarSourceCard .calendarCreateForm label input { box-sizing:border-box; width:100%; min-width:0; height:33px; padding:7px; font-size:12px; font-weight:400; }
+.calendarFormWide,.calendarFormActions { grid-column:1/-1; }
+.calendarFormActions { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; }
+.calendarFormActions button { min-height:32px; padding:7px 10px; cursor:pointer; }
+.calendarFormActions .calendarPermissionButton { margin:0; background:transparent; color:#326c94; border:1px solid #bdd1e0; font-size:10px; }
+.calendarFormActions button:disabled { opacity:.6; cursor:wait; }
+@container (max-width:430px) { .calendarSourceCard .calendarDayIndicators small span { display:none; } .calendarSourceCard .calendarDayLabel { font-size:9px; } }
+
+/* The folder menus must escape the dashboard's scroll containers while open. */
+.dashboard:has(.archiveSettingsMenu),.dashboard:has(.deadlineSettingsMenu),.dashboardColumn:has(.archiveSettingsMenu),.dashboardColumn:has(.deadlineSettingsMenu),.dashboardFolderBrowser:has(.archiveSettingsMenu),.dashboardFolderBrowser:has(.deadlineSettingsMenu),.dashboardFolderGrid:has(.archiveSettingsMenu),.dashboardFolderGrid:has(.deadlineSettingsMenu) { overflow:visible!important; }
+.dashboard:has(.archiveSettingsMenu),.dashboard:has(.deadlineSettingsMenu) { z-index:1000; }
+.dashboardColumn:has(.archiveSettingsMenu),.dashboardColumn:has(.deadlineSettingsMenu),.dashboardFolderBrowser:has(.archiveSettingsMenu),.dashboardFolderBrowser:has(.deadlineSettingsMenu) { position:relative; z-index:1001; }
+.dashboardSourceBlock:has(.archiveSettingsMenu),.dashboardSourceBlock:has(.deadlineSettingsMenu),.dashboardSubfolderBlock:has(.archiveSettingsMenu),.dashboardSubfolderBlock:has(.deadlineSettingsMenu) { z-index:1002; }
+.deadlineSettingsMenu { display:block!important; visibility:visible!important; opacity:1!important; pointer-events:auto!important; z-index:900!important; }
+
+/* Calendar uses the selected day in its one-line navigator; event creation is the + icon only. */
+.calendarSourceCard .calendarHeaderNavigation { max-width:146px; }
+.calendarSourceCard .calendarHeaderNavigation strong { max-width:94px; font-size:10px; }
+.calendarSourceCard .calendarCreateToggle { width:28px; min-width:28px; padding:4px!important; justify-content:center; }
+
+/* Keep the Convert files action visibly inside Local conversion. */
+.processingPage .conversionPanel { box-sizing:border-box; }
+.processingPage .conversionPanel > .convertButton { align-self:stretch; width:100%; box-sizing:border-box; margin:10px 0 0; }
+.processingPage .conversionPanel .conversionQueue { min-height:52px; }
+
+/* Dashboard folder actions occupy one compact, ordered control strip. */
+.dashboard .folderDropZone .archiveButton.archiveCompact { display:grid!important; width:32px; height:32px; min-width:32px; min-height:32px; place-items:center; padding:0!important; }
+.dashboard .folderDropZone .deadlineControls { display:flex!important; align-items:center; min-height:32px; padding:2px; border:1px solid #d9e4ed; border-radius:10px; background:rgba(255,255,255,.92); box-shadow:0 2px 7px rgba(32,67,96,.12); }
+.dashboard .folderDropZone .deadlineControls .deadlineButton { width:28px; height:28px; min-width:28px; min-height:28px; padding:0; }
+
+/* Scadenze is a fixed overlay, just like a real pop-up menu, so no dashboard
+   panel can crop it. */
+.deadlineSettingsMenu { width:min(310px,calc(100vw - 16px))!important; max-height:calc(100vh - 76px); overflow-y:auto; z-index:10030!important; }
+
+/* Calendar keeps the selected day and month between the two arrows. */
+.calendarSourceCard .calendarSourceHeader { position:relative!important; grid-template-columns:27px minmax(0,1fr) auto auto!important; }
+.calendarSourceCard .calendarHeaderNavigation { position:absolute!important; top:50%; left:50%; grid-column:auto; transform:translate(-50%,-50%)!important; z-index:3; max-width:none!important; }
+.calendarSourceCard .calendarHeaderNavigation strong { min-width:82px; max-width:110px!important; text-align:center; font-size:10px; }
+.calendarSourceCard .calendarCreateToggle { position:absolute!important; right:67px; grid-column:auto; z-index:4; }
+.calendarSourceCard .calendarHeaderRefresh { position:absolute!important; right:38px; grid-column:auto; z-index:4; }
+@container (max-width:420px) { .calendarSourceCard .calendarHeaderNavigation strong { min-width:58px; max-width:66px!important; font-size:9px; } .calendarSourceCard .calendarCreateToggle { right:64px; } .calendarSourceCard .calendarHeaderRefresh { right:37px; } }
+
+/* Daily Job uses the same centred day switcher as Calendar. */
+.dailyJobPage > header { position:relative; min-height:44px; }
+.dailyJobPage > header nav { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); margin:0; white-space:nowrap; }
+.dailyJobPage > header nav input[type="date"] { width:142px; text-align:center; font-weight:800; }
+@media (max-width:720px) { .dailyJobPage > header { align-items:flex-start; padding-bottom:42px; } .dailyJobPage > header nav { top:auto; bottom:0; left:0; transform:none; } }
+
+/* Both folder menus are constrained to the visible window, even for cards at
+   the top or bottom of a scrolling column. */
+.archiveSettingsMenu { position:fixed!important; top:12px!important; right:12px!important; width:min(390px,calc(100vw - 24px))!important; max-height:calc(100vh - 24px)!important; z-index:10031!important; }
+.deadlineSettingsMenu { top:12px!important; bottom:auto!important; max-height:calc(100vh - 24px)!important; }
+
+/* Recent Files prioritises the file name and makes each result easy to read. */
+.recentSourceCard .usbFileList .usbInspectorFile { min-height:42px; grid-template-columns:30px minmax(0,1fr) auto 30px; gap:8px; padding:6px 7px; }
+.recentSourceCard .usbFileList .inspectorFileName { gap:7px; }
+.recentSourceCard .usbFileList .inspectorFileName strong { font-size:14px; font-weight:800; }
+.recentSourceCard .usbFileList .usbInspectorFile > small { font-size:12px; font-weight:700; }
+.recentSourceCard .usbFileList .recentFileFire,.recentSourceCard .usbFileList .recentFileOpen { width:28px; height:28px; }
+.recentSourceCard .usbFileList .recentFileFire svg,.recentSourceCard .usbFileList .recentFileOpen svg { width:16px; height:16px; }
+
+/* Each Daily Job item stays on one readable row, including Open and Undo. */
+.dailyJobPage .dailyEventRow { grid-template-columns:34px minmax(180px,1.5fr) 108px minmax(105px,.8fr) minmax(135px,1fr)!important; gap:11px!important; min-height:48px; font-size:14px; }
+.dailyJobPage .dailyEventRow strong { font-size:14px; }
+.dailyJobPage .dailyEventRow time,.dailyJobPage .dailyEventRow small { font-size:12px; }
+.dailyJobPage .dailyActivityRow { grid-template-columns:100px minmax(190px,1.45fr) minmax(120px,.8fr) minmax(135px,.9fr) minmax(160px,1fr) auto!important; gap:11px!important; min-height:48px; font-size:14px; }
+.dailyJobPage .dailyActivityRow strong { font-size:14px; }
+.dailyJobPage .dailyActivityRow time,.dailyJobPage .dailyActivityRow small { font-size:12px; }
+.dailyJobPage .dailyActivityActions { grid-column:auto!important; grid-row:auto!important; flex-wrap:nowrap!important; align-items:center; margin:0!important; }
+.dailyJobPage .dailyActivityActions button { min-height:30px; padding:5px 9px; font-size:12px; white-space:nowrap; }
+
+/* Gmail keeps a direct disconnect control available while its inbox refreshes. */
+.gmailQuickDisconnect { flex:0 0 auto; margin:0!important; white-space:nowrap; }
+
+/* Folder controls share a compact footprint without shrinking their icons. */
+.dashboard .folderDropZone .archiveButton.archiveCompact { width:29px; height:29px; min-width:29px; min-height:29px; }
+.dashboard .folderDropZone .deadlineControls { min-height:0; padding:0; border:0; background:transparent; box-shadow:none; }
+.dashboard .folderDropZone .deadlineControls .deadlineButton { width:26px; height:26px; min-width:26px; min-height:26px; }
+@keyframes folderControlPress { 0% { transform:scale(1); } 45% { transform:scale(.82) rotate(-5deg); } 100% { transform:scale(1); } }
+.folderDropZone .archiveButton.archiveCompact:active:not(:disabled),.folderDropZone .deadlineButton:active:not(:disabled) { animation:folderControlPress .26s ease-out; }
+
+/* Archive and deadlines use a split control: the main part toggles continuous
+   updates, while the small cog opens its configuration right beside it. */
+.folderDropZone .archiveSplitControl { position:absolute; top:7px; right:7px; z-index:120; display:flex; align-items:stretch; overflow:hidden; border:1px solid #aab4c0; border-radius:10px; background:#fff; box-shadow:0 2px 7px rgba(32,67,96,.12); }
+.folderDropZone .archiveSplitControl.isActive { border-color:#1684e8; background:#dceeff; }
+.folderDropZone .archiveSplitControl .archiveButton.archiveCompact { border:0!important; border-radius:0!important; box-shadow:none!important; }
+.archiveEditButton,.deadlineEditButton { width:20px; min-width:20px; padding:0; border:0; border-left:1px solid #c8d3de; background:transparent; color:#486175; cursor:pointer; font-size:12px; line-height:1; }
+.archiveEditButton:hover,.deadlineEditButton:hover { background:#edf5fb; color:#126fc4; }
+.folderDropZone .deadlineSplitControl { display:flex; align-items:stretch; overflow:hidden; border:1px solid #aab4c0; border-radius:10px; background:#fff; box-shadow:0 2px 7px rgba(32,67,96,.12); }
+.folderDropZone .deadlineSplitControl .deadlineButton { border:0!important; border-radius:0!important; box-shadow:none!important; }
+.folderDropZone .deadlineControls { z-index:1200!important; }
+.folderDropZone:has(.deadlineSettingsMenu),.folderDropZone:has(.archiveSettingsMenu) { overflow:visible!important; z-index:1500!important; }
+.deadlineSettingsMenu { position:absolute!important; top:auto!important; right:auto!important; bottom:38px!important; left:0!important; z-index:1502!important; width:min(310px,calc(100vw - 24px))!important; max-height:min(520px,calc(100vh - 24px))!important; overflow-y:auto!important; }
+.archiveSettingsMenu { position:absolute!important; top:42px!important; right:7px!important; bottom:auto!important; left:auto!important; z-index:1502!important; width:min(390px,calc(100vw - 24px))!important; max-height:min(520px,calc(100vh - 24px))!important; }
+.continuousUpdateToggle { display:flex; align-items:center; gap:7px; margin:0 0 11px; color:#34566e; font-size:12px; font-weight:700; }
+.deadlineLevelsEditor { display:grid; gap:6px; margin:0 0 12px; padding:9px; border:1px solid #bfd6e8; border-radius:8px; background:#f5faff; }
+.deadlineLevelsEditor > strong { color:#175f91; font-size:13px; }
+.deadlineLevelsEditor > small { color:#567187; font-size:11px; line-height:1.3; }
+.deadlineLevelRow { display:grid; grid-template-columns:26px minmax(0,1fr) 48px 17px 22px; align-items:center; gap:4px; }
+.deadlineLevelRow input { min-width:0; height:29px; box-sizing:border-box; border:1px solid #b7cfe2; border-radius:5px; padding:4px 6px; background:#fff; color:#284d69; font:inherit; font-size:11px; }
+.deadlineLevelRow input[type="color"] { width:26px; padding:2px; cursor:pointer; }
+.deadlineLevelRow span { color:#567187; font-size:11px; }
+.deadlineLevelRow button,.deadlineAddLevel { border:0; border-radius:5px; cursor:pointer; }
+.deadlineLevelRow button { width:22px; height:24px; background:#e9eef4; color:#526171; }
+.deadlineLevelRow button:disabled { opacity:.4; cursor:default; }
+.deadlineAddLevel { min-height:28px; background:#eaf5ff; color:#1679ce; font-size:11px; font-weight:800; }
+.recentSourceCard .usbFileList .inspectorFileName strong { font-weight:500; }
+
+/* Deadline controls are unavailable while the folder is in AI mode. */
+.folderDropZone.aiEnabled .deadlineControls { display:none!important; }
+
+/* Compact folder controls without reducing the archive or deadline symbols. */
+.dashboard .folderDropZone .archiveButton.archiveCompact { width:26px; height:26px; min-width:26px; min-height:26px; }
+.folderDropZone .archiveSplitControl { border-radius:8px; }
+.folderDropZone .deadlineSplitControl { border-radius:8px; }
+.folderDropZone .deadlineSplitControl .deadlineButton { width:24px; height:24px; min-width:24px; min-height:24px; font-size:16px; }
+.archiveEditButton,.deadlineEditButton { width:17px; min-width:17px; font-size:10px; }
+.deadlineSettingsMenu { width:min(275px,calc(100vw - 20px))!important; max-height:min(455px,calc(100vh - 20px))!important; padding:11px!important; }
+.archiveSettingsMenu { width:min(340px,calc(100vw - 20px))!important; max-height:min(455px,calc(100vh - 20px))!important; padding:11px!important; }
+.deadlineLevelsEditor,.manualDeadlineForm { gap:5px; margin-bottom:9px; padding:8px; }
+.archiveSettingsMenu > p { margin:4px 0 9px; }
+
+/* Final compact size: the button frame shrinks while the symbols stay legible. */
+.dashboard .folderDropZone .archiveButton.archiveCompact { width:22px; height:22px; min-width:22px; min-height:22px; }
+.folderDropZone .archiveSplitControl,.folderDropZone .deadlineSplitControl { border-radius:7px; }
+.folderDropZone .deadlineSplitControl .deadlineButton { width:22px; height:22px; min-width:22px; min-height:22px; }
+.archiveEditButton,.deadlineEditButton { width:14px; min-width:14px; font-size:9px; }
+
+/* The original compact controls used !important dimensions. Override them at
+   the same priority in every workspace, not only in Dashboard. */
+.folderDropZone .archiveSplitControl .archiveButton.archiveCompact { width:22px!important; height:22px!important; min-width:22px!important; min-height:22px!important; }
+.folderDropZone .deadlineSplitControl .deadlineButton.deadlineCompact { width:22px!important; height:22px!important; min-width:22px!important; min-height:22px!important; }
+.folderDropZone.aiEnabled .deadlineControls { display:flex!important; }
+
+/* One last narrower pass, including the separate Rename control. */
+.folderDropZone .archiveSplitControl .archiveButton.archiveCompact { width:20px!important; height:20px!important; min-width:20px!important; min-height:20px!important; }
+.folderDropZone .deadlineSplitControl .deadlineButton.deadlineCompact { width:20px!important; height:20px!important; min-width:20px!important; min-height:20px!important; }
+.archiveEditButton,.deadlineEditButton { width:12px; min-width:12px; padding:0; font-size:8px; }
+.folderDropZone > .archiveButton.archiveCompact.archiveControlArea { width:20px!important; height:20px!important; min-width:20px!important; min-height:20px!important; border-radius:7px!important; }
+
+/* Keep the Sauron action readable while removing its oversized fixed width. */
+.folderDropZone .uploadFileButton { min-width:150px!important; width:auto!important; padding-left:10px!important; padding-right:10px!important; }
+
+/* Rename matches the same split-control footprint as Archive and Deadlines. */
+.folderDropZone .renameSplitControl { position:absolute; top:58px; right:7px; z-index:651; display:flex; height:20px; overflow:hidden; border:1px solid #aab4c0; border-radius:7px; background:#fff; box-shadow:0 2px 7px rgba(32,67,96,.12); }
+.folderDropZone .renameSplitControl.isActive { border-color:#1684e8; background:#dceeff; }
+.folderDropZone .renameSplitControl .archiveButton.archiveCompact { width:20px!important; height:20px!important; min-width:20px!important; min-height:20px!important; padding:0!important; border:0!important; border-radius:0!important; background:transparent!important; color:#5c6570!important; box-shadow:none!important; }
+.folderDropZone .renameSplitControl.isActive .archiveButton.archiveCompact { color:#1684e8!important; }
+.renameEditButton { width:12px; min-width:12px; padding:0; border:0; border-left:1px solid #c8d3de; background:transparent; color:#486175; cursor:pointer; font-size:9px; line-height:1; }
+.renameEditButton:hover { background:#edf5fb; color:#126fc4; }
+
+/* Three square actions, with one shared settings launcher between Archive and Rename. */
+.folderDropZone .archiveControlButton,.folderDropZone .folderSettingsButton,.folderDropZone .renameControlButton { position:absolute; right:7px; z-index:651; box-sizing:border-box; width:20px!important; height:20px!important; min-width:20px!important; min-height:20px!important; padding:0!important; border:1px solid #aab4c0!important; border-radius:6px!important; background:#fff; color:#5c6570; box-shadow:0 2px 7px rgba(32,67,96,.12); cursor:pointer; }
+.folderDropZone .archiveControlButton { top:7px; display:grid; place-items:center; }
+.folderDropZone .archiveControlButton .archiveButton.archiveCompact { width:18px!important; height:18px!important; min-width:18px!important; min-height:18px!important; padding:0!important; border:0!important; border-radius:0!important; background:transparent!important; box-shadow:none!important; }
+.folderDropZone .archiveControlButton.isActive { border-color:#1684e8!important; background:#dceeff; }
+.folderDropZone .folderSettingsButton { top:33px; display:grid; place-items:center; }
+.folderDropZone .folderSettingsButton.isActive { border-color:#1684e8!important; background:#dceeff; color:#1684e8; }
+.folderDropZone .renameControlButton { top:58px; display:grid!important; place-items:center; }
+.folderDropZone .renameControlButton.isActive { border-color:#1684e8!important; background:#dceeff!important; color:#1684e8!important; }
+.folderDropZone .deadlineControls .deadlineButton.deadlineCompact { width:20px!important; height:20px!important; min-width:20px!important; min-height:20px!important; border-radius:6px!important; }
+.folderSettingsMenu { position:absolute; top:31px; right:32px; z-index:1503; display:grid; width:122px; gap:5px; padding:7px; border:1px solid #9fc4df; border-radius:8px; background:#fff; box-shadow:0 10px 25px rgba(24,49,74,.22); }
+.folderSettingsMenu button { min-height:26px; border:1px solid #c9dbe9; border-radius:5px; background:#f5faff; color:#175f91; cursor:pointer; font-size:11px; font-weight:800; }
+.folderSettingsMenu button:hover { border-color:#1684e8; background:#e6f4ff; }
+
+/* Folder actions use one integrated 24 px treatment, rather than floating chips. */
+.folderDropZone .archiveControlButton,.folderDropZone .folderSettingsButton,.folderDropZone .renameControlButton,.folderDropZone .deadlineControls .deadlineButton.deadlineCompact { box-sizing:border-box; width:24px!important; height:24px!important; min-width:24px!important; min-height:24px!important; border:1px solid #d2dee8!important; border-radius:6px!important; background:#f5f8fb!important; box-shadow:none!important; }
+.folderDropZone .archiveControlButton { top:7px; }
+.folderDropZone .folderSettingsButton { top:38px; }
+.folderDropZone .renameControlButton { top:69px; }
+.folderDropZone .archiveControlButton .archiveButton.archiveCompact { width:22px!important; height:22px!important; min-width:22px!important; min-height:22px!important; }
+.folderDropZone .archiveControlButton.isActive,.folderDropZone .folderSettingsButton.isActive,.folderDropZone .renameControlButton.isActive,.folderDropZone .deadlineControls .deadlineButton.isActive { border-color:#8dbce0!important; background:#e7f3fc!important; box-shadow:inset 0 0 0 1px rgba(22,132,232,.08)!important; }
+.folderDropZone .deadlineControls { padding:0!important; border:0!important; border-radius:0!important; background:transparent!important; box-shadow:none!important; }
+
+/* Archive uses a wrapper for its loading state; make its actual button match
+   the 24 px Deadline and Rename buttons exactly. */
+.folderDropZone .archiveControlButton { border:0!important; background:transparent!important; box-shadow:none!important; }
+.folderDropZone .archiveControlButton .archiveButton.archiveCompact { box-sizing:border-box; width:24px!important; height:24px!important; min-width:24px!important; min-height:24px!important; border:1px solid #d2dee8!important; border-radius:6px!important; background:#f5f8fb!important; color:#5c6570!important; }
+.folderDropZone .archiveControlButton.isActive .archiveButton.archiveCompact { border-color:#8dbce0!important; background:#e7f3fc!important; color:#1684e8!important; box-shadow:inset 0 0 0 1px rgba(22,132,232,.08)!important; }
+
+/* This is the single source of truth for every folder action's visible box. */
+.folderDropZone .folderMiniAction { box-sizing:border-box!important; display:grid!important; place-items:center!important; width:24px!important; height:24px!important; min-width:24px!important; min-height:24px!important; margin:0!important; padding:0!important; border:1px solid #d2dee8!important; border-radius:6px!important; background:#f5f8fb!important; color:#5c6570!important; box-shadow:none!important; }
+.folderDropZone .archiveControlButton { width:24px!important; height:24px!important; min-width:24px!important; min-height:24px!important; }
+.folderDropZone .archiveControlButton .folderMiniAction { width:24px!important; height:24px!important; min-width:24px!important; min-height:24px!important; }
+.folderDropZone .folderMiniAction.isActive,.folderDropZone .archiveControlButton.isActive .folderMiniAction { border-color:#8dbce0!important; background:#e7f3fc!important; color:#1684e8!important; box-shadow:inset 0 0 0 1px rgba(22,132,232,.08)!important; }
+
+/* The visible marks are aligned too: all four folder controls use a 16 px symbol. */
+.folderDropZone .folderMiniAction svg { width:16px!important; height:16px!important; }
+.folderDropZone .deadlineControls .folderMiniAction { font-size:16px!important; line-height:1!important; }
+
+/* The four visible folder actions deliberately share this class only. */
+.folderDropZone .folderUtilityButton { box-sizing:border-box!important; display:grid!important; place-items:center!important; width:24px!important; height:24px!important; min-width:24px!important; min-height:24px!important; margin:0!important; padding:0!important; border:1px solid #d2dee8!important; border-radius:6px!important; background:#f5f8fb!important; color:#5c6570!important; box-shadow:none!important; cursor:pointer; }
+.folderDropZone .folderUtilityButton svg { width:16px!important; height:16px!important; }
+.folderDropZone .folderUtilityButton.archiveControlButton,.folderDropZone .folderUtilityButton.folderSettingsButton,.folderDropZone .folderUtilityButton.renameControlButton { position:absolute; right:7px; z-index:651; }
+.folderDropZone .folderUtilityButton.archiveControlButton { top:7px; }
+.folderDropZone .folderUtilityButton.folderSettingsButton { top:38px; }
+.folderDropZone .folderUtilityButton.renameControlButton { top:69px; }
+.folderDropZone .deadlineControls .folderUtilityButton.deadlineToggle { font-size:16px!important; line-height:1!important; }
+.folderDropZone .folderUtilityButton.isActive { border-color:#8dbce0!important; background:#e7f3fc!important; color:#1684e8!important; box-shadow:inset 0 0 0 1px rgba(22,132,232,.08)!important; }
+
+/* Dashboard's folder blocks use a locked square footprint for these exact controls. */
+.dashboard .folderDropZone .folderUtilityButton { box-sizing:border-box!important; display:grid!important; place-items:center!important; flex:0 0 24px!important; inline-size:24px!important; block-size:24px!important; width:24px!important; height:24px!important; min-width:24px!important; min-height:24px!important; max-width:24px!important; max-height:24px!important; padding:0!important; margin:0!important; }
+.dashboard .folderDropZone .deadlineControls .folderUtilityButton { flex:0 0 24px!important; }
+
+/* Dashboard overrides must not keep folder controls visible after AI is turned off. */
+.dashboard .folderDropZone:not(.aiEnabled) .deadlineControls,
+.dashboard .folderDropZone:not(.aiEnabled) .archiveControlArea { display:none!important; }
+
+/* Calendar's week strip stays compact while keeping its labels readable. */
+.calendarSourceCard .calendarWeekGrid .calendarDayCell {
+  min-height:58px!important;
+  height:58px!important;
+  padding:3px!important;
+  grid-template-rows:14px 18px minmax(14px,1fr)!important;
+  gap:1px!important;
+}
+.calendarSourceCard .calendarDayCell > strong { font-size:15px!important; }
+.calendarSourceCard .calendarDayIndicators { min-height:0; gap:2px; padding:1px; }
+.calendarSourceCard .calendarDayIndicators small { font-size:8px; line-height:11px; }
+
+/* File Studio: Local conversion and Change format share one balanced panel layout. */
+.processingPage .conversionStack > .conversionPanel,
+.processingPage .conversionStack > .changeFormatPanel {
+  box-sizing:border-box;
+  display:flex;
+  flex:1 1 0;
+  min-height:215px;
+  flex-direction:column;
+  overflow:hidden;
+}
+.processingPage .conversionPanel > h2,
+.processingPage .changeFormatPanel > h2 {
+  flex:0 0 auto;
+  min-height:42px;
+  box-sizing:border-box;
+}
+.processingPage .conversionPanel .conversionQueue,
+.processingPage .changeFormatPanel .conversionQueue {
+  flex:1 1 0;
+  min-height:52px;
+  max-height:none;
+}
+.processingPage .conversionPanel > .convertButton,
+.processingPage .changeFormatPanel > .applyMotherFormat {
+  flex:0 0 auto;
+  width:100%;
+  min-height:35px;
+  box-sizing:border-box;
+  margin-top:auto;
+}
+
+/* The two conversion cards always divide the available File Studio space evenly. */
+.processingPage .conversionStack {
+  display:flex!important;
+  flex-direction:column!important;
+  min-height:0!important;
+  overflow:hidden!important;
+  gap:10px!important;
+}
+.processingPage .conversionStack > .conversionPanel,
+.processingPage .conversionStack > .changeFormatPanel {
+  flex:1 1 0!important;
+  flex-shrink:1!important;
+  min-height:0!important;
+  height:auto!important;
+}
+.processingPage .conversionPanel .conversionQueue,
+.processingPage .changeFormatPanel .conversionQueue {
+  min-height:0!important;
+  overflow-y:auto!important;
+}
+.processingPage .conversionPanel > .convertButton,
+.processingPage .changeFormatPanel > .applyMotherFormat {
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  height:38px;
+  min-height:38px;
+  margin:0;
+  margin-top:auto;
+}
+
+/* Recent Files uses the same full-size action buttons as Folder Management. */
+.recentSourceCard .usbFileList .usbInspectorFile {
+  grid-template-columns:32px minmax(0,1fr) auto 32px;
+}
+.recentSourceCard .usbFileList .recentFileFire,
+.recentSourceCard .usbFileList .recentFileOpen {
+  width:32px!important;
+  height:32px!important;
+  min-width:32px!important;
+  min-height:32px!important;
+  border:1px solid transparent;
+  border-radius:7px;
+}
+.recentSourceCard .usbFileList .recentFileFire { border-color:#b74135; }
+.recentSourceCard .usbFileList .recentFileOpen { border-color:#7eadd0; }
+
+/* Dashboard block headings use one fixed title bar and one control rhythm. */
+.dashboard {
+  --dashboard-title-bar-height:38px;
+}
+.dashboardSourceBlock .sourceHeader,
+.dashboardSourceBlock .searchCompactHeader {
+  box-sizing:border-box!important;
+  min-height:var(--dashboard-title-bar-height)!important;
+  height:var(--dashboard-title-bar-height)!important;
+  padding:3px 34px 3px 7px!important;
+  align-items:center!important;
+  gap:4px!important;
+}
+.dashboardSourceBlock .searchCompactHeader .resultsHeader {
+  min-height:0!important;
+  height:26px;
+  align-items:center;
+}
+.dashboardSourceBlock .sourceHeader > :is(svg,button,span,label,div),
+.dashboardSourceBlock .searchCompactHeader > :is(svg,button,span,label,div) {
+  align-self:center;
+}
+.dashboardSourceBlock .sourceHeader :is(.usbRefresh,.calendarCreateToggle,.calendarHeaderRefresh,.gmailWarningToggle,.screenCaptureStop,.emailReaderHeaderButton,.emailDisconnectButton,.emailVirtualReadingToggle,.searchSubmitButton,.searchClearButton),
+.dashboardSourceBlock .searchCompactHeader :is(.searchSubmitButton,.searchClearButton) {
+  box-sizing:border-box!important;
+  min-height:26px!important;
+  height:26px!important;
+  align-self:center!important;
+}
+.dashboardSourceBlock .sourceHeader :is(.domainAddressInput,.usbHeaderSelect,.usbTypeSelect,.recentHeaderSearch,.phoneHeaderSearch,.phoneCompactHeader > select) {
+  box-sizing:border-box;
+  min-height:26px;
+  height:26px;
+}
+.dashboardSourceBlock .sourceBlockMenuToggle {
+  top:50%!important;
+  transform:translateY(-50%)!important;
+}
+.dashboard .folderDropZone .folderTitleRow {
+  box-sizing:border-box;
+  min-height:var(--dashboard-title-bar-height);
+  height:var(--dashboard-title-bar-height);
+  align-items:center;
+  padding-right:36px;
+}
+.dashboard .folderDropZone .folderTitleRow h3 {
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+
+/* Recent file actions stay visible without taking over each file row. */
+.recentSourceCard .usbFileList .usbInspectorFile {
+  grid-template-columns:24px minmax(0,1fr) auto 24px;
+}
+.recentSourceCard .usbFileList .recentFileFire,
+.recentSourceCard .usbFileList .recentFileOpen {
+  width:24px!important;
+  height:24px!important;
+  min-width:24px!important;
+  min-height:24px!important;
+  border-radius:6px;
+}
+.recentSourceCard .usbFileList .recentFileFire svg,
+.recentSourceCard .usbFileList .recentFileOpen svg {
+  width:14px!important;
+  height:14px!important;
+}
+
+/* Keep each dashboard-block menu anchored in its own title bar. */
+.dashboardSourceBlock .sourceBlockMenuToggle {
+  top:7px!important;
+  transform:none!important;
+}
+.dashboardSourceBlock .sourceBlockMenu {
+  top:34px!important;
+}
+
+/* File Studio: make the file list denser while preserving readable names. */
+.processingPage .processingFiles {
+  padding:12px;
+  gap:8px;
+}
+.processingPage .processingFile {
+  gap:7px;
+  padding:6px 7px;
+}
+.processingPage .processingFileList {
+  scrollbar-width:none;
+}
+.processingPage .processingFileList::-webkit-scrollbar {
+  display:none;
+}
+
+/* Deadline settings must always sit above the dashboard instead of being clipped by a block. */
+.folderDropZone:has(.deadlineSettingsMenu),
+.dashboardSourceBlock:has(.deadlineSettingsMenu),
+.dashboardSubfolderBlock:has(.deadlineSettingsMenu),
+.dashboardColumn:has(.deadlineSettingsMenu) {
+  overflow:visible!important;
+  z-index:20000!important;
+}
+.deadlineSettingsMenu {
+  position:fixed!important;
+  top:50%!important;
+  right:auto!important;
+  bottom:auto!important;
+  left:50%!important;
+  transform:translate(-50%, -50%)!important;
+  z-index:2147483000!important;
+  display:block!important;
+  visibility:visible!important;
+  opacity:1!important;
+  pointer-events:auto!important;
+  width:min(300px, calc(100vw - 24px))!important;
+  max-height:calc(100vh - 24px)!important;
+  overflow-y:auto!important;
+  box-shadow:0 18px 48px rgba(23, 48, 70, .28)!important;
+}
+
+/* Folder Management: a short, clean quick preview with the file name above its image. */
+.folderManagementLeft .folderQuickPreview {
+  flex-basis:112px;
+  gap:4px;
+  padding:6px;
+}
+.folderManagementLeft .folderQuickPreview > div {
+  gap:4px;
+}
+.folderManagementLeft .folderQuickPreviewSlot {
+  grid-template-rows:auto minmax(0, 1fr);
+}
+.folderManagementLeft .folderQuickPreviewName {
+  grid-row:1;
+  border-top:0;
+  border-bottom:1px solid #e1eaf2;
+}
+.folderManagementLeft .folderQuickPreviewVisual {
+  grid-row:2;
+  overflow:hidden;
+}
+.folderManagementLeft .folderQuickPreviewVisual pre {
+  overflow:hidden;
+}
+.folderManagementLeft .folderQuickPreviewVisual :is(img, iframe) {
+  min-height:0;
+}
+
+/* Folder Management file rows use the same readable rhythm as File Studio. */
+.folderInspector .inspectorFile {
+  min-height:36px;
+  gap:7px;
+  padding:6px 7px;
+  font-family:Arial, Helvetica, sans-serif;
+}
+.folderInspector .inspectorFileName {
+  gap:7px;
+  font-size:17px;
+  line-height:1.25;
+}
+.folderInspector .inspectorFileName strong {
+  font-size:inherit;
+  font-weight:400;
+  line-height:inherit;
+}
+.folderInspector .inspectorFile small {
+  font-size:11px;
+}
+.folderInspector .folderTreeChildren .inspectorFile {
+  padding:6px 7px 6px calc(7px + var(--folder-depth, 1) * 14px);
+}
+
+/* Keep Converted files out of the way until there is an actual converted file. */
+.processingFiles .emptyConvertedFiles {
+  flex:0 0 76px;
+}
+.processingFiles .emptyConvertedFiles .processingFileList {
+  flex:0 0 auto;
+}
+.processingFiles .emptyConvertedFiles p {
+  margin:0;
+  font-size:12px;
+}
+
+/* Keep every dashboard block title vertically centred in its title bar. */
+.dashboardSourceBlock .sourceHeader .sourceTitle,
+.dashboardSourceBlock .sourceHeader .emailConnectionTitle,
+.dashboardSourceBlock .resultsHeader > strong {
+  display:inline-flex!important;
+  height:100%;
+  align-items:center!important;
+  align-self:center!important;
+  margin-top:0!important;
+  margin-bottom:0!important;
+  line-height:1.1!important;
+}
+.dashboard .folderDropZone .folderTitleRow h3 {
+  display:flex;
+  height:100%;
+  align-items:center;
+  align-self:center;
+  margin:0!important;
+  line-height:1.1!important;
+}
+.dashboard .sourcesColumnHeader > span {
+  display:inline-flex;
+  height:100%;
+  align-items:center;
+  line-height:1;
+}
+
+/* Exact title-bar centre line: every label occupies the same 26px track. */
+.dashboardSourceBlock .sourceHeader .sourceTitle,
+.dashboardSourceBlock .sourceHeader .emailConnectionTitle,
+.dashboardSourceBlock .resultsHeader > strong {
+  box-sizing:border-box!important;
+  height:26px!important;
+  min-height:26px!important;
+  padding-top:0!important;
+  padding-bottom:0!important;
+  align-items:center!important;
+  justify-content:flex-start;
+  line-height:26px!important;
+}
+.dashboardSourceBlock .sourceHeader .emailConnectionControls,
+.dashboardSourceBlock .sourceHeader .calendarConnectionControls,
+.dashboardSourceBlock .sourceHeader .emailReaderHeaderControl,
+.dashboardSourceBlock .resultsHeader {
+  height:26px!important;
+  min-height:26px!important;
+  align-items:center!important;
+  align-self:center!important;
+}
+.dashboard .folderDropZone .folderTitleRow h3 {
+  height:26px!important;
+  min-height:26px!important;
+  align-items:center!important;
+  line-height:26px!important;
+}
+
+/* Folder titles sit on the exact centre line of every dashboard block. */
+.dashboard .folderDropZone .folderTitleRow {
+  display:grid!important;
+  width:100%!important;
+  height:38px!important;
+  min-height:38px!important;
+  place-items:center!important;
+  padding:0 30px 0 8px!important;
+  margin:0!important;
+}
+.dashboard .folderDropZone .folderTitleRow h3 {
+  display:flex!important;
+  width:100%!important;
+  height:26px!important;
+  align-items:center!important;
+  justify-content:center!important;
+  padding:0!important;
+  text-align:center!important;
+  line-height:26px!important;
+}
+
+/* Rename is a file operation and remains available with AI switched off. */
+.dashboard .folderDropZone:not(.aiEnabled) .renameControlButton.renameControlArea {
+  display:grid!important;
+}
+.dashboard .folderDropZone:not(.aiEnabled) .renameMenu.renameControlArea {
+  display:block!important;
+}
+
+/* The folder name itself belongs at the physical centre of the dashboard card. */
+.dashboard .foldersContainer .folderDropZone .folderTitleRow,
+.dashboard .dashboardSubfolderBlock .folderDropZone .folderTitleRow {
+  position:absolute!important;
+  top:50%!important;
+  right:34px!important;
+  left:20px!important;
+  z-index:3;
+  width:auto!important;
+  height:26px!important;
+  min-height:26px!important;
+  padding:0!important;
+  transform:translateY(-50%)!important;
+  pointer-events:none;
+}
+.dashboard .foldersContainer .folderDropZone .folderTitleRow h3,
+.dashboard .dashboardSubfolderBlock .folderDropZone .folderTitleRow h3 {
+  width:100%!important;
+  height:26px!important;
+  justify-content:center!important;
+  text-align:center!important;
+}
+
+/* Fast, index-only filters for the Applications search panel. */
+.applicationSearchFilters {
+  display:grid;
+  min-width:0;
+  gap:8px;
+  margin:2px 0 0;
+  padding:10px;
+  border:1px solid #d3e0ea;
+  border-radius:8px;
+  background:#fff;
+}
+.applicationSearchFilters legend {
+  padding:0 4px;
+  color:#315c7b;
+  font-size:11px;
+  font-weight:800;
+}
+.applicationSearchFilters label {
+  display:grid!important;
+  min-width:0;
+  gap:4px!important;
+  color:#587086;
+  font-size:10px!important;
+  font-weight:750;
+}
+.applicationSearchFilters :is(input, select) {
+  box-sizing:border-box;
+  width:100%;
+  min-width:0;
+  height:31px;
+  border:1px solid #bdccda!important;
+  border-radius:6px!important;
+  background:#fff;
+  color:#29465e;
+  font:inherit;
+  font-size:11px;
+  padding:5px 7px!important;
+}
+.applicationDateFilters {
+  display:grid!important;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+  gap:6px!important;
+}
+.applicationFilterActions {
+  display:grid!important;
+  grid-template-columns:auto minmax(0,1fr)!important;
+  gap:6px!important;
+}
+.applicationFilterActions button {
+  display:inline-flex;
+  min-height:31px;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  border:1px solid #b9cddd!important;
+  border-radius:6px!important;
+  cursor:pointer;
+  font-size:11px;
+  font-weight:800;
+}
+.applicationFilterActions .applicationFiltersReset {
+  width:auto;
+  padding:5px 8px;
+  background:#f4f7fa;
+  color:#61758a;
+}
+.applicationFilterActions .applicationFiltersSearch {
+  width:100%;
+  background:#176fc8;
+  color:#fff;
+}
+
+/* Keep the Applications filter card compact and contained in its column. */
+.applicationsLayout {
+  grid-template-columns:minmax(0,1fr);
+  gap:14px;
+}
+.applicationsGrid {
+  grid-template-columns:repeat(auto-fill,minmax(210px,1fr));
+}
+.applicationSearch {
+  box-sizing:border-box;
+  width:100%;
+  min-width:0;
+  gap:6px;
+  padding:11px;
+  overflow:hidden;
+}
+.applicationSearchFilters {
+  box-sizing:border-box;
+  width:100%;
+  min-width:0;
+  gap:6px;
+  margin:0;
+  padding:7px;
+}
+.applicationSearchFilters .applicationTitleFilter,
+.applicationSearchFilters .applicationLocationFilter {
+  grid-template-columns:76px minmax(0,1fr)!important;
+  align-items:center;
+}
+.applicationSearchFilters :is(input,select) {
+  height:28px;
+  padding:3px 5px!important;
+}
+.applicationDateFilters {
+  min-width:0;
+  gap:5px!important;
+}
+.applicationDateFilters label {
+  min-width:0;
+  gap:2px!important;
+}
+.applicationDateFilters input[type="date"] {
+  min-width:0!important;
+  width:100%!important;
+  font-size:10px;
+}
+.applicationFilterActions button {
+  min-height:28px;
+}
+.applicationSearch > section {
+  min-width:0;
+  overflow-x:hidden;
+}
+@media(max-width:900px) {
+  .applicationsLayout { grid-template-columns:1fr; }
+  .applicationSearch { position:static; }
+}
+
+/* Each application owns its filters; no separate search column is needed. */
+.applicationInlineFilters {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:5px;
+  padding:6px;
+  border:1px solid #d7e3ec;
+  border-radius:7px;
+  background:#f8fbfd;
+}
+.applicationInlineFilters label {
+  display:grid;
+  min-width:0;
+  gap:2px;
+  color:#5a7085;
+  font-size:9px;
+  font-weight:800;
+}
+.applicationInlineFilters :is(input,select) {
+  box-sizing:border-box;
+  width:100%;
+  min-width:0;
+  height:27px;
+  border:1px solid #bdccda;
+  border-radius:5px;
+  background:#fff;
+  color:#29465e;
+  font:inherit;
+  font-size:10px;
+  padding:3px 5px;
+}
+.applicationInlineFilters .applicationInlineLocation {
+  grid-column:1 / -1;
+}
+.applicationInlineFilters > button {
+  grid-column:1 / -1;
+  min-height:25px;
+  border:1px solid #c8d5e0;
+  border-radius:5px;
+  background:#fff;
+  color:#587087;
+  cursor:pointer;
+  font-size:9px;
+  font-weight:800;
+}
+.applicationFileWindow .applicationInlineFilters {
+  grid-template-columns:repeat(3,minmax(0,1fr)) auto;
+  align-items:end;
+}
+.applicationFileWindow .applicationInlineFilters .applicationInlineLocation,
+.applicationFileWindow .applicationInlineFilters > button {
+  grid-column:auto;
+}
+.applicationWorkspaceMessage {
+  margin:8px 0 0;
+  padding:7px 9px;
+  border:1px solid #c9dce9;
+  border-radius:6px;
+  background:#f2f9fe;
+  color:#365f7b;
+  font-size:11px;
+}
+
+/* Stable layout for the folder cards in the centre Dashboard column. */
+.dashboard .foldersContainer .folderDropZone,
+.dashboard .dashboardSubfolderBlock > .folderDropZone {
+  box-sizing:border-box!important;
+  min-height:122px!important;
+  padding:6px 8px 38px!important;
+  align-items:center!important;
+  justify-content:flex-start!important;
+  gap:3px!important;
+}
+.dashboard .foldersContainer .folderDropZone .folderTitleRow,
+.dashboard .dashboardSubfolderBlock .folderDropZone .folderTitleRow {
+  position:static!important;
+  top:auto!important;
+  right:auto!important;
+  left:auto!important;
+  width:100%!important;
+  height:32px!important;
+  min-height:32px!important;
+  padding:0 30px!important;
+  margin:0!important;
+  display:grid!important;
+  place-items:center!important;
+  transform:none!important;
+  pointer-events:none;
+}
+.dashboard .foldersContainer .folderDropZone .folderTitleRow h3,
+.dashboard .dashboardSubfolderBlock .folderDropZone .folderTitleRow h3 {
+  display:block!important;
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  margin:0!important;
+  overflow:hidden!important;
+  line-height:1.15!important;
+  text-align:center!important;
+  text-overflow:ellipsis!important;
+  white-space:nowrap!important;
+}
+.dashboard .folderDropZone > .dropHint {
+  margin:0!important;
+  line-height:1.1!important;
+  text-align:center;
+}
+.dashboard .folderDropZone > .uploadFileButton {
+  width:auto!important;
+  max-width:calc(100% - 16px);
+  min-width:132px!important;
+  min-height:27px!important;
+  margin:1px auto 0!important;
+  padding:4px 9px!important;
+}
+
+/* All folder actions share one aligned bottom toolbar. */
+.dashboard .folderDropZone .folderUtilityButton.archiveControlButton,
+.dashboard .folderDropZone .folderUtilityButton.folderSettingsButton,
+.dashboard .folderDropZone .folderUtilityButton.renameControlButton,
+.dashboard .folderDropZone .deadlineControls {
+  top:auto!important;
+  bottom:7px!important;
+}
+.dashboard .folderDropZone .folderUtilityButton.renameControlButton {
+  right:7px!important;
+}
+.dashboard .folderDropZone .folderUtilityButton.folderSettingsButton {
+  right:38px!important;
+}
+.dashboard .folderDropZone .folderUtilityButton.archiveControlButton {
+  right:69px!important;
+}
+.dashboard .folderDropZone .deadlineControls {
+  right:100px!important;
+  left:auto!important;
+  bottom:7px!important;
+}
+.dashboard .folderDropZone .folderUtilityButton,
+.dashboard .folderDropZone .deadlineControls .folderUtilityButton {
+  inline-size:24px!important;
+  block-size:24px!important;
+  width:24px!important;
+  height:24px!important;
+  min-width:24px!important;
+  min-height:24px!important;
+  max-width:24px!important;
+  max-height:24px!important;
+}
+.dashboard .folderDropZone .folderSettingsMenu {
+  top:auto!important;
+  right:7px!important;
+  bottom:36px!important;
+}
+.dashboard .folderDropZone .renameMenu.renameControlArea {
+  top:auto!important;
+  right:7px!important;
+  bottom:36px!important;
+}
+
+/* Restore the familiar right-side action column, away from the Sauron button. */
+.dashboard .foldersContainer .folderDropZone,
+.dashboard .dashboardSubfolderBlock > .folderDropZone {
+  padding:6px 38px 6px 8px!important;
+}
+.dashboard .foldersContainer .folderDropZone .folderTitleRow,
+.dashboard .dashboardSubfolderBlock .folderDropZone .folderTitleRow {
+  padding:0 8px!important;
+}
+.dashboard .folderDropZone .folderUtilityButton.archiveControlButton {
+  top:7px!important;
+  right:7px!important;
+  bottom:auto!important;
+}
+.dashboard .folderDropZone .folderUtilityButton.folderSettingsButton {
+  top:38px!important;
+  right:7px!important;
+  bottom:auto!important;
+}
+.dashboard .folderDropZone .folderUtilityButton.renameControlButton {
+  top:69px!important;
+  right:7px!important;
+  bottom:auto!important;
+}
+.dashboard .folderDropZone .deadlineControls {
+  top:auto!important;
+  right:auto!important;
+  bottom:8px!important;
+  left:10px!important;
+}
+.dashboard .folderDropZone .folderSettingsMenu {
+  top:31px!important;
+  right:32px!important;
+  bottom:auto!important;
+}
+.dashboard .folderDropZone .renameMenu.renameControlArea {
+  top:98px!important;
+  right:7px!important;
+  bottom:auto!important;
+}
+
+/* One precise four-button rail for every central Dashboard folder. */
+.dashboard .folderDropZone.aiEnabled .deadlineControls {
+  top:7px!important;
+  right:7px!important;
+  bottom:auto!important;
+  left:auto!important;
+  width:24px!important;
+  height:24px!important;
+}
+.dashboard .folderDropZone.aiEnabled .folderUtilityButton.archiveControlButton {
+  top:35px!important;
+  right:7px!important;
+}
+.dashboard .folderDropZone.aiEnabled .folderUtilityButton.folderSettingsButton {
+  top:63px!important;
+  right:7px!important;
+}
+.dashboard .folderDropZone.aiEnabled .folderUtilityButton.renameControlButton {
+  top:91px!important;
+  right:7px!important;
+}
+.dashboard .folderDropZone:not(.aiEnabled) .folderUtilityButton.renameControlButton {
+  top:7px!important;
+  right:7px!important;
+  bottom:auto!important;
+}
+.dashboard .folderDropZone .folderSettingsMenu {
+  top:63px!important;
+  right:36px!important;
+  bottom:auto!important;
+}
+.dashboard .folderDropZone .renameMenu.renameControlArea {
+  top:91px!important;
+  right:36px!important;
+  bottom:auto!important;
+}
+.dashboard .folderDropZone:not(.aiEnabled) .renameMenu.renameControlArea {
+  top:7px!important;
+  right:36px!important;
+}
+
+/* Final compact Dashboard folder layout. */
+.dashboard .foldersContainer .folderDropZone,
+.dashboard .dashboardSubfolderBlock > .folderDropZone {
+  height:auto!important;
+  min-height:104px!important;
+  padding:5px 38px!important;
+  justify-content:center!important;
+  align-items:center!important;
+  gap:2px!important;
+}
+.dashboard .foldersContainer .folderDropZone .folderTitleRow,
+.dashboard .dashboardSubfolderBlock .folderDropZone .folderTitleRow {
+  position:static!important;
+  width:100%!important;
+  height:24px!important;
+  min-height:24px!important;
+  padding:0!important;
+  margin:0!important;
+  transform:none!important;
+  display:grid!important;
+  place-items:center!important;
+}
+.dashboard .foldersContainer .folderDropZone .folderTitleRow h3,
+.dashboard .dashboardSubfolderBlock .folderDropZone .folderTitleRow h3 {
+  width:100%!important;
+  height:auto!important;
+  min-height:0!important;
+  margin:0!important;
+  line-height:1.05!important;
+  text-align:center!important;
+}
+.dashboard .folderDropZone > .dropHint {
+  margin:0!important;
+  text-align:center!important;
+}
+.dashboard .folderDropZone > .uploadFileButton {
+  min-width:132px!important;
+  min-height:27px!important;
+  margin:1px auto 0!important;
+}
+
+/* Deadline bottom-left; Archive, settings and Rename top-to-bottom on the right. */
+.dashboard .folderDropZone.aiEnabled .deadlineControls {
+  top:auto!important;
+  right:auto!important;
+  bottom:7px!important;
+  left:7px!important;
+}
+.dashboard .folderDropZone.aiEnabled .folderUtilityButton.archiveControlButton {
+  top:7px!important;
+  right:7px!important;
+  bottom:auto!important;
+}
+.dashboard .folderDropZone.aiEnabled .folderUtilityButton.folderSettingsButton {
+  top:35px!important;
+  right:7px!important;
+  bottom:auto!important;
+}
+.dashboard .folderDropZone .folderUtilityButton.renameControlButton,
+.dashboard .folderDropZone.aiEnabled .folderUtilityButton.renameControlButton,
+.dashboard .folderDropZone:not(.aiEnabled) .folderUtilityButton.renameControlButton {
+  top:63px!important;
+  right:7px!important;
+  bottom:auto!important;
+}
+.dashboard .folderDropZone .folderSettingsMenu {
+  top:35px!important;
+  right:36px!important;
+  bottom:auto!important;
+}
+.dashboard .folderDropZone .renameMenu.renameControlArea,
+.dashboard .folderDropZone:not(.aiEnabled) .renameMenu.renameControlArea {
+  top:63px!important;
+  right:36px!important;
+  bottom:auto!important;
+}

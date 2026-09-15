@@ -18,7 +18,7 @@ interface LinkedApp {
     folders: string[];
 }
 
-interface Props { storageScope: string; folders: ManagedFolder[]; onVirtualFilesAdd: (folderId: string, files: VirtualFile[]) => void }
+interface Props { storageScope: string; folders: ManagedFolder[]; onVirtualFilesAdd: (folderId: string, files: VirtualFile[]) => void; onScanningChange?: (active: boolean) => void }
 interface DiscoveryProgress { inspected:number; directoriesScanned:number; queuedDirectories:number; found:number; skipped:number; latest:string[] }
 
 const PRESETS: Record<string, {icon: string; extensions: string[]}> = {
@@ -34,6 +34,7 @@ const PRESETS: Record<string, {icon: string; extensions: string[]}> = {
 
 function storageKey(scope: string) { return `folderrocket-linked-apps-${scope}`; }
 function fileCacheKey(scope: string) { return `folderrocket-linked-app-files-${scope}`; }
+function pausedScanKey(scope: string) { return `folderrocket-paused-application-scans-${scope}`; }
 function formatSize(size = 0) { return size >= 1024 * 1024 ? `${(size / (1024 * 1024)).toFixed(1)} MB` : size ? `${Math.max(1, Math.round(size / 1024))} KB` : ""; }
 function ApplicationLogo({app}:{app:LinkedApp}) { const key=app.name.toLowerCase().replace(/[^a-z]/g,''); const brands:Record<string,string>={word:'W',excel:'X',powerpoint:'P',inkscape:'◒',solidworks:'3D',vscode:'〈〉',whatsapp:'☎',downloads:'↓'}; return <span className={`applicationBrandLogo brand-${key}`}>{brands[key]??app.icon}</span>; }
 
@@ -46,6 +47,7 @@ function readApps(scope: string): LinkedApp[] {
     }
 }
 function readRememberedFiles(scope:string):Record<string,FileEntry[]>{try{const value=JSON.parse(sessionStorage.getItem(fileCacheKey(scope))||"{}");return value&&typeof value==="object"&&!Array.isArray(value)?value:{}}catch{return {}}}
+function readPausedScans(scope:string):string[]{try{const value=JSON.parse(sessionStorage.getItem(pausedScanKey(scope))||"[]");return Array.isArray(value)?value.filter(value=>typeof value==="string"):[]}catch{return []}}
 
 function ApplicationFileIcon({name}: {name: string}) {
     const extension = extensionOf(name);
@@ -80,7 +82,7 @@ function ApplicationFileWindow({app, onClose, children}: {app: LinkedApp; onClos
     </dialog>, document.body);
 }
 
-export default function ApplicationsWorkspace({storageScope, folders, onVirtualFilesAdd}: Props) {
+export default function ApplicationsWorkspace({storageScope, folders, onVirtualFilesAdd, onScanningChange}: Props) {
     const [apps, setApps] = useState<LinkedApp[]>(() => readApps(storageScope));
     const [name, setName] = useState("");
     const [icon, setIcon] = useState("🔗");
@@ -93,20 +95,29 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
     const [scanning, setScanning] = useState<Record<string, boolean>>({});
     const [scanProgress, setScanProgress] = useState<Record<string, DiscoveryProgress>>({});
     const [scanErrors, setScanErrors] = useState<Record<string, string>>({});
+    const [pausedScans, setPausedScans] = useState<string[]>(() => readPausedScans(storageScope));
     const scansInFlight = useRef(new Map<string, Promise<FileEntry[]>>());
     const scanControllers = useRef(new Map<string, AbortController>());
-    const automaticallyScanned = useRef(new Set<string>());
     const fileWindowApp = apps.find(app => app.id === fileWindowId);
-    const [query, setQuery] = useState("");
-    const [selected, setSelected] = useState<string[]>([]);
-    const [results, setResults] = useState<FileEntry[]>([]);
+    const [appDateFrom, setAppDateFrom] = useState<Record<string, string>>({});
+    const [appDateTo, setAppDateTo] = useState<Record<string, string>>({});
+    const [appLocationFilters, setAppLocationFilters] = useState<Record<string, "all" | "local" | "shared">>({});
     const [selectedFilePaths, setSelectedFilePaths] = useState<string[]>([]);
     const [message, setMessage] = useState("");
     const [folderMenuPath,setFolderMenuPath]=useState<string|null>(null);
     const [editingFormats,setEditingFormats]=useState<string|null>(null),[formatDraft,setFormatDraft]=useState('');
+    const [removeArmed,setRemoveArmed]=useState<string|null>(null);
 
     useEffect(() => localStorage.setItem(storageKey(storageScope), JSON.stringify(apps)), [apps, storageScope]);
     useEffect(() => { const timer=window.setTimeout(()=>{try{sessionStorage.setItem(fileCacheKey(storageScope),JSON.stringify(files));}catch{/* Results remain in memory. */}},250);return()=>window.clearTimeout(timer); }, [files, storageScope]);
+    useEffect(() => { sessionStorage.setItem(pausedScanKey(storageScope), JSON.stringify(pausedScans)); }, [pausedScans, storageScope]);
+    useEffect(() => { onScanningChange?.(Object.values(scanning).some(Boolean)); }, [onScanningChange, scanning]);
+    useEffect(() => () => {
+        const pending = [...scanControllers.current.keys()];
+        if (pending.length) sessionStorage.setItem(pausedScanKey(storageScope), JSON.stringify([...new Set([...readPausedScans(storageScope), ...pending])]));
+        scanControllers.current.forEach(controller => controller.abort());
+        onScanningChange?.(false);
+    }, [onScanningChange, storageScope]);
 
     function addApp() {
         const trimmed = name.trim();
@@ -123,14 +134,14 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
         setName("");
         setExtensions("");
         setIcon("🔗");
-        if (added.extensions.length) window.setTimeout(() => void discover(added, {reveal:false}), 0);
     }
     function clearDiscoveryCache(appId:string){void fetch(`${API_BASE_URL}/applications/discover`,{method:'DELETE',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({appId})});}
-    function saveFormats(app:LinkedApp){const next=[...new Set(formatDraft.split(/[,;\s]+/).map(value=>value.replace(/^\./,'').toLowerCase()).filter(value=>/^[a-z0-9]{1,12}$/.test(value)))];const updated={...app,extensions:next};setApps(current=>current.map(item=>item.id===app.id?updated:item));setFiles(current=>{const copy={...current};delete copy[app.id];return copy;});clearDiscoveryCache(app.id);setEditingFormats(null);if(next.length)window.setTimeout(()=>void discover(updated,{reveal:false}),0);}
+    function saveFormats(app:LinkedApp){const next=[...new Set(formatDraft.split(/[,;\s]+/).map(value=>value.replace(/^\./,'').toLowerCase()).filter(value=>/^[a-z0-9]{1,12}$/.test(value)))];const updated={...app,extensions:next};setApps(current=>current.map(item=>item.id===app.id?updated:item));setFiles(current=>{const copy={...current};delete copy[app.id];return copy;});clearDiscoveryCache(app.id);setEditingFormats(null);}
 
-    function discover(app: LinkedApp, options: {reveal?: boolean} = {}): Promise<FileEntry[]> {
+    function discover(app: LinkedApp, options: {reveal?: boolean; cachedOnly?: boolean} = {}): Promise<FileEntry[]> {
         const pending = scansInFlight.current.get(app.id);
         if (pending) return pending;
+        if (!options.cachedOnly) setPausedScans(current => current.filter(id => id !== app.id));
         setScanning(current => ({...current, [app.id]: true}));
         setScanErrors(current => ({...current, [app.id]: ""}));
         if (options.reveal !== false) setExpanded(current => current.includes(app.id) ? current : [...current, app.id]);
@@ -140,22 +151,23 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
             try {
                 const response = await fetch(`${API_BASE_URL}/applications/discover`, {
                     method: "POST", credentials: "include", headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({appId: app.id, extensions: app.extensions}), signal:controller.signal
+                    body: JSON.stringify({appId: app.id, extensions: app.extensions, cachedOnly: Boolean(options.cachedOnly)}), signal:controller.signal
                 });
                 if (!response.ok) { const failed=await response.json().catch(()=>({})) as {message?:string};throw new Error(failed.message||"Scan failed."); }
-                let data:{files?:FileEntry[];folders?:{path:string;count:number}[];message?:string;skipped?:number}={};
+                let data:{files?:FileEntry[];folders?:{path:string;count:number}[];message?:string;skipped?:number;cacheMiss?:boolean}={};
                 const reader=response.body?.getReader();
                 if(!reader)throw new Error("Live scan is not available.");
                 const decoder=new TextDecoder();let buffered="";
-                while(true){const {done,value}=await reader.read();buffered+=decoder.decode(value||new Uint8Array(),{stream:!done});const lines=buffered.split("\n");buffered=lines.pop()||"";for(const line of lines){if(!line.trim())continue;const event=JSON.parse(line) as {type:string;message?:string;result?:typeof data;files?:FileEntry[];inspected?:number;directoriesScanned?:number;queuedDirectories?:number;found?:number;skipped?:number};if(event.type==="error")throw new Error(event.message||"Scan failed.");if(event.type==="complete")data=event.result||{};if(event.type==="progress"){const batch=event.files||[];setScanProgress(current=>({...current,[app.id]:{inspected:event.inspected||0,directoriesScanned:event.directoriesScanned||0,queuedDirectories:event.queuedDirectories||0,found:event.found||0,skipped:event.skipped||0,latest:batch.slice(-3).map(file=>file.name)}}));if(batch.length)setFiles(current=>{const merged=new Map((current[app.id]||[]).map(file=>[file.path,file]));for(const file of batch)merged.set(file.path,file);return {...current,[app.id]:[...merged.values()].slice(0,5000)};});}}if(done)break;}
+                while(true){const {done,value}=await reader.read();buffered+=decoder.decode(value||new Uint8Array(),{stream:!done});const lines=buffered.split("\n");buffered=lines.pop()||"";for(const line of lines){if(!line.trim())continue;const event=JSON.parse(line) as {type:string;message?:string;result?:typeof data;files?:FileEntry[];inspected?:number;directoriesScanned?:number;queuedDirectories?:number;found?:number;skipped?:number};if(event.type==="error")throw new Error(event.message||"Scan failed.");if(event.type==="complete")data=event.result||{};if(event.type==="progress"){const batch=event.files||[];setScanProgress(current=>({...current,[app.id]:{inspected:event.inspected||0,directoriesScanned:event.directoriesScanned||0,queuedDirectories:event.queuedDirectories||0,found:event.found||0,skipped:event.skipped||0,latest:batch.slice(-3).map(file=>file.name)}}));}}if(done)break;}
                 const found = data.files || [];
+                if (options.cachedOnly && data.cacheMiss) return [];
                 if (data.skipped) setScanErrors(current => ({...current, [app.id]: `${data.skipped} locations or files could not be accessed. Cloud files must be visible in a mounted or synced folder.`}));
                 setFiles(current => ({...current, [app.id]: found.slice(0, 5000)}));
                 setApps(current => current.map(item => item.id === app.id ? {...item, folders: (data.folders || []).map(folder => folder.path)} : item));
                 return found;
             } catch (error) {
                 const stopped=error instanceof DOMException&&error.name==="AbortError";
-                setScanErrors(current => ({...current, [app.id]: stopped ? "Scan stopped. Files found so far have been kept." : error instanceof Error ? `${error.message} Files found so far have been kept.` : "Scan failed. Files found so far have been kept."}));
+                setScanErrors(current => ({...current, [app.id]: stopped ? "Scan stopped. Run it again whenever you are ready." : error instanceof Error ? error.message : "Scan failed."}));
                 return [];
             } finally {
                 setScanning(current => ({...current, [app.id]: false}));
@@ -168,21 +180,6 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
     }
     function stopDiscovery(appId:string){scanControllers.current.get(appId)?.abort();}
 
-    useEffect(() => {
-        let cancelled = false;
-        const pending = apps.filter(app => app.extensions.length && !automaticallyScanned.current.has(`${storageScope}:${app.id}`));
-        void (async () => {
-            for (const app of pending) {
-                if (cancelled) break;
-                automaticallyScanned.current.add(`${storageScope}:${app.id}`);
-                await discover(app, {reveal:false});
-            }
-        })();
-        return () => { cancelled = true; };
-        // Apps are queued once per stored id. The changing discover closure must
-        // not restart scans after each result update.
-    }, [apps, storageScope]);
-
     async function openApp(app: LinkedApp) {
         try {
             const response = await fetch(`${API_BASE_URL}/applications/open`, {method: "POST", credentials: "include", headers: {"Content-Type": "application/json"}, body: JSON.stringify({name: app.name})});
@@ -190,26 +187,6 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
             if (!response.ok) throw new Error(data.message || "Unable to open application.");
             setMessage("");
         } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to open application."); }
-    }
-
-    async function search() {
-        const active = apps.filter(app => selected.includes(app.id));
-        if (!query.trim() || !active.length) return;
-        setMessage("Searching…");
-        const collections = await Promise.all(active.map(async app => files[app.id] || discover(app)));
-        const lowered = query.trim().toLowerCase();
-        const matchLimit = 250;
-        const matches: FileEntry[] = [];
-        let limited = false;
-        searchCollections: for (const collection of collections) {
-            for (const file of collection) {
-                if (!file.name.toLowerCase().includes(lowered)) continue;
-                if (matches.length >= matchLimit) { limited = true; break searchCollections; }
-                matches.push(file);
-            }
-        }
-        setResults(matches);
-        setMessage(limited ? `Showing the first ${matchLimit} results. Refine the file name to see fewer items.` : "");
     }
 
     async function openFile(path: string, containingFolder = false) {
@@ -256,7 +233,7 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
         setMessage(`${items.length} file${items.length === 1 ? "" : "s"} added to Fire Mountain.`);
     }
 
-    function renderFile(file: FileEntry, availableFiles: FileEntry[] = results) {
+    function renderFile(file: FileEntry, availableFiles: FileEntry[] = []) {
         const selectedFile = selectedFilePaths.includes(file.path);
         const actionFiles=selectedFile ? availableFiles.filter(item => selectedFilePaths.includes(item.path)) : [file];
         const sensitivity = applicationFileSensitivity(file), sensitivityLabel=applicationSensitivityLabel(sensitivity);
@@ -292,10 +269,31 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
         }, {});
         const requestedFilter = appFilters[app.id] || "all";
         const filter = requestedFilter === "all" || counts[requestedFilter] ? requestedFilter : "all";
-        const visibleFiles = filterApplicationFiles(appFiles, appQueries[app.id] || "", filter);
+        const titleTerms = (appQueries[app.id] || "").trim().toLowerCase().split(/\s+/).filter(Boolean);
+        const from = appDateFrom[app.id] || "";
+        const to = appDateTo[app.id] || "";
+        const fromTime = from ? new Date(`${from}T00:00:00`).getTime() : null;
+        const toTime = to ? new Date(`${to}T23:59:59.999`).getTime() : null;
+        const location = appLocationFilters[app.id] || "all";
+        const visibleFiles = filterApplicationFiles(appFiles, "", filter).filter(file => {
+            if (titleTerms.length && !titleTerms.every(term => file.name.toLowerCase().includes(term))) return false;
+            if (fromTime !== null || toTime !== null) {
+                const fileTime = file.createdAt ? new Date(file.createdAt).getTime() : Number.NaN;
+                if (!Number.isFinite(fileTime) || (fromTime !== null && fileTime < fromTime) || (toTime !== null && fileTime > toTime)) return false;
+            }
+            const sensitivity = applicationFileSensitivity(file);
+            const sharedLocation = sensitivity === "shared" || sensitivity === "synced";
+            return location === "all" || (location === "shared" ? sharedLocation : !sharedLocation);
+        });
         const selectedVisibleFiles = visibleFiles.filter(file => selectedFilePaths.includes(file.path));
         return <div className="applicationFiles" aria-busy={Boolean(scanning[app.id])}>
             <label className="applicationTypeFilter"><span>File format</span><select aria-label={`${app.name} file format${windowView ? " in window" : ""}`} value={filter} onChange={event => setAppFilters(current => ({...current, [app.id]: event.target.value}))}><option value="all">All ({appFiles.length})</option>{Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)).map(([type, count]) => <option value={type} key={type}>{type.toUpperCase()} ({count})</option>)}</select></label>
+            <div className="applicationInlineFilters">
+                <label><span>From</span><input type="date" value={from} max={to || undefined} onChange={event => setAppDateFrom(current => ({...current, [app.id]: event.target.value}))}/></label>
+                <label><span>To</span><input type="date" value={to} min={from || undefined} onChange={event => setAppDateTo(current => ({...current, [app.id]: event.target.value}))}/></label>
+                <label className="applicationInlineLocation"><span>Location</span><select value={location} onChange={event => setAppLocationFilters(current => ({...current, [app.id]: event.target.value as "all" | "local" | "shared"}))}><option value="all">All locations</option><option value="local">Local only</option><option value="shared">Shared / synced</option></select></label>
+                <button type="button" onClick={() => { setAppQueries(current => ({...current, [app.id]: ""})); setAppDateFrom(current => ({...current, [app.id]: ""})); setAppDateTo(current => ({...current, [app.id]: ""})); setAppLocationFilters(current => ({...current, [app.id]: "all"})); setAppFilters(current => ({...current, [app.id]: "all"})); }}>Clear filters</button>
+            </div>
             {scanning[app.id] && <div className="applicationScanProgress" role="status"><span><strong>Finding files… {scanProgress[app.id]?.found || 0} found</strong><small>{scanProgress[app.id]?.directoriesScanned || 0} folders checked · {scanProgress[app.id]?.inspected || 0} files inspected</small>{scanProgress[app.id]?.latest?.map(name=><em key={name}>{name}</em>)}</span><button type="button" onClick={()=>stopDiscovery(app.id)}>Stop</button></div>}
             {scanErrors[app.id] && <p role="alert">{scanErrors[app.id]}</p>}
             {windowView && !!visibleFiles.length && <div className="applicationBulkToolbar"><button type="button" onClick={() => setSelectedFilePaths(current => [...new Set([...current, ...visibleFiles.map(file => file.path)])])}>Select all</button><button type="button" disabled={!selectedVisibleFiles.length} onClick={() => setSelectedFilePaths(current => current.filter(path => !selectedVisibleFiles.some(file => file.path === path)))}>Deselect</button><button className="applicationOpenAction fileActionPulse" type="button" disabled={!selectedVisibleFiles.length} onClick={() => void openFiles(selectedVisibleFiles)}><ExternalLink size={13}/>Open files</button><button className="applicationFireAction fileActionPulse" type="button" disabled={!selectedVisibleFiles.length} onClick={() => sendToFire(selectedVisibleFiles)}><Flame size={13}/>Fire Mountain</button></div>}
@@ -309,7 +307,7 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
 
     return <main className="applicationsWorkspace">
         <header>
-            <div><h1>Applications</h1><p>Select file types and FolderRocket automatically finds their folders across this computer.</p></div>
+            <div><h1>Applications</h1><p>Choose file types, then start a check only when you need it. Saved indexes make later searches fast.</p></div>
             <div className="applicationAdd"><select aria-label="Application preset" value="" onChange={event=>{const preset=PRESETS[event.target.value];if(preset){setName(event.target.value);setIcon(preset.icon);setExtensions(preset.extensions.join(", "));}}}><option value="">Choose application / formats</option>{Object.keys(PRESETS).map(item=><option key={item} value={item}>{item}</option>)}</select>
                 <input value={name} onChange={event => { const value = event.target.value; setName(value); if (PRESETS[value]) { setIcon(PRESETS[value].icon); setExtensions(PRESETS[value].extensions.join(", ")); } }} list="applicationPresets" placeholder="Application name"/>
                 <datalist id="applicationPresets">{Object.keys(PRESETS).map(item => <option key={item} value={item}/>)}</datalist>
@@ -318,27 +316,21 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
                 <button type="button" onClick={addApp}><Plus size={16}/>Add</button>
             </div>
         </header>
+        {message && <p className="applicationWorkspaceMessage" role="alert">{message}</p>}
         <div className="applicationsLayout">
             <section className="applicationsGrid">
                 {apps.map(app => <article className="applicationCard" key={app.id}>
-                    <button type="button" className="applicationExpandFiles" title={`Open ${app.name} files in window`} aria-label={`Open ${app.name} files in window`} onClick={() => { setFileWindowId(app.id); if (!files[app.id]) void discover(app); }}><Maximize2 size={16}/></button>
+                    <button type="button" className="applicationExpandFiles" title={`Open ${app.name} files in window`} aria-label={`Open ${app.name} files in window`} onClick={() => setFileWindowId(app.id)}><Maximize2 size={16}/></button>
                     <div className="applicationCardMain"><button className="applicationLogo" type="button" title={`Double-click to open ${app.name}`} aria-label={`Open ${app.name}`} onDoubleClick={() => void openApp(app)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); void openApp(app); } }}><ApplicationLogo app={app}/></button><strong>{app.name}</strong>{editingFormats===app.id?<span className="applicationFormatEditor"><input aria-label={`Edit ${app.name} file formats`} value={formatDraft} onChange={event=>setFormatDraft(event.target.value)} onKeyDown={event=>{if(event.key==='Enter')saveFormats(app);if(event.key==='Escape')setEditingFormats(null);}} autoFocus/><button onClick={()=>saveFormats(app)} title="Save formats"><Check size={13}/></button></span>:<small>{app.extensions.map(type => `.${type}`).join(" · ") || "Choose file types"}</small>}</div>
                     {renderAppSearch(app)}
-                    <div className="applicationCardActions"><button type="button" disabled={scanning[app.id]} onClick={() => void discover(app)}><Search size={14}/>{scanning[app.id] ? "Checking…" : "Check for new files"}</button><button type="button" onClick={()=>{setEditingFormats(app.id);setFormatDraft(app.extensions.join(', '));}} title="Edit file formats"><Pencil size={14}/></button><button type="button" onClick={() => { clearDiscoveryCache(app.id); setApps(current => current.filter(item => item.id !== app.id)); setFiles(current => { const next={...current}; delete next[app.id]; return next; }); }} title="Remove application"><Trash2 size={14}/></button></div>
+                    <div className="applicationCardActions"><button type="button" disabled={scanning[app.id]} onClick={() => void discover(app)}><Search size={14}/>{scanning[app.id] ? "Checking…" : pausedScans.includes(app.id) ? "Continue checking" : "Check for new files"}</button><button type="button" onClick={()=>{setEditingFormats(app.id);setFormatDraft(app.extensions.join(', '));}} title="Edit file formats"><Pencil size={14}/></button><button type="button" className={removeArmed===app.id?"applicationRemoveButton armed":"applicationRemoveButton"} onClick={() => { if(removeArmed!==app.id){setRemoveArmed(app.id);return;} clearDiscoveryCache(app.id); setApps(current => current.filter(item => item.id !== app.id)); setFiles(current => { const next={...current}; delete next[app.id]; return next; }); setPausedScans(current => current.filter(id => id !== app.id)); setRemoveArmed(null); }} title={removeArmed===app.id?"Press again to remove application":"Remove application"} aria-label={removeArmed===app.id?`Press again to remove ${app.name}`:`Remove ${app.name}`}><Trash2 size={14}/></button></div>
                     {expanded.includes(app.id) && renderAppFiles(app)}
                 </article>)}
                 {!apps.length && <div className="applicationsEmpty">Add an application and its file types to scan this computer.</div>}
             </section>
-            <aside className="applicationSearch">
-                <h2>Search application files</h2>
-                {apps.map(app => <label key={app.id}><input type="checkbox" checked={selected.includes(app.id)} onChange={event => setSelected(current => event.target.checked ? [...current, app.id] : current.filter(id => id !== app.id))}/><ApplicationLogo app={app}/>{app.name}</label>)}
-                <div><input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => { if (event.key === "Enter") void search(); }} placeholder="File name"/><button type="button" onClick={() => void search()}><Search size={16}/></button></div>
-                {message && <p role="alert">{message}</p>}
-                <section>{results.map(file => renderFile(file, results))}</section>
-            </aside>
         </div>
         {fileWindowApp && <ApplicationFileWindow app={fileWindowApp} onClose={() => setFileWindowId(null)}>
-            <div className="applicationWindowToolbar">{renderAppSearch(fileWindowApp, true)}<button type="button" disabled={scanning[fileWindowApp.id]} onClick={() => void discover(fileWindowApp)}>Scan computer</button></div>
+            <div className="applicationWindowToolbar">{renderAppSearch(fileWindowApp, true)}<button type="button" disabled={scanning[fileWindowApp.id]} onClick={() => void discover(fileWindowApp)}>{pausedScans.includes(fileWindowApp.id) ? "Continue checking" : "Check for new files"}</button></div>
             {renderAppFiles(fileWindowApp, true)}
         </ApplicationFileWindow>}
     </main>;

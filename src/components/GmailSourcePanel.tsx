@@ -406,6 +406,12 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
     }, [connected, liveReading, refresh]);
 
     useEffect(() => {
+        if (!connected || !attachmentReader.enabled) return;
+        const timer = window.setTimeout(() => void refresh(), 0);
+        return () => window.clearTimeout(timer);
+    }, [attachmentReader.enabled, connected, refresh]);
+
+    useEffect(() => {
         const dismissWhenOutside = (event: MouseEvent) => {
             const target = event.target as Element;
             if (!target.closest(".emailSourceCard")) setSelectedIds([]);

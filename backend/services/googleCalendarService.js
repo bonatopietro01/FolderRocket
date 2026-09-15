@@ -67,7 +67,7 @@ async function calendarFetch(userId, resource, blockId, options = {}) {
     const request = token => ({...options,headers:{...(options.headers||{}),Authorization:`Bearer ${token}`}});
     let response = await fetch(`${CALENDAR_API}${resource}`, request(current.accessToken));
     if (response.status === 401) { await refresh(userId, blockId); current = connectionFor(userId, blockId); response = await fetch(`${CALENDAR_API}${resource}`, request(current.accessToken)); }
-    if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data?.error?.message || "Google Calendar could not be read."); }
+    if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(response.status === 403 && options.method === "POST" ? "Event creation is not authorized. Click Authorize event creation and allow Google Calendar event access, then retry." : data?.error?.message || "Google Calendar request failed."); }
     return response;
 }
 

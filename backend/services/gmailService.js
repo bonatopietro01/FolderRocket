@@ -140,10 +140,10 @@ function getAuthorizationUrl(userId, blockId = "", options = {}) {
             redirect_uri: redirectUri,
             response_type: "code",
             access_type: "offline",
-            // Let Google request consent only when it is really required.
-            // Forcing legacy consent on every reconnect can fail in browsers
-            // that already have a Google account session open.
-            prompt: "select_account",
+            // Gmail sometimes omits the refresh token unless consent is
+            // requested. Without it, the connection works only until the
+            // short-lived access token expires and the user has to reconnect.
+            prompt: "consent select_account",
             include_granted_scopes: "true",
             scope: GMAIL_SCOPES
         });
@@ -348,6 +348,14 @@ async function gmailFetch(
 
         const errorText =
             await response.text();
+
+        // A persisted access token can be invalidated before its recorded
+        // expiry. Refresh it once and retry so reopening FolderRocket does
+        // not leave Gmail in a permanent loading state.
+        if (response.status === 401 && remainingRetries > 0) {
+            await refreshAccessToken(userId, blockId);
+            return gmailFetch(userId, path, blockId, remainingRetries - 1, options);
+        }
 
         const rateLimited = response.status === 429
             || (response.status === 403 && /rateLimitExceeded|Quota exceeded/i.test(errorText));

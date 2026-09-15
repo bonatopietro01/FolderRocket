@@ -1,5 +1,5 @@
 import {lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode} from "react";
-import {BriefcaseBusiness, ChevronLeft, ChevronRight, FolderCog, GripHorizontal, Home, LayoutDashboard, Plus, RotateCcw, Shapes, WandSparkles} from "lucide-react";
+import {BriefcaseBusiness, FolderCog, GripHorizontal, LayoutDashboard, Plus, RotateCcw, Shapes, WandSparkles} from "lucide-react";
 import {AccountMenu, type FolderRocketUser} from "./components/AuthGate";
 import {API_BASE_URL} from "./api";
 import "./App.css";
@@ -158,7 +158,13 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     const floatingBookmarkScaleStorageKey = `${FLOATING_BOOKMARK_SCALE_KEY}-${user.id}`;
     const isCargoShipWindow = new URLSearchParams(window.location.search).has("folderrocketCargoShip");
     const [page, setPage] = useState<"dashboard" | "folders" | "processing" | "applications" | "daily">("dashboard");
+    const [applicationChecking, setApplicationChecking] = useState(false);
     const [folders, setFolders] = useState<Folder[]>(() => readFolders(foldersStorageKey, user.workspacePath, user.role === "admin"));
+
+    function navigate(next: "dashboard" | "folders" | "processing" | "applications" | "daily") {
+        if (next !== page && page === "applications" && applicationChecking && !window.confirm("A file check is still running. Leaving Applications will stop it, and you will need to press Continue checking when you return. Leave Applications?")) return;
+        setPage(next);
+    }
     const [dashboardWidths, setDashboardWidths] = useState<DashboardWidths | null>(() => readDashboardWidths(widthsStorageKey));
     const [dashboardHeight, setDashboardHeight] = useState<number | null>(() => readDashboardHeight(heightStorageKey));
     const [searchFolderIds, setSearchFolderIds] = useState<string[]>(() => readSearchFolderSelection(searchStorageKey));
@@ -168,7 +174,6 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
     const [aiConfigured, setAiConfigured] = useState(false);
     const [aiMode, setAiMode] = useState(() => localStorage.getItem(`${AI_MODE_KEY}-${user.id}`) === "on");
-    const [navigation, setNavigation] = useState({canGoBack: false, canGoForward: false});
     const [appZoom, setAppZoom] = useState(() => readAppZoom(appZoomStorageKey));
     const [floatingToolsScale, setFloatingToolsScale] = useState(() => readFloatingToolsScale(floatingToolsScaleStorageKey));
     const [floatingBookmarkScale, setFloatingBookmarkScale] = useState(() => readFloatingToolsScale(floatingBookmarkScaleStorageKey));
@@ -256,22 +261,6 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     const aiEnabled = aiConfigured && aiMode;
 
     useEffect(() => {
-        let active = true;
-        const updateNavigation = () => {
-            if (window.folderRocketDesktop) {
-                void window.folderRocketDesktop.navigationState().then(state => { if (active) setNavigation(state); });
-                return;
-            }
-            setNavigation({canGoBack: window.history.length > 1, canGoForward: false});
-        };
-        updateNavigation();
-        const unsubscribe = window.folderRocketDesktop?.onNavigationChanged(updateNavigation);
-        window.addEventListener("popstate", updateNavigation);
-        window.addEventListener("focus", updateNavigation);
-        return () => { active = false; unsubscribe?.(); window.removeEventListener("popstate", updateNavigation); window.removeEventListener("focus", updateNavigation); };
-    }, []);
-
-    useEffect(() => {
         if (!window.folderRocketDesktop || isCargoShipWindow) return;
         let active = true;
         void window.folderRocketDesktop.setZoomFactor(initialAppZoomRef.current).then(value => { if (active) setAppZoom(Math.max(.75, Math.min(1.5, value))); });
@@ -283,15 +272,6 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
         const zoom = Math.max(.75, Math.min(1.5, Math.round(next * 100) / 100));
         if (!window.folderRocketDesktop) { setAppZoom(zoom); return; }
         void window.folderRocketDesktop.setZoomFactor(zoom).then(setAppZoom);
-    }
-
-    function navigateHistory(direction: "back" | "forward") {
-        if (window.folderRocketDesktop) {
-            void window.folderRocketDesktop.navigateHistory(direction).then(() => window.setTimeout(() => void window.folderRocketDesktop?.navigationState().then(setNavigation), 60));
-            return;
-        }
-        if (direction === "back") window.history.back();
-        else window.history.forward();
     }
 
     useEffect(() => {
@@ -460,14 +440,14 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     useEffect(() => {
         const openFileStudio = (event: MessageEvent) => {
             if (event.origin !== window.location.origin || event.data?.type !== "folderrocket-open-file-studio") return;
-            setPage("processing");
+            navigate("processing");
         };
         window.addEventListener("message", openFileStudio);
         return () => window.removeEventListener("message", openFileStudio);
-    }, []);
+    }, [applicationChecking, page]);
 
     const cargoShipProps = {
-        onOpenFileStudio: () => setPage("processing"),
+        onOpenFileStudio: () => navigate("processing"),
         aiEnabled,
         storageScope: user.id,
         folders,
@@ -481,24 +461,24 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
                 {aiEnabled && <button type="button" className="notesAiQuickAdd" onClick={() => setAiNoteAddRequest(current => current + 1)} title="Create an AI post-it" aria-label="Create an AI post-it"><span>AI</span></button>}
                 <button type="button" className={aiEnabled ? "notesQuickAdd withAi" : "notesQuickAdd"} onClick={() => setNoteAddRequest(current => current + 1)} title="Add a post-it" aria-label="Add a post-it"><Plus size={19}/></button><button type="button" className="notesReminderQuickAdd" onClick={() => setReminderAddRequest(current => current + 1)} title="Create a reminder post-it" aria-label="Create a reminder post-it"><span>!</span></button>
                 <div className="pageMenu" role="group" aria-label="Pages"><div className="pageMenuItems">
-                    <button className={page === "dashboard" ? "active" : ""} type="button" onClick={() => setPage("dashboard")}><LayoutDashboard size={15}/>Dashboard</button>
-                    <button className={page === "folders" ? "active" : ""} type="button" onClick={() => setPage("folders")}><FolderCog size={15}/>Folder management</button>
-                    <button className={page === "processing" ? "active" : ""} type="button" onClick={() => setPage("processing")}><WandSparkles size={15}/>File Studio</button>
-                    <button className={page === "applications" ? "active" : ""} type="button" onClick={() => setPage("applications")}><Shapes size={15}/>Applications</button>
-                    <button className={page === "daily" ? "active" : ""} type="button" onClick={() => setPage("daily")}><BriefcaseBusiness size={15}/>Daily Job</button>
+                    <button className={page === "dashboard" ? "active" : ""} type="button" onClick={() => navigate("dashboard")}><LayoutDashboard size={15}/>Dashboard</button>
+                    <button className={page === "folders" ? "active" : ""} type="button" onClick={() => navigate("folders")}><FolderCog size={15}/>Folder management</button>
+                    <button className={page === "processing" ? "active" : ""} type="button" onClick={() => navigate("processing")}><WandSparkles size={15}/>File Studio</button>
+                    <button className={page === "applications" ? "active" : ""} type="button" onClick={() => navigate("applications")}><Shapes size={15}/>Applications</button>
+                    <button className={page === "daily" ? "active" : ""} type="button" onClick={() => navigate("daily")}><BriefcaseBusiness size={15}/>Daily Job</button>
                 </div></div>
                 {page === "dashboard" && <button type="button" className="dashboardResetButton" onClick={resetDashboardLayout} title="Restore default dashboard size" aria-label="Restore default dashboard size"><RotateCcw size={14} /></button>}
             </nav>
             <div className="appHeaderTools"><IntegrationSetup isAdmin={user.role === "admin"} onAIStatusChange={setAiConfigured} aiMode={aiMode} onAIModeChange={setAiMode} /><CargoShip {...cargoShipProps} /><AccountMenu user={user} onLogout={onLogout} appZoom={appZoom} onAppZoomChange={setDesktopZoom} floatingToolsScale={floatingToolsScale} onFloatingToolsScaleChange={setFloatingToolsScale} bookmarkScale={floatingBookmarkScale} onBookmarkScaleChange={setFloatingBookmarkScale} /></div>
         </header>
-        <DailyAgendaRail storageScope={user.id} onOpenDailyJob={()=>setPage("daily")}/><StickyNotes key={user.id} storageScope={user.id} folders={folders} aiEnabled={aiEnabled} floatingScale={floatingToolsScale} bookmarkScale={floatingBookmarkScale} addRequest={noteAddRequest} aiAddRequest={aiNoteAddRequest} /><div className="pageFrame"><main ref={dashboardRef} style={dashboardStyle} className={page === "dashboard" ? "dashboard" : "dashboard pageHidden"}>
+        <DailyAgendaRail storageScope={user.id} onOpenDailyJob={()=>navigate("daily")}/><StickyNotes key={user.id} storageScope={user.id} folders={folders} aiEnabled={aiEnabled} floatingScale={floatingToolsScale} bookmarkScale={floatingBookmarkScale} addRequest={noteAddRequest} aiAddRequest={aiNoteAddRequest} /><div className="pageFrame"><main ref={dashboardRef} style={dashboardStyle} className={page === "dashboard" ? "dashboard" : "dashboard pageHidden"}>
             <DashboardSourceColumn className="sourcesColumn" title="Sources" blocks={sourceBlocks} onAdd={type => addSourceBlock("left", type)} onDelete={id => deleteSourceBlock("left", id)} onMove={(id, direction) => moveSourceBlock("left", id, direction)} onResize={(id, height) => updateSourceBlock("left", id, {height})} renderBlock={block => renderSourceBlock("left", block)} />
             <div className="dashboardResizer" role="separator" aria-label="Ridimensiona colonne sinistra e centrale" onPointerDown={event => startColumnResize("left", event)} />
             <section className="dashboardColumn foldersColumn">{dashboardBrowser ? <Suspense fallback={<p className="sourceLoading">Loading folder…</p>}><DashboardFolderBrowser key={dashboardBrowser.path} initialPath={dashboardBrowser.path} initialName={dashboardBrowser.name} onHome={()=>setDashboardBrowser(null)} sourceFolderPaths={folders.filter(item => item.storage !== "imaginary" && Boolean(item.path)).map(item => item.path)} storageScope={user.id} aiEnabled={aiEnabled}/></Suspense> : <div className="foldersContainer">{folderProjectGroups(folders).map(group=><div className={group.members.length>1?"dashboardProjectGroup linkedProject":"dashboardProjectGroup"} key={group.key}>{group.members.length>1&&<div className="dashboardProjectLabel"><span>{group.symbol}</span><small>{group.members[0].appearance?.workGroup || group.members[0].description}</small></div>}{group.members.map(folder => <div className={draggedFolderId === folder.id ? "folderOrderItem draggingFolder" : "folderOrderItem"} draggable onDragStart={event => { if (event.target !== event.currentTarget) return; setDraggedFolderId(folder.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("application/x-folderrocket-folder-order", folder.id); }} onDragOver={event => { if (event.dataTransfer.types.includes("application/x-folderrocket-folder-order")) event.preventDefault(); }} onDrop={event => { const sourceId = event.dataTransfer.getData("application/x-folderrocket-folder-order"); if (sourceId) { event.preventDefault(); event.stopPropagation(); moveFolder(sourceId, folder.id); } setDraggedFolderId(null); }} onDragEnd={() => setDraggedFolderId(null)} key={folder.id}><FileDropZone id={folder.id} name={folder.name} pathValue={folder.path} hidePath imaginary={folder.storage === "imaginary"} selected={Boolean(folder.path) && searchFolderIds.includes(folder.id)} sourceFolderPaths={folders.filter(item => item.storage !== "imaginary" && Boolean(item.path)).map(item => item.path)} storageScope={user.id} aiEnabled={aiEnabled} onVirtualFilesAdd={items => updateFolder(folder.id, {virtualFiles: [...(folder.virtualFiles ?? []), ...items.filter(item => !(folder.virtualFiles ?? []).some(file => file.path === item.path))]})} onPathChange={path => updateFolder(folder.id, {path, storage: "physical"})} /></div>)}</div>)}</div>}</section>
             <div className="dashboardResizer" role="separator" aria-label="Resize center and right columns" onPointerDown={event => startColumnResize("right", event)} />
             <DashboardSourceColumn className="rightSourcesColumn" title="Sources" blocks={rightSourceBlocks} onAdd={type => addSourceBlock("right", type)} onDelete={id => deleteSourceBlock("right", id)} onMove={(id, direction) => moveSourceBlock("right", id, direction)} onResize={(id, height) => updateSourceBlock("right", id, {height})} renderBlock={block => renderSourceBlock("right", block)} />
             <button type="button" className="dashboardHeightResizer" onPointerDown={startDashboardHeightResize} title="Drag to set dashboard height" aria-label="Set dashboard height"><GripHorizontal size={15} /></button>
-        </main>{page === "folders" && <div className="folderPage"><Suspense fallback={<p className="sourceLoading">Loading folders…</p>}><FolderManagement folders={folders} onAdd={addFolder} onUpdate={updateFolder} onDelete={deleteFolder} onReorder={moveFolder} aiEnabled={aiEnabled} /></Suspense></div>}{page === "processing" && <div className="processingView"><Suspense fallback={<p className="sourceLoading">Loading File Studio…</p>}><ProcessingWorkspace folders={folders} onUpdate={updateFolder} /></Suspense></div>}{page === "applications" && <div className="applicationsView"><Suspense fallback={<p className="sourceLoading">Loading applications…</p>}><ApplicationsWorkspace storageScope={user.id} folders={folders} onVirtualFilesAdd={(folderId,items)=>updateFolder(folderId,{virtualFiles:[...(folders.find(folder=>folder.id===folderId)?.virtualFiles??[]),...items.filter(item=>!(folders.find(folder=>folder.id===folderId)?.virtualFiles??[]).some(existing=>existing.path===item.path))]})}/></Suspense></div>}{page === "daily" && <Suspense fallback={<p className="sourceLoading">Loading Daily Job…</p>}><DailyJob storageScope={user.id}/></Suspense>}</div><nav className="navigationHistory" aria-label="Navigation history"><button type="button" onClick={() => navigateHistory("back")} title="Back" disabled={!navigation.canGoBack}><ChevronLeft size={16} /></button><button type="button" onClick={() => setPage("dashboard")} title="Home"><Home size={15} /></button><button type="button" onClick={() => navigateHistory("forward")} title="Forward" disabled={!navigation.canGoForward}><ChevronRight size={16} /></button></nav>
+        </main>{page === "folders" && <div className="folderPage"><Suspense fallback={<p className="sourceLoading">Loading folders…</p>}><FolderManagement folders={folders} onAdd={addFolder} onUpdate={updateFolder} onDelete={deleteFolder} onReorder={moveFolder} aiEnabled={aiEnabled} /></Suspense></div>}{page === "processing" && <div className="processingView"><Suspense fallback={<p className="sourceLoading">Loading File Studio…</p>}><ProcessingWorkspace folders={folders} onUpdate={updateFolder} /></Suspense></div>}{page === "applications" && <div className="applicationsView"><Suspense fallback={<p className="sourceLoading">Loading applications…</p>}><ApplicationsWorkspace storageScope={user.id} folders={folders} onScanningChange={setApplicationChecking} onVirtualFilesAdd={(folderId,items)=>updateFolder(folderId,{virtualFiles:[...(folders.find(folder=>folder.id===folderId)?.virtualFiles??[]),...items.filter(item=>!(folders.find(folder=>folder.id===folderId)?.virtualFiles??[]).some(existing=>existing.path===item.path))]})}/></Suspense></div>}{page === "daily" && <Suspense fallback={<p className="sourceLoading">Loading Daily Job…</p>}><DailyJob storageScope={user.id} onOpenWorkspace={kind=>navigate(kind==="studio"?"processing":kind==="applications"?"applications":"dashboard")}/></Suspense>}</div>
     </div>;
 }
 

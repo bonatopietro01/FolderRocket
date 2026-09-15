@@ -420,6 +420,33 @@ async function loadDeadlineWorkbook(folderPath) {
 
 }
 
+async function addManualDeadline(folderPath, {label, expirationDate, watchDays, urgentDays, levels}) {
+    const {workbook, sheet, excelPath} = await loadDeadlineWorkbook(folderPath);
+    let row = findRowByFileName(sheet, label);
+    if (!row) row = sheet.addRow([]);
+    const due = new Date(`${expirationDate}T12:00:00`);
+    if (Number.isNaN(due.getTime())) throw new Error("Enter a valid deadline date.");
+    const daysRemaining = Math.ceil((due.getTime() - Date.now()) / 86400000);
+    const deadlineLevels = (Array.isArray(levels) && levels.length ? levels : [
+        {id: "urgent", days: urgentDays, color: "#e53935"},
+        {id: "watch", days: watchDays, color: "#e6a700"}
+    ]).map(level => ({id: String(level.id), days: Number(level.days), color: String(level.color || "#5b8def")})).filter(level => level.id && Number.isFinite(level.days) && level.days >= 0).sort((first, second) => first.days - second.days);
+    const status = deadlineLevels.find(level => daysRemaining <= level.days)?.id ?? "ok";
+    const statusColors = Object.fromEntries(deadlineLevels.map(level => [level.id, level.color]));
+    row.getCell(1).value = label;
+    row.getCell(2).value = expirationDate;
+    row.getCell(3).value = daysRemaining;
+    row.getCell(4).value = status;
+    row.getCell(5).value = "Manual";
+    row.getCell(6).value = "Created from FolderRocket deadline input.";
+    row.alignment = {vertical:"top", wrapText:true};
+    for (let columnNumber = 1; columnNumber <= 6; columnNumber++) row.getCell(columnNumber).fill = {type:"pattern", pattern:"solid", fgColor:{argb:"FFFFFFFF"}};
+    applyDeadlineColor(row, status, statusColors);
+    styleHeader(sheet);
+    await workbook.xlsx.writeFile(excelPath);
+    return {fileName:label, expirationDate, daysRemaining, status, source:"Manual", reason:"Created from FolderRocket deadline input."};
+}
+
 
 /*
     Cerca una riga attraverso
@@ -618,14 +645,19 @@ async function getDeadlineArchiveData(
 */
 function applyDeadlineColor(
     row,
-    status
+    status,
+    statusColors = {}
 ) {
 
     let color =
         "FFFFFFFF";
 
 
-    if (status === "watch") {
+    const configuredColor = statusColors[status];
+    if (typeof configuredColor === "string" && /^#[0-9a-f]{6}$/i.test(configuredColor)) {
+        color = `FF${configuredColor.slice(1).toUpperCase()}`;
+    }
+    else if (status === "watch") {
 
         color =
             "FFFFE699";
@@ -703,7 +735,8 @@ function applyDeadlineColor(
 */
 async function updateDeadlineInfo(
     folderPath,
-    results
+    results,
+    statusColors = {}
 ) {
 
     const {
@@ -750,9 +783,16 @@ async function updateDeadlineInfo(
                 row.getCell(1).value ?? ""
             ).trim();
 
+        const source =
+            String(
+                row.getCell(5).value ?? ""
+            ).trim();
+
 
         if (
             fileName
+            &&
+            source !== "Manual"
             &&
             !currentFileNames.has(
                 fileName
@@ -864,7 +904,8 @@ async function updateDeadlineInfo(
         */
         applyDeadlineColor(
             row,
-            result.status
+            result.status,
+            statusColors
         );
 
 
@@ -937,6 +978,7 @@ module.exports = {
 
     getDeadlineArchiveData,
 
-    updateDeadlineInfo
+    updateDeadlineInfo,
+    addManualDeadline
 
 };

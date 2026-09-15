@@ -12,6 +12,7 @@ let readFileContentModule;
 let analyzeDocumentModule;
 let saveFileInfoModule;
 let checkFolderDeadlinesModule;
+let addManualDeadlineModule;
 let syncArchiveModule;
 
 function getXlsx() { return xlsxModule ??= require("xlsx"); }
@@ -19,6 +20,7 @@ function readFileContent(...args) { return (readFileContentModule ??= require(".
 function analyzeDocument(...args) { return (analyzeDocumentModule ??= require("./ai/analyzer"))(...args); }
 function saveFileInfo(...args) { return (saveFileInfoModule ??= require("./database/excelManager"))(...args); }
 function checkFolderDeadlines(...args) { return (checkFolderDeadlinesModule ??= require("./services/deadlineService").checkFolderDeadlines)(...args); }
+function addManualDeadline(...args) { return (addManualDeadlineModule ??= require("./services/deadlineService").addManualDeadline)(...args); }
 function syncArchive(...args) { return (syncArchiveModule ??= require("./services/archiveService").syncArchive)(...args); }
 
 const {moveToTrash} = require("./services/trashService");
@@ -238,10 +240,8 @@ async function openWithDefaultApp(filePath) {
     if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
         throw new Error("File non trovato");
     }
-    const command = process.platform === "win32" ? "powershell.exe" : process.platform === "darwin" ? "open" : "xdg-open";
-    const args = process.platform === "win32"
-        ? ["-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-Command", "& { param($target) Invoke-Item -LiteralPath $target }", filePath]
-        : [filePath];
+    const command = process.platform === "win32" ? "explorer.exe" : process.platform === "darwin" ? "open" : "xdg-open";
+    const args = [filePath];
     await new Promise((resolve, reject) => {
         const child = spawn(command, args, {detached: true, stdio: "ignore", windowsHide: true});
         child.once("error", reject);
@@ -322,6 +322,53 @@ function convertWordToPdf(sourcePath, targetPath) {
         child.on("error", reject);
         child.on("close", code => code === 0 && fs.existsSync(targetPath) ? resolve() : reject(new Error(error.trim() || "Microsoft Word non ha potuto creare il PDF")));
     });
+}
+
+function convertExcelToPdf(sourcePath, targetPath) {
+    const source = Buffer.from(sourcePath, "utf16le").toString("base64");
+    const target = Buffer.from(targetPath, "utf16le").toString("base64");
+    const script = [
+        "$ErrorActionPreference = 'Stop'",
+        `$source = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('${source}'))`,
+        `$target = [Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('${target}'))`,
+        "$excel = $null; $workbook = $null",
+        "try {",
+        "  $excel = New-Object -ComObject Excel.Application",
+        "  $excel.Visible = $false",
+        "  $excel.DisplayAlerts = $false",
+        "  $workbook = $excel.Workbooks.Open($source, 0, $true)",
+        "  foreach ($sheet in $workbook.Worksheets) {",
+        "    $sheet.PageSetup.Zoom = $false",
+        "    $sheet.PageSetup.FitToPagesWide = 1",
+        "    $sheet.PageSetup.FitToPagesTall = $false",
+        "  }",
+        "  $workbook.ExportAsFixedFormat(0, $target)",
+        "} finally {",
+        "  if ($workbook) { $workbook.Close($false) }",
+        "  if ($excel) { $excel.Quit() }",
+        "  [GC]::Collect()",
+        "  [GC]::WaitForPendingFinalizers()",
+        "}"
+    ].join("; ");
+    try { if (fs.existsSync(targetPath)) fs.unlinkSync(targetPath); } catch { /* Excel will report a useful write error. */ }
+    return new Promise((resolve, reject) => {
+        const child = spawn("powershell.exe", ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-Command", script], {windowsHide: true});
+        let error = "";
+        child.stderr.on("data", data => { error += data.toString(); });
+        child.on("error", reject);
+        child.on("close", code => code === 0 && fs.existsSync(targetPath)
+            ? resolve()
+            : reject(new Error(error.trim() || "Microsoft Excel could not create the PDF. Check that Excel is installed.")));
+    });
+}
+
+function spreadsheetToText(sourcePath) {
+    const XLSX = getXlsx();
+    const workbook = XLSX.readFile(sourcePath, {cellDates: true});
+    return workbook.SheetNames.map(sheetName => {
+        const table = XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName], {FS: "\t", RS: "\r\n", blankrows: true});
+        return workbook.SheetNames.length > 1 ? `[${sheetName}]\r\n${table}` : table;
+    }).join("\r\n\r\n");
 }
 
 function convertImageToPdf(sourcePath, targetPath) {
@@ -1342,6 +1389,8 @@ app.post(
                     req.body.urgentDays
                 );
 
+            const levels = Array.isArray(req.body.levels) ? req.body.levels : undefined;
+
 
             // Il servizio si occupa di:
             // - aprire o creare scadenze.xlsx
@@ -1358,7 +1407,9 @@ app.post(
 
                     watchDays,
 
-                    urgentDays
+                    urgentDays,
+
+                    levels
 
                 );
 
@@ -1437,6 +1488,20 @@ app.post(
 
     }
 );
+
+app.post("/deadlines/manual", async (req, res) => {
+    try {
+        const folderPath = assertUserPath(req.user, req.body?.path);
+        const label = typeof req.body?.label === "string" ? req.body.label.trim().slice(0, 180) : "";
+        const expirationDate = typeof req.body?.expirationDate === "string" ? req.body.expirationDate : "";
+        const watchDays = Math.max(1, Number(req.body?.watchDays) || 30);
+        const urgentDays = Math.max(0, Number(req.body?.urgentDays) || 7);
+        const levels = Array.isArray(req.body?.levels) ? req.body.levels : undefined;
+        if (!label) throw new Error("Describe what you want to track.");
+        if (!levels && urgentDays >= watchDays) throw new Error("Urgent days must be less than watch days.");
+        res.status(201).json({result: await addManualDeadline(folderPath, {label, expirationDate, watchDays, urgentDays, levels})});
+    } catch (error) { res.status(400).json({message: error instanceof Error ? error.message : "Unable to create the deadline."}); }
+});
 
 // File trascinati dal browser in una cartella immaginaria. Il browser non
 // comunica il percorso di origine, quindi il server conserva una copia privata
@@ -1546,6 +1611,7 @@ app.post("/applications/discover", requireAuthenticated, requireAdministrator, a
         if (!/^[a-zA-Z0-9_-]{1,120}$/.test(appId)) throw new Error("Invalid application identifier.");
         const extensions = [...new Set((Array.isArray(req.body?.extensions) ? req.body.extensions : []).map(value => String(value).replace(/^\./, "").toLowerCase()).filter(value => /^[a-z0-9]{1,12}$/.test(value)))];
         if (!extensions.length) throw new Error("Select at least one file type for this application.");
+        const cachedOnly = Boolean(req.body?.cachedOnly);
         const roots = [os.homedir(), process.env.OneDrive, process.env.OneDriveCommercial, process.env.OneDriveConsumer].filter(Boolean);
         if (process.platform === "win32") for (let code = 68; code <= 90; code += 1) {
             const root = String.fromCharCode(code) + ":\\";
@@ -1562,6 +1628,17 @@ app.post("/applications/discover", requireAuthenticated, requireAdministrator, a
             const send = payload => { if (!res.destroyed && !res.writableEnded) res.write(`${JSON.stringify(payload)}\n`); };
             const cache = require("./services/applicationDiscoveryCache");
             const previous = cache.read(req.user.id, appId, extensions);
+            if (cachedOnly) {
+                const files = previous?.files ?? [];
+                const folders = new Map();
+                for (const file of files) {
+                    const directory = path.dirname(file.path);
+                    folders.set(directory, (folders.get(directory) || 0) + 1);
+                }
+                send({type:"complete", result:{files, folders:[...folders].map(([path, count]) => ({path, count})).sort((a, b) => b.count - a.count), skipped:0, cached:true, cacheMiss:!previous}});
+                if (!res.destroyed && !res.writableEnded) res.end();
+                return;
+            }
             const result = await require("./services/applicationDiscoveryService").discoverApplicationFiles(roots, extensions, {signal:controller.signal, previous, onProgress:progress => send({type:"progress", ...progress})});
             cache.write(req.user.id, appId, extensions, result);
             const {directories, ...response} = result;
@@ -1993,26 +2070,30 @@ app.post("/convert-files", async (req, res) => {
         for (const sourcePath of paths) {
             if (!fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) continue;
             const sourceExtension = path.extname(sourcePath).toLowerCase();
+            const spreadsheetExtensions = [".xlsx", ".xls", ".xlsm", ".xlsb", ".ods"];
             const displayedSourceName = requestedNames.get(sourcePath) || path.basename(sourcePath);
             const targetPath = path.join(path.dirname(sourcePath), `${path.basename(displayedSourceName, path.extname(displayedSourceName))}_converted.${targetFormat}`);
             if (targetFormat === "pdf") {
                 if (sourceExtension === ".pdf") fs.copyFileSync(sourcePath, targetPath);
                 else if ([".doc", ".docx"].includes(sourceExtension)) await convertWordToPdf(sourcePath, targetPath);
                 else if ([".png", ".jpg", ".jpeg"].includes(sourceExtension)) await convertImageToPdf(sourcePath, targetPath);
+                else if (spreadsheetExtensions.includes(sourceExtension)) await convertExcelToPdf(sourcePath, targetPath);
                 else {
                     const content = sourceExtension === ".csv" ? fs.readFileSync(sourcePath, "utf8") : await readFileContent(sourcePath);
                     if (!content || content === "Formato non supportato") throw new Error(`${path.basename(sourcePath)} non può essere convertito in PDF`);
                     writeTextPdf(targetPath, path.basename(sourcePath), content);
                 }
             } else if (targetFormat === "txt") {
-                const content = sourceExtension === ".csv" ? fs.readFileSync(sourcePath, "utf8") : await readFileContent(sourcePath);
+                const content = spreadsheetExtensions.includes(sourceExtension)
+                    ? spreadsheetToText(sourcePath)
+                    : sourceExtension === ".csv" ? fs.readFileSync(sourcePath, "utf8") : await readFileContent(sourcePath);
                 if (!content || content === "Formato non supportato") throw new Error(`${path.basename(sourcePath)} non può essere convertito in TXT`);
                 fs.writeFileSync(targetPath, content, "utf8");
-            } else if (targetFormat === "csv" && sourceExtension === ".xlsx") {
+            } else if (targetFormat === "csv" && spreadsheetExtensions.includes(sourceExtension)) {
                 const XLSX = getXlsx();
                 const workbook = XLSX.readFile(sourcePath);
                 fs.writeFileSync(targetPath, XLSX.utils.sheet_to_csv(workbook.Sheets[workbook.SheetNames[0]]), "utf8");
-            } else if (targetFormat === "xlsx" && sourceExtension === ".csv") {
+            } else if (targetFormat === "xlsx" && [".csv", ".xls", ".xlsm", ".xlsb", ".ods"].includes(sourceExtension)) {
                 const XLSX = getXlsx();
                 const workbook = XLSX.readFile(sourcePath, {type: "file"});
                 XLSX.writeFile(workbook, targetPath);
@@ -2376,5 +2457,24 @@ startEmailAlertScheduler();
 // Mantiene il processo agganciato al terminale anche in ambienti che
 // rilasciano prematuramente gli handle del server HTTP.
 server.ref();
-if (process.stdin.isTTY) process.stdin.resume();
 server.on("error", error => console.error("Backend error:", error));
+
+let shuttingDown = false;
+function shutDownBackend() {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    process.stdin.pause();
+    const forceExit = setTimeout(() => process.exit(0), 1200);
+    forceExit.unref?.();
+    server.close(() => process.exit(0));
+}
+
+if (process.env.FOLDERROCKET_DESKTOP === "1") {
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", data => {
+        if (String(data).split(/\r?\n/).some(command => command.trim() === "shutdown")) shutDownBackend();
+    });
+    process.stdin.on("end", shutDownBackend);
+}
+process.on("SIGINT", shutDownBackend);
+process.on("SIGTERM", shutDownBackend);

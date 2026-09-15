@@ -20,6 +20,8 @@ const CARGO_SHIP_DEFAULT_PANEL_SIZE = {width: 250, height: 230};
 const CARGO_SHIP_MINIMUM_PANEL_SIZE = {width: 250, height: 230};
 const CARGO_SHIP_MAXIMUM_PANEL_SIZE = {width: 880, height: 760};
 let backendProcess = null;
+let backendShutdownTimer = null;
+let backendShutdownRequested = false;
 let mainWindow = null;
 let cargoWindow = null;
 let cargoShipExpanded = false;
@@ -55,7 +57,7 @@ function cargoShipState() {
 }
 
 function notifyCargoShipState() {
-    if (!mainWindow?.isDestroyed()) mainWindow.webContents.send("folderrocket:cargo-ship-state", cargoShipState());
+    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("folderrocket:cargo-ship-state", cargoShipState());
 }
 
 const desktopConfigKeys = new Set([
@@ -195,6 +197,7 @@ async function waitForBackend() {
 }
 
 function startBackend() {
+    backendShutdownRequested = false;
     const directory = backendDirectory();
     const entry = path.join(directory, "server.js");
     if (!fs.existsSync(entry)) throw new Error("FolderRocket backend was not found in this installation.");
@@ -221,15 +224,33 @@ function startBackend() {
         cwd: directory,
         env: environment,
         windowsHide: true,
-        stdio: ["ignore", "pipe", "pipe"]
+        stdio: ["pipe", "pipe", "pipe"]
     });
 
     backendProcess.stdout?.on("data", data => console.info(`[FolderRocket backend] ${data}`));
     backendProcess.stderr?.on("data", data => console.error(`[FolderRocket backend] ${data}`));
+    backendProcess.stdin?.on("error", error => {
+        if (!app.isQuitting) console.error("FolderRocket backend input error:", error);
+    });
     backendProcess.once("exit", code => {
+        if (backendShutdownTimer) {
+            clearTimeout(backendShutdownTimer);
+            backendShutdownTimer = null;
+        }
         if (!app.isQuitting && code && code !== 0) console.error(`FolderRocket backend stopped with code ${code}.`);
         backendProcess = null;
     });
+}
+
+function stopBackend() {
+    if (!backendProcess || backendProcess.killed || backendShutdownRequested) return;
+    backendShutdownRequested = true;
+    try { backendProcess.stdin?.end("shutdown\n"); }
+    catch { backendProcess.kill(); return; }
+    backendShutdownTimer = setTimeout(() => {
+        if (backendProcess && !backendProcess.killed) backendProcess.kill();
+    }, 1500);
+    backendShutdownTimer.unref?.();
 }
 
 function createWindow(loadApplication = true) {
@@ -276,7 +297,7 @@ function createWindow(loadApplication = true) {
         for (const window of BrowserWindow.getAllWindows()) {
             if (!window.isDestroyed()) window.destroy();
         }
-        if (backendProcess && !backendProcess.killed) backendProcess.kill();
+        stopBackend();
         app.quit();
     });
 
@@ -291,12 +312,12 @@ function createWindow(loadApplication = true) {
         }
     });
     const notifyNavigationState = () => {
-        if (!mainWindow?.isDestroyed()) mainWindow.webContents.send("folderrocket:navigation-changed");
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("folderrocket:navigation-changed");
     };
     mainWindow.webContents.on("did-navigate", notifyNavigationState);
     mainWindow.webContents.on("did-navigate-in-page", notifyNavigationState);
     mainWindow.webContents.on("zoom-changed", () => {
-        if (!mainWindow?.isDestroyed()) mainWindow.webContents.send("folderrocket:zoom-changed", mainWindow.webContents.getZoomFactor());
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("folderrocket:zoom-changed", mainWindow.webContents.getZoomFactor());
     });
     mainWindow.once("ready-to-show", () => mainWindow?.show());
     if (loadApplication) void mainWindow.loadURL(APP_ORIGIN);
@@ -349,17 +370,17 @@ function createCargoShipWindow(showWhenReady = true) {
         }
     });
     cargoWindow.once("ready-to-show", () => {
-        if (!cargoWindow?.isDestroyed()) {
+        if (cargoWindow && !cargoWindow.isDestroyed()) {
             cargoShipLastBounds = clampCargoShipBounds(cargoWindow.getBounds());
             cargoWindow.setBounds(cargoShipLastBounds);
             if (showWhenReady) cargoWindow.show();
         }
     });
     cargoWindow.on("move", () => {
-        if (!cargoWindow?.isDestroyed()) cargoShipLastBounds = cargoWindow.getBounds();
+        if (cargoWindow && !cargoWindow.isDestroyed()) cargoShipLastBounds = cargoWindow.getBounds();
     });
     cargoWindow.on("resize", () => {
-        if (!cargoWindow?.isDestroyed()) cargoShipLastBounds = cargoWindow.getBounds();
+        if (cargoWindow && !cargoWindow.isDestroyed()) cargoShipLastBounds = cargoWindow.getBounds();
     });
     cargoWindow.on("closed", () => {
         cargoWindow = null;
@@ -683,7 +704,7 @@ app.on("activate", () => {
 
 app.on("before-quit", () => {
     app.isQuitting = true;
-    if (backendProcess && !backendProcess.killed) backendProcess.kill();
+    stopBackend();
 });
 
 app.on("window-all-closed", () => {
