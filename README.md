@@ -55,6 +55,8 @@ FolderRocket is being designed local-first:
 - AI and mail integrations are optional connected features;
 - when AI is disabled or the computer is offline, the app must clearly show that connected features are unavailable rather than sending anything automatically.
 
+The planned migration from email accounts to password-optional local profiles is documented in [docs/LOCAL_PROFILES_ROADMAP.md](docs/LOCAL_PROFILES_ROADMAP.md).
+
 ## Source control and releases
 
 Development and release rules are documented in [docs/DEVELOPMENT_AND_RELEASES.md](docs/DEVELOPMENT_AND_RELEASES.md). The practical flow is:

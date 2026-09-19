@@ -2729,6 +2729,26 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .cargoFolderSend { gap:4px; margin-top:1px; }
 .cargoFolderSend select { padding:5px; }
 .cargoFolderSend button { min-height:27px; padding:5px 6px; }
+.cargoFolderSend { position:relative; grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+.cargoWorkspaceSelect,.cargoDestinationPicker { min-width:0; }
+.cargoDestinationPicker { position:relative; }
+.cargoFolderSend .cargoDestinationToggle { width:100%; min-width:0; justify-content:flex-start; border:1px solid #cbbcdc; background:#fff; color:#523b6a; font-weight:700; }
+.cargoDestinationToggle span { min-width:0; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-align:left; }
+.cargoDestinationMenu { position:absolute; z-index:30; right:0; bottom:calc(100% + 5px); width:max(210px,200%); max-width:calc(100vw - 24px); max-height:190px; padding:5px; overflow:auto; border:1px solid #bca8d1; border-radius:8px; background:#fff; box-shadow:0 10px 28px rgba(48,35,72,.24); }
+.cargoDestinationBranch { min-width:0; }
+.cargoDestinationRow { display:grid; grid-template-columns:22px minmax(0,1fr); align-items:center; min-width:0; }
+.cargoFolderSend .cargoDestinationExpand,.cargoFolderSend .cargoDestinationName { min-height:24px; padding:3px 4px; border:0; border-radius:5px; background:transparent; color:#4e6074; }
+.cargoFolderSend .cargoDestinationExpand { width:22px; }
+.cargoFolderSend .cargoDestinationName { min-width:0; justify-content:flex-start; font-weight:700; }
+.cargoDestinationName span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cargoDestinationSideArrow { flex:0 0 auto; margin-left:auto; }
+.cargoFolderSend .cargoDestinationName:hover,.cargoFolderSend .cargoDestinationName.active { background:#eee4f8; color:#623f88; }
+.cargoDestinationSpacer { width:22px; }
+.cargoDestinationChildren { margin-left:10px; padding-left:4px; border-left:1px solid #dfd3ea; }
+.cargoDestinationChildren > small { display:block; padding:3px 5px; color:#8190a0; font-size:9px; }
+.cargoDestinationChildren > .cargoDestinationError { color:#a34747; }
+.cargoFolderSend .cargoUseCurrentFolder { width:calc(100% - 4px); min-height:22px; justify-content:flex-start; margin:2px; padding:3px 6px; background:#f2edf7; color:#65457f; font-size:9px; }
+.cargoDestinationBranch > .cargoDestinationError { display:block; padding:2px 5px 3px 27px; color:#a34747; font-size:9px; }
 .cargoClear { margin-top:1px; padding:2px; }
 .cargoForm, .cargoConvert { align-content:start; gap:4px; padding:5px; }
 .cargoForm input, .cargoForm textarea, .cargoForm select, .cargoConvert select { padding:5px 6px; }
@@ -3123,6 +3143,32 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .fileKindIcon.audio { background:#f1e5ff; color:#7642a8; }.fileKindIcon.video { background:#ffe7dc; color:#b14e25; }.fileKindIcon.csv { background:#dff4e7; color:#16834a; }
 @media(max-width:1100px){.applicationsGrid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:650px){.applicationsGrid{grid-template-columns:1fr}}
 
+/* Side post-it dimensions use a saved base size; the existing percentage scales the whole tab. */
+.accountBookmarkSettings { display:grid; gap:5px; padding:6px; border:1px solid #d6e2ed; border-radius:7px; background:#fff; }
+.accountBookmarkSettings > small { color:#718397; font-size:9px; font-weight:700; text-align:right; }
+.floatingStickyBookmark { width:var(--bookmark-width,96px); height:var(--bookmark-height,29px); }
+.floatingStickyBookmark:hover { width:calc(var(--bookmark-width,96px) + 30px); }
+
+/* A rename recipe can be paused without deleting its configured parts. */
+.renameTransferToggle { display:grid; width:23px; height:23px; flex:0 0 23px; place-items:center; padding:0; border:1px solid #b7c7d5; border-radius:6px; background:#edf2f6; color:#718291; cursor:pointer; box-shadow:inset 0 0 0 1px rgba(255,255,255,.55); transition:background .15s ease,border-color .15s ease,box-shadow .15s ease,transform .15s ease; }
+.renameTransferToggle.active { border-color:#3f9a6d; background:#dff4e8; color:#24784f; box-shadow:inset 0 2px 4px rgba(28,100,65,.2),0 0 0 1px rgba(63,154,109,.14); transform:translateY(1px); }
+.renameBuilder .renameToken { transition:filter .16s ease,opacity .16s ease; }
+.renameBuilder.renameDisabled .renameToken { filter:blur(1.6px); opacity:.42; pointer-events:none; user-select:none; }
+.renameBuilder { flex-wrap:nowrap!important; overflow:hidden; }
+.renameBuilder::-webkit-scrollbar { display:none; }
+.renameComposition { display:flex; min-width:0; height:18px; align-items:center; overflow-x:auto; overflow-y:hidden; border:1px solid #9eabb7; border-radius:4px; background:#fff; scrollbar-width:none; }
+.renameComposition::-webkit-scrollbar { display:none; }
+.renameBuilder .renameToken { position:relative; width:auto; min-width:0; max-width:none; height:16px; box-sizing:border-box; flex:0 0 auto; overflow:hidden; padding:0 3px!important; border:0!important; white-space:nowrap; }
+.renameBuilder .renameToken + .renameToken { padding-left:7px!important; }
+.renameBuilder .renameToken + .renameToken::before { position:absolute; top:50%; left:1px; color:#7e8994; content:"|"; font-size:10px; line-height:1; transform:translateY(-52%); }
+.renameBuilder .renameToken > span { display:block; max-width:none; overflow:hidden; font-size:10px!important; text-overflow:ellipsis; white-space:nowrap; }
+.renameBuilder .renamePartInput { min-width:4ch; max-width:18ch; padding:0; overflow:hidden; font-size:10px!important; text-overflow:ellipsis; }
+
+/* The Rename launcher follows the compact height of the generated name line. */
+.folderDropZone .folderUtilityButton.renameControlButton { width:20px!important; height:20px!important; min-width:20px!important; min-height:20px!important; }
+.folderDropZone .folderUtilityButton.renameControlButton svg { width:13px!important; height:13px!important; }
+.dashboard .folderDropZone .folderUtilityButton.renameControlButton { inline-size:20px!important; block-size:20px!important; width:20px!important; height:20px!important; min-width:20px!important; min-height:20px!important; max-width:20px!important; max-height:20px!important; }
+
 /* Dashboard subfolders are real FolderRocket drop targets, not a file browser. */
 .dashboardFolderBrowser { grid-template-rows:auto minmax(0,1fr); }
 .dashboardFolderGrid { align-content:start; grid-template-columns:repeat(auto-fill,minmax(180px,1fr)); overflow:auto; }
@@ -3237,7 +3283,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .convertedRenamePanel>div:first-child { color:#176fa9; }
 .floatingStickyNote .stickyNoteTitle { width:100%; flex:0 0 auto; box-sizing:border-box; margin:0 0 3px; padding:2px 4px; overflow:hidden; border:0; background:transparent; color:#382f19; font-size:12px; font-weight:800; text-overflow:ellipsis; outline:none; }
 .floatingStickyNote .stickyNoteTitle::placeholder { color:#746a4c; font-weight:700; opacity:.7; }
-.floatingStickyBookmark:hover { width:180px; }
+.floatingStickyBookmark:hover { width:calc(var(--bookmark-width,96px) + 30px); }
 .calendarSourceHeader .calendarHeaderRefresh { margin-left:2px!important; margin-right:0; }
 .calendarHeaderNavigation { margin-left:auto; }
 .emailReaderHeaderButton > .emailRefreshIcon { display:grid; align-self:stretch; margin:0 0 0 -7px; padding:0 7px; place-items:center; border-radius:5px 0 0 5px; background:#d94940; color:#fff; }
@@ -4564,3 +4610,61 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
   right:36px!important;
   bottom:auto!important;
 }
+
+/* Final card treatment: controls stay part of their folder card and spread as it grows. */
+.dashboard .foldersContainer .folderDropZone,
+.dashboard .dashboardSubfolderBlock > .folderDropZone {
+  box-shadow:0 4px 13px rgba(38,76,108,.13)!important;
+}
+.dashboard .foldersContainer .folderDropZone:hover,
+.dashboard .dashboardSubfolderBlock > .folderDropZone:hover {
+  box-shadow:0 6px 16px rgba(38,76,108,.18)!important;
+}
+
+/* Restore the original Rename launcher. The compact control is only the eye beside the name recipe. */
+.folderDropZone .folderUtilityButton.renameControlButton,
+.dashboard .folderDropZone .folderUtilityButton.renameControlButton {
+  inline-size:24px!important;
+  block-size:24px!important;
+  width:24px!important;
+  height:24px!important;
+  min-width:24px!important;
+  min-height:24px!important;
+  max-width:24px!important;
+  max-height:24px!important;
+}
+.folderDropZone .folderUtilityButton.renameControlButton svg { width:16px!important; height:16px!important; }
+
+/* The eye belongs to the 18 px name-composition field. */
+.renameTransferToggle { width:16px!important; height:16px!important; flex-basis:16px!important; border-radius:4px!important; }
+.renameTransferToggle svg { width:10px!important; height:10px!important; }
+.renameTransferToggle.active { transform:none!important; }
+.renameBuilder .renameTransferToggle { align-self:center; margin:0!important; }
+
+/* Three right-side actions are distributed by the card height rather than fixed pixels. */
+.dashboard .folderDropZone.aiEnabled .folderUtilityButton.archiveControlButton { top:9%!important; right:7px!important; bottom:auto!important; }
+.dashboard .folderDropZone.aiEnabled .folderUtilityButton.folderSettingsButton { top:50%!important; right:7px!important; bottom:auto!important; transform:translateY(-50%); }
+.dashboard .folderDropZone.aiEnabled .folderUtilityButton.renameControlButton { top:auto!important; right:7px!important; bottom:9%!important; }
+.dashboard .folderDropZone:not(.aiEnabled) .folderUtilityButton.renameControlButton { top:50%!important; right:7px!important; bottom:auto!important; transform:translateY(-50%); }
+.dashboard .folderDropZone .folderUtilityButton.archiveControlButton,
+.dashboard .folderDropZone .folderUtilityButton.folderSettingsButton,
+.dashboard .folderDropZone .folderUtilityButton.renameControlButton {
+  background:#f7fbff!important;
+  box-shadow:0 2px 6px rgba(38,76,108,.16)!important;
+}
+.dashboard .folderDropZone.aiEnabled .deadlineControls .folderUtilityButton.deadlineToggle {
+  border:1px solid #d2dee8!important;
+  border-radius:6px!important;
+  background:#f7fbff!important;
+  box-shadow:0 2px 6px rgba(38,76,108,.16)!important;
+}
+.dashboard .folderDropZone.aiEnabled .deadlineControls .folderUtilityButton.deadlineToggle.isActive {
+  border-color:#e0a000!important;
+  background:#fff8d7!important;
+  box-shadow:0 2px 6px rgba(151,103,0,.2)!important;
+}
+.dashboard .folderDropZone.aiEnabled .deadlineControls { bottom:9%!important; }
+.dashboard .folderDropZone.aiEnabled .folderSettingsMenu { top:50%!important; right:36px!important; bottom:auto!important; transform:translateY(-50%); }
+.dashboard .folderDropZone.aiEnabled .renameMenu.renameControlArea { top:auto!important; right:36px!important; bottom:calc(12% + 28px)!important; }
+.dashboard .folderDropZone:not(.aiEnabled) .renameMenu.renameControlArea { top:50%!important; right:36px!important; bottom:auto!important; transform:translateY(-50%); }
+.appSaveError{position:fixed;z-index:10020;top:64px;left:50%;transform:translateX(-50%);max-width:min(620px,calc(100vw - 32px));padding:8px 13px;border:1px solid #d69b91;border-radius:8px;background:#fff1ee;color:#8f3027;box-shadow:0 5px 18px #44120e26;font-size:12px;font-weight:700;}

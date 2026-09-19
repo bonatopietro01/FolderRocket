@@ -14,6 +14,13 @@ let saveFileInfoModule;
 let checkFolderDeadlinesModule;
 let addManualDeadlineModule;
 let syncArchiveModule;
+let archiveWorkQueue = Promise.resolve();
+
+function enqueueArchiveWork(work) {
+    archiveWorkQueue = archiveWorkQueue.then(work, work).catch(error => {
+        console.error("Archive background processing failed:", error);
+    });
+}
 
 function getXlsx() { return xlsxModule ??= require("xlsx"); }
 function readFileContent(...args) { return (readFileContentModule ??= require("./ai/reader"))(...args); }
@@ -24,6 +31,7 @@ function addManualDeadline(...args) { return (addManualDeadlineModule ??= requir
 function syncArchive(...args) { return (syncArchiveModule ??= require("./services/archiveService").syncArchive)(...args); }
 
 const {moveToTrash} = require("./services/trashService");
+const {executeCopyBatch, executeMoveBatch, moveFilePortable, pathExists} = require("./services/fileBatchService");
 const {searchFiles} = require("./services/searchService");
 const {readDashboardPreferences, writeDashboardPreferences} = require("./services/userPreferencesService");
 const {getRuntimeUploadsDirectory} = require("./services/runtimePaths");
@@ -91,7 +99,7 @@ const {
 } = require("./services/outlookService");
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = Number(process.env.PORT || process.env.FOLDERROCKET_PORT) || 3000;
 const HOST = process.env.HOST || "127.0.0.1";
 const APP_ORIGIN = (process.env.APP_ORIGIN || `http://localhost:${PORT}`).replace(/\/$/, "");
 const FRONTEND_ORIGIN = (process.env.FRONTEND_ORIGIN || APP_ORIGIN).replace(/\/$/, "");
@@ -1077,20 +1085,7 @@ app.post(
 
 
             // Crea la cartella se non esiste
-            if (
-                !fs.existsSync(
-                    destination
-                )
-            ) {
-
-                fs.mkdirSync(
-                    destination,
-                    {
-                        recursive: true
-                    }
-                );
-
-            }
+            await fs.promises.mkdir(destination, {recursive: true});
 
 
             // ==========================================
@@ -1111,14 +1106,7 @@ app.post(
                 1;
 
 
-            while (
-                fs.existsSync(
-                    path.join(
-                        destination,
-                        finalName
-                    )
-                )
-            ) {
+            while (await pathExists(path.join(destination, finalName))) {
 
                 const extension =
                     path.extname(
@@ -1152,10 +1140,7 @@ app.post(
 
             // Sposta il file dalla cartella temporanea
             // alla cartella scelta dall'utente
-            fs.renameSync(
-                file.path,
-                newPath
-            );
+            await moveFilePortable(file.path, newPath);
 
 
             console.log(
@@ -1163,109 +1148,6 @@ app.post(
                 newPath
             );
 
-
-            /*
-                L'analisi generale viene eseguita
-                soltanto quando Archivio è attivo.
-            */
-            let analysis = {
-
-                azienda: "",
-
-                posizione: "",
-
-                tipoDocumento: "",
-
-                competenze: [],
-
-                esperienza: "",
-
-                aiStatus: "Not analysed"
-
-            };
-
-
-            if (archiveEnabled) {
-
-                console.log(
-                    "ARCHIVIO ATTIVO: ANALIZZO IL FILE"
-                );
-
-
-                let content = "";
-
-
-                try {
-
-                    const extractedContent =
-                        await readFileContent(
-                            newPath
-                        );
-
-
-                    if (
-                        typeof extractedContent ===
-                        "string"
-                    ) {
-
-                        content =
-                            extractedContent;
-
-                    }
-
-                }
-
-                catch (readError) {
-
-                    console.log(
-                        "ERRORE LETTURA FILE:",
-                        readError
-                    );
-
-                }
-
-
-                if (!content || content === "Formato non supportato") {
-                    analysis.aiStatus = content === "Formato non supportato"
-                        ? "Warning: unsupported file format"
-                        : "Warning: no readable text extracted";
-                } else {
-                    try {
-                        analysis = await analyzeDocument(content, archiveColumns);
-                        analysis.aiStatus = "Success";
-                    } catch (analysisError) {
-                        analysis.aiStatus = `Error: ${analysisError instanceof Error ? analysisError.message : String(analysisError)}`;
-                    }
-                }
-
-
-                await saveFileInfo(
-                    destination,
-                    finalName,
-                    analysis,
-                    archiveColumns
-                );
-
-
-                console.log(
-                    "ARCHIVIO AGGIORNATO AUTOMATICAMENTE"
-                );
-
-            }
-
-            else {
-
-                console.log(
-                    "ARCHIVIO DISATTIVATO: FILE NON INSERITO IN archivio.xlsx"
-                );
-
-            }
-
-
-
-            console.log(
-                "EXCEL AGGIORNATO"
-            );
 
             addAuditEvent({
                 user: req.user,
@@ -1278,18 +1160,41 @@ app.post(
             });
 
 
-            // Risposta al frontend
+            // The file operation finishes immediately. Archive extraction and AI
+            // analysis continue in the background so they cannot freeze uploads.
             res.json({
-
-                message:
-                    "File salvato correttamente",
-
-                location:
-                    newPath,
-
-                analysis
-
+                message: archiveEnabled ? "File saved. Archive analysis is running in the background." : "File salvato correttamente",
+                location: newPath,
+                name: finalName,
+                archiveQueued: archiveEnabled
             });
+
+            if (archiveEnabled) {
+                setImmediate(() => {
+                    enqueueArchiveWork(async () => {
+                        let analysis = {azienda:"",posizione:"",tipoDocumento:"",competenze:[],esperienza:"",aiStatus:"Not analysed"};
+                        let content = "";
+                        try {
+                            const extractedContent = await readFileContent(newPath);
+                            if (typeof extractedContent === "string") content = extractedContent;
+                        } catch (readError) {
+                            console.error("Archive reader failed:", readError);
+                        }
+                        if (!content || content === "Formato non supportato") {
+                            analysis.aiStatus = content === "Formato non supportato" ? "Warning: unsupported file format" : "Warning: no readable text extracted";
+                        } else {
+                            try {
+                                analysis = await analyzeDocument(content, archiveColumns);
+                                analysis.aiStatus = "Success";
+                            } catch (analysisError) {
+                                analysis.aiStatus = `Error: ${analysisError instanceof Error ? analysisError.message : String(analysisError)}`;
+                            }
+                        }
+                        await saveFileInfo(destination, finalName, analysis, archiveColumns);
+                        console.log("ARCHIVIO AGGIORNATO AUTOMATICAMENTE:", finalName);
+                    });
+                });
+            }
 
         }
 
@@ -1676,41 +1581,30 @@ app.post("/sticky-notes/ai", async (req, res) => {
     }
 });
 
-app.post("/list-folder-files", (req, res) => {
+app.post("/list-folder-files", async (req, res) => {
     try {
         const folder = assertUserPath(req.user, req.body?.folder);
-        if (!folder || !fs.existsSync(folder) || !fs.statSync(folder).isDirectory()) {
+        const folderStats = await fs.promises.stat(folder).catch(() => null);
+        if (!folderStats?.isDirectory()) {
             throw new Error("Il percorso della cartella non è valido o non è accessibile");
         }
-        const files = fs.readdirSync(folder, {withFileTypes: true})
-            .filter(entry => entry.isFile())
-            .filter(entry => !["archivio.xlsx", "scadenze.xlsx"].includes(entry.name.toLowerCase()))
-            .flatMap(entry => {
-                const filePath = path.join(folder, entry.name);
-                try {
-                    const stats = fs.statSync(filePath);
-                    return [{name: entry.name, path: filePath, createdAt: stats.birthtime.toISOString(), size: stats.size}];
-                } catch {
-                    // Some removable-media files can be briefly locked while
-                    // Windows indexes them. Ignore only that item.
-                    return [];
-                }
-            })
+        const entries = await fs.promises.readdir(folder, {withFileTypes: true});
+        const readEntry = async entry => {
+            const entryPath = path.join(folder, entry.name);
+            const stats = await fs.promises.stat(entryPath).catch(() => null);
+            return stats ? {entry, entryPath, stats} : null;
+        };
+        const inspected = (await Promise.all(entries.map(readEntry))).filter(Boolean);
+        const files = inspected
+            .filter(item => item.entry.isFile() && !["archivio.xlsx", "scadenze.xlsx"].includes(item.entry.name.toLowerCase()))
+            .map(item => ({name: item.entry.name, path: item.entryPath, createdAt: item.stats.birthtime.toISOString(), size: item.stats.size}))
             .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
         // Directory entries are returned separately. The frontend requests their
         // contents only after the user expands a folder, so a large tree never
         // blocks the initial folder view.
-        const folders = fs.readdirSync(folder, {withFileTypes: true})
-            .filter(entry => entry.isDirectory())
-            .flatMap(entry => {
-                const folderPath = path.join(folder, entry.name);
-                try {
-                    const stats = fs.statSync(folderPath);
-                    return [{name: entry.name, path: folderPath, createdAt: stats.birthtime.toISOString()}];
-                } catch {
-                    return [];
-                }
-            })
+        const folders = inspected
+            .filter(item => item.entry.isDirectory())
+            .map(item => ({name: item.entry.name, path: item.entryPath, createdAt: item.stats.birthtime.toISOString()}))
             .sort((a, b) => a.name.localeCompare(b.name, undefined, {numeric: true, sensitivity: "base"}));
         res.json({files, folders});
     }
@@ -1806,60 +1700,79 @@ app.post("/files/rename", (req, res) => {
     } catch (error) { res.status(400).json({message: error instanceof Error ? error.message : "Unable to rename file"}); }
 });
 
-app.post("/files/move", (req, res) => {
+async function prepareFileBatch(user, body) {
+    const destination = assertUserPath(user, body?.destination);
+    const destinationStats = await fs.promises.stat(destination).catch(() => null);
+    if (!destinationStats?.isDirectory()) throw new Error("Select a valid destination folder");
+    const requested = Array.isArray(body?.items)
+        ? body.items.filter(item => item && typeof item.path === "string").map(item => ({path:item.path,name:item.name}))
+        : (Array.isArray(body?.paths) ? body.paths.filter(item => typeof item === "string").map(item => ({path:item})) : []);
+    const operations = [];
+    const targetKeys = new Set();
+    for (const item of requested) {
+        const sourcePath = assertUserPath(user, item.path);
+        const sourceStats = await fs.promises.stat(sourcePath).catch(() => null);
+        if (!sourceStats?.isFile()) throw new Error(`${path.basename(sourcePath)} is no longer available`);
+        const requestedName = typeof item.name === "string" && item.name.trim() ? path.basename(item.name.trim()) : path.basename(sourcePath);
+        if (!requestedName || requestedName === "." || requestedName === "..") throw new Error("One destination file name is invalid");
+        const targetPath = path.join(destination, requestedName);
+        const targetKey = process.platform === "win32" ? targetPath.toLowerCase() : targetPath;
+        if (targetKeys.has(targetKey)) throw new Error(`${requestedName} would be created more than once`);
+        targetKeys.add(targetKey);
+        const samePath = path.resolve(sourcePath) === path.resolve(targetPath);
+        if (!samePath && await pathExists(targetPath)) throw new Error(`${requestedName} already exists in the destination folder`);
+        operations.push({sourcePath, targetPath, samePath});
+    }
+    return operations;
+}
+
+app.post("/files/move", async (req, res) => {
     try {
-        const destination = assertUserPath(req.user, req.body?.destination);
-        const paths = Array.isArray(req.body?.paths) ? req.body.paths.filter(item => typeof item === "string").map(item => assertUserPath(req.user, item)) : [];
-        if (!destination || !fs.existsSync(destination) || !fs.statSync(destination).isDirectory()) throw new Error("Select a valid destination folder");
-        const moved = [];
-        for (const sourcePath of paths) {
-            if (!fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) continue;
-            const targetPath = path.join(destination, path.basename(sourcePath));
-            if (fs.existsSync(targetPath)) throw new Error(`${path.basename(sourcePath)} already exists in the destination folder`);
-            try {
-                fs.renameSync(sourcePath, targetPath);
-            } catch (error) {
-                // rename non funziona tra dischi diversi. Copia e rimozione
-                // mantengono comunque la semantica di un vero taglia/incolla.
-                if (error && ["EXDEV", "EPERM"].includes(error.code)) {
-                    try {
-                        fs.copyFileSync(sourcePath, targetPath);
-                        fs.unlinkSync(sourcePath);
-                    } catch (fallbackError) {
-                        // Non lasciare una copia quando il taglio non riesce:
-                        // l'operazione deve essere atomica dal punto di vista UI.
-                        if (fs.existsSync(targetPath)) fs.unlinkSync(targetPath);
-                        if (fallbackError && fallbackError.code === "EPERM") {
-                            throw new Error(`Cannot move ${path.basename(sourcePath)} because it is open or locked by OneDrive. Close the file and try again.`);
-                        }
-                        throw fallbackError;
-                    }
-                } else {
-                    throw error;
-                }
-            }
-            moved.push({name: path.basename(targetPath), path: targetPath});
-        }
+        const moved = await executeMoveBatch(await prepareFileBatch(req.user, req.body));
         res.json({moved});
     } catch (error) { res.status(400).json({message: error instanceof Error ? error.message : "Unable to move files"}); }
 });
 
-app.post("/files/copy", (req, res) => {
+app.post("/files/copy", async (req, res) => {
     try {
-        const destination = assertUserPath(req.user, req.body?.destination);
-        const paths = Array.isArray(req.body?.paths) ? req.body.paths.filter(item => typeof item === "string").map(item => assertUserPath(req.user, item)) : [];
-        if (!destination || !fs.existsSync(destination) || !fs.statSync(destination).isDirectory()) throw new Error("Select a valid destination folder");
-        const copied = [];
-        for (const sourcePath of paths) {
-            if (!fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) continue;
-            const targetPath = path.join(destination, path.basename(sourcePath));
-            if (fs.existsSync(targetPath)) throw new Error(`${path.basename(sourcePath)} already exists in the destination folder`);
-            fs.copyFileSync(sourcePath, targetPath);
-            const stats = fs.statSync(targetPath);
-            copied.push({name: path.basename(targetPath), path: targetPath, size: stats.size, createdAt: stats.birthtime.toISOString()});
-        }
+        const operations = await prepareFileBatch(req.user, req.body);
+        const copied = await executeCopyBatch(operations);
         res.json({copied});
     } catch (error) { res.status(400).json({message: error instanceof Error ? error.message : "Unable to copy files"}); }
+});
+
+app.post("/daily-job/undo", async (req, res) => {
+    try {
+        const undo = req.body?.undo;
+        if (undo?.type === "move") {
+            const requested = Array.isArray(undo.entries) ? undo.entries : [];
+            const operations = [];
+            const destinations = new Set();
+            for (const entry of requested) {
+                const currentPath = assertUserPath(req.user, entry?.to);
+                const originalPath = assertUserPath(req.user, entry?.from, {allowMissing:true});
+                const stats = await fs.promises.stat(currentPath).catch(() => null);
+                if (!stats?.isFile()) throw new Error(`${path.basename(currentPath)} is no longer available`);
+                if (await pathExists(originalPath)) throw new Error(`${path.basename(originalPath)} already exists in its original folder`);
+                const key = process.platform === "win32" ? originalPath.toLowerCase() : originalPath;
+                if (destinations.has(key)) throw new Error("The undo operation contains duplicate destinations");
+                destinations.add(key);
+                operations.push({sourcePath:currentPath,targetPath:originalPath,samePath:false});
+            }
+            await executeMoveBatch(operations);
+            return res.json({message:"File operation undone."});
+        }
+        if (undo?.type === "trash-created") {
+            const paths = Array.isArray(undo.paths) ? undo.paths.map(value => assertUserPath(req.user, value)) : [];
+            for (const targetPath of paths) {
+                const stats = await fs.promises.stat(targetPath).catch(() => null);
+                if (!stats?.isFile()) throw new Error(`${path.basename(targetPath)} is no longer available`);
+            }
+            for (const targetPath of paths) await moveToTrash(targetPath);
+            return res.json({message:"Created files moved to the Recycle Bin."});
+        }
+        throw new Error("This Daily Job entry cannot be undone.");
+    } catch (error) { res.status(400).json({message:error instanceof Error?error.message:"Unable to undo this operation."}); }
 });
 
 // ==================================================
@@ -2464,9 +2377,11 @@ function shutDownBackend() {
     if (shuttingDown) return;
     shuttingDown = true;
     process.stdin.pause();
-    const forceExit = setTimeout(() => process.exit(0), 1200);
+    const forceExit = setTimeout(() => process.exit(0), 15000);
     forceExit.unref?.();
-    server.close(() => process.exit(0));
+    server.close(() => {
+        void archiveWorkQueue.finally(() => process.exit(0));
+    });
 }
 
 if (process.env.FOLDERROCKET_DESKTOP === "1") {

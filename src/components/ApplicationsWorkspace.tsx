@@ -98,6 +98,7 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
     const [pausedScans, setPausedScans] = useState<string[]>(() => readPausedScans(storageScope));
     const scansInFlight = useRef(new Map<string, Promise<FileEntry[]>>());
     const scanControllers = useRef(new Map<string, AbortController>());
+    const hydratedCacheIds = useRef(new Set<string>());
     const fileWindowApp = apps.find(app => app.id === fileWindowId);
     const [appDateFrom, setAppDateFrom] = useState<Record<string, string>>({});
     const [appDateTo, setAppDateTo] = useState<Record<string, string>>({});
@@ -178,6 +179,20 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
         scansInFlight.current.set(app.id, request);
         return request;
     }
+
+    useEffect(() => {
+        const timer = window.setTimeout(() => {
+            for (const app of apps) {
+                if (!app.extensions.length) continue;
+                const key = `${storageScope}:${app.id}`;
+                if (hydratedCacheIds.current.has(key)) continue;
+                hydratedCacheIds.current.add(key);
+                void discover(app, {reveal:false, cachedOnly:true});
+            }
+        }, 0);
+        return () => window.clearTimeout(timer);
+        // Each saved application cache is hydrated once per local profile.
+    }, [apps, storageScope]);
     function stopDiscovery(appId:string){scanControllers.current.get(appId)?.abort();}
 
     async function openApp(app: LinkedApp) {

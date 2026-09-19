@@ -12,6 +12,8 @@ import type {
 
 import {
     Archive,
+    Eye,
+    EyeOff,
     LoaderCircle,
     Pencil,
     SlidersHorizontal,
@@ -120,6 +122,10 @@ interface BasicResponse {
 
     message?: string;
 
+    location?: string;
+
+    name?: string;
+
 }
 
 interface ArchiveColumn { key: string; header: string; enabled: boolean; instruction?: string; }
@@ -197,7 +203,19 @@ function FileDropZone({
 
     // Parti utilizzate per rinominare i file
     const [renameParts, setRenameParts] =
-        useState<RenamePart[]>([]);
+        useState<RenamePart[]>(() => {
+            try {
+                const saved = JSON.parse(localStorage.getItem(`folderrocket-rename-parts-${storageScope}-${name}`) ?? "[]");
+                return Array.isArray(saved)
+                    ? saved.filter((part): part is RenamePart => part && ["fixed", "date", "originalName"].includes(part.type))
+                    : [];
+            } catch {
+                return [];
+            }
+        });
+    const [renameEnabled, setRenameEnabled] = useState<boolean>(() =>
+        localStorage.getItem(`folderrocket-rename-enabled-${storageScope}-${name}`) !== "false"
+    );
 
 
     // ==================================================
@@ -343,6 +361,14 @@ function FileDropZone({
     }, [archiveColumns, name, storageScope]);
 
     useEffect(() => {
+        localStorage.setItem(`folderrocket-rename-enabled-${storageScope}-${name}`, String(renameEnabled));
+    }, [name, renameEnabled, storageScope]);
+
+    useEffect(() => {
+        localStorage.setItem(`folderrocket-rename-parts-${storageScope}-${name}`, JSON.stringify(renameParts));
+    }, [name, renameParts, storageScope]);
+
+    useEffect(() => {
         localStorage.setItem(`folderrocket-deadlines-${storageScope}-${name}`, String(deadlineCheckEnabled));
     }, [deadlineCheckEnabled, name, storageScope]);
 
@@ -352,8 +378,9 @@ function FileDropZone({
 
     useEffect(() => {
         if (!aiEnabled) return;
-        setArchiveEnabled(true);
-        setDeadlineCheckEnabled(true);
+        let active=true;
+        queueMicrotask(()=>{if(active){setArchiveEnabled(true);setDeadlineCheckEnabled(true);}});
+        return()=>{active=false;};
     }, [aiEnabled]);
 
     useEffect(() => {
@@ -1225,29 +1252,12 @@ function FileDropZone({
 
         if (type === "fixed") {
 
-            const text =
-                prompt(
-                    "Inserisci testo fisso"
-                );
-
-
-            if (
-                text
-                &&
-                text.trim()
-            ) {
-
-                setRenameParts(
-                    currentParts => [
-                        ...currentParts,
-                        {
-                            type: "fixed",
-                            value: text.trim()
-                        }
-                    ]
-                );
-
-            }
+            // Create the editable token immediately. Native prompt dialogs can
+            // lose focus behind the desktop window and make the part disappear.
+            setRenameParts(currentParts => [
+                ...currentParts,
+                {type: "fixed", value: ""}
+            ]);
 
         }
 
@@ -1339,6 +1349,8 @@ function FileDropZone({
     ) {
 
         if (
+            !renameEnabled
+            ||
             renameParts.length === 0
         ) {
 
@@ -1562,6 +1574,11 @@ function FileDropZone({
             [];
 
 
+        const uploadedLocations:
+            string[] =
+            [];
+
+
         const failedFiles:
             string[] =
             [];
@@ -1577,13 +1594,23 @@ function FileDropZone({
                 const response = await fetch(`${API_BASE_URL}/files/move`, {
                     method: "POST",
                     headers: {"Content-Type": "application/json"},
-                    body: JSON.stringify({destination: path.trim(), paths: pendingMoveFiles.map(file => file.path)})
+                    credentials: "include",
+                    body: JSON.stringify({
+                        destination: path.trim(),
+                        items: pendingMoveFiles.map(file => ({path: file.path, name: generateFileName(file.name)}))
+                    })
                 });
-                const data = await readJsonResponse<{moved?: Array<{name: string}>; message?: string}>(response);
+                const data = await readJsonResponse<{moved?: Array<{name: string; path: string; sourcePath?: string}>; message?: string}>(response);
                 if (!response.ok) throw new Error(data.message ?? "Unable to move the selected files");
                 const movedNames = (data.moved ?? []).map(file => file.name);
                 window.dispatchEvent(new CustomEvent("folderrocket-files-moved", {
-                    detail: {sourcePaths: pendingMoveFiles.map(file => file.path), moved: data.moved ?? [], destination: path.trim()}
+                    detail: {
+                        source: pendingDailySource,
+                        sourcePaths: pendingMoveFiles.map(file => file.path),
+                        moved: data.moved ?? [],
+                        destination: path.trim(),
+                        undo: {type: "move", entries: (data.moved ?? []).map(file => ({from: file.sourcePath ?? "", to: file.path})).filter(entry => entry.from && entry.to)}
+                    }
                 }));
                 setPendingMoveFiles([]);
                 setLastUploadedFile("");
@@ -1687,8 +1714,10 @@ function FileDropZone({
 
 
                     uploadedNames.push(
-                        newFileName
+                        data.name ?? newFileName
                     );
+
+                    if (data.location) uploadedLocations.push(data.location);
 
                 }
 
@@ -1745,7 +1774,7 @@ function FileDropZone({
                         uploadedNames.length - 1
                     ]
                 );
-                recordDailyActivity({kind:pendingDailySource,summary:`Transferred ${uploadedNames.length} file${uploadedNames.length===1?"":"s"}`,files:uploadedNames,destination:path.trim()});
+                recordDailyActivity({kind:pendingDailySource,summary:`Transferred ${uploadedNames.length} file${uploadedNames.length===1?"":"s"}`,files:uploadedNames,destination:path.trim(),undo:uploadedLocations.length?{type:"trash-created",paths:uploadedLocations}:undefined});
                 if (deadlineCheckEnabled) void checkFolderDeadlines(undefined, true);
 
             }
@@ -2517,7 +2546,7 @@ function FileDropZone({
                 <button type="button" className={`folderUtilityButton renameControlButton renameControlArea${renameMenuOpen ? " isActive" : ""}`} title="Add rename" onClick={event => { event.stopPropagation(); setRenameMenuOpen(current => !current); }}>
                     <Pencil size={15}/>
                 </button>
-                {renameMenuOpen && <select className="renameMenu renameControlArea" aria-label="Add a rename part" autoFocus onClick={event => event.stopPropagation()} onChange={event => { addRenamePart(event.target.value); event.target.value = ""; setRenameMenuOpen(false); }} style={{position: "absolute", top: "98px", right: "7px", zIndex: 652, width: "160px", height: "31px", fontSize: "12px", border: "1px solid #b9d6ed", borderRadius: "6px", background: "white", color: "#1684e8", cursor: "pointer"}}><option value="">Choose an item</option><option value="originalName">Original file name</option><option value="fixed">Fixed text</option><option value="date">Current date</option><option value="company">Company</option><option value="delete">Delete last item</option></select>}
+                {renameMenuOpen && <select className="renameMenu renameControlArea" aria-label="Add a rename part" autoFocus onClick={event => event.stopPropagation()} onChange={event => { addRenamePart(event.target.value); event.target.value = ""; setRenameMenuOpen(false); }} style={{position: "absolute", top: "98px", right: "7px", zIndex: 652, width: "160px", height: "31px", fontSize: "12px", border: "1px solid #b9d6ed", borderRadius: "6px", background: "white", color: "#1684e8", cursor: "pointer"}}><option value="">Choose an item</option><option value="originalName">Original file name</option><option value="fixed">Fixed text</option><option value="date">Current date</option><option value="delete">Delete last item</option></select>}
             </>
 
             {!imaginary && archiveMenuOpen && (
@@ -2603,7 +2632,7 @@ function FileDropZone({
 
             {/* Anteprima parti del nuovo nome */}
             {renameParts.length > 0 && <div
-                className="renameBuilder"
+                className={`renameBuilder${renameEnabled ? " renameEnabled" : " renameDisabled"}`}
 
                 onClick={(event) =>
                     event.stopPropagation()
@@ -2613,9 +2642,9 @@ function FileDropZone({
 
                     display: "flex",
 
-                    flexWrap: "wrap",
+                    flexWrap: "nowrap",
 
-                    gap: "3px",
+                    gap: "2px",
 
                     width: "95%",
 
@@ -2631,11 +2660,24 @@ function FileDropZone({
 
             >
 
+                <button
+                    type="button"
+                    className={`renameTransferToggle${renameEnabled ? " active" : ""}`}
+                    aria-pressed={renameEnabled}
+                    title={renameEnabled ? "Rinomina attiva: premi per saltarla nei prossimi trasferimenti" : "Rinomina sospesa: premi per riattivarla"}
+                    onClick={() => setRenameEnabled(current => !current)}
+                >
+                    {renameEnabled ? <Eye size={13}/> : <EyeOff size={13}/>}
+                </button>
+
+                <div className="renameComposition" aria-label="File name composition">
                 {
                     renameParts.map(
                         (part, index) => (
 
                             <div
+
+                                className="renameToken"
 
                                 key={
                                     `${part.type}-${index}`
@@ -2643,14 +2685,9 @@ function FileDropZone({
 
                                 style={{
 
-                                    minHeight: "20px",
+                                    minHeight: "15px",
 
-                                    padding: "1px 4px",
-
-                                    border:
-                                        "1px solid gray",
-
-                                    borderRadius: "4px",
+                                    padding: "0 3px",
 
                                     display: "flex",
 
@@ -2669,7 +2706,7 @@ function FileDropZone({
 
                                                 style={{
 
-                                                    fontSize: "11px"
+                                                    fontSize: "10px"
 
                                                 }}
 
@@ -2683,10 +2720,16 @@ function FileDropZone({
                                             </span>
                                         )
                                         : part.type === "originalName"
-                                            ? <span style={{fontSize: "10px"}}>Original file name</span>
+                                            ? <span style={{fontSize: "10px"}}>File Name</span>
                                         : (
                                             <input
                                                 className="renamePartInput"
+
+                                                disabled={!renameEnabled}
+
+                                                autoFocus={part.type === "fixed" && index === renameParts.length - 1}
+
+                                                placeholder="Text"
 
                                                 value={
                                                     part.value
@@ -2703,15 +2746,7 @@ function FileDropZone({
 
                                                 style={{
 
-                                                    width:
-                                                        `${Math.max(
-                                                            (
-                                                                part.value
-                                                                ??
-                                                                ""
-                                                            ).length,
-                                                            1
-                                                        )}ch`,
+                                                    width: `${Math.max(4, Math.min(18, (part.value ?? "").length || 4))}ch`,
 
                                                     border: "none",
 
@@ -2737,6 +2772,7 @@ function FileDropZone({
                         )
                     )
                 }
+                </div>
 
             </div>}
 

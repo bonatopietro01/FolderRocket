@@ -368,7 +368,7 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
                 headers: {"Content-Type": "application/json"},
                 credentials: "include",
                 body: JSON.stringify({providerSettings: {attachmentReader, rules: warnings}, favorites})
-            });
+            }).then(async response=>{if(!response.ok){const data=await response.json().catch(()=>({})) as {message?:string};throw new Error(data.message||"Unable to save Gmail settings.");}}).catch(reason=>setError(reason instanceof Error?reason.message:"Unable to save Gmail settings."));
         }, 350);
         return () => window.clearTimeout(timer);
     }, [alertSettingsReady, alertSettingsUrl, attachmentReader, favorites, warnings]);
@@ -476,7 +476,7 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
             credentials: "include",
             keepalive: true,
             body: JSON.stringify({providerSettings: {attachmentReader, rules: nextWarnings}, favorites: nextFavorites})
-        });
+        }).then(async response=>{if(!response.ok){const data=await response.json().catch(()=>({})) as {message?:string};throw new Error(data.message||"Unable to save Gmail settings.");}setError("");}).catch(reason=>setError(reason instanceof Error?reason.message:"Unable to save Gmail settings."));
     }
 
     function toggleWarnings() {

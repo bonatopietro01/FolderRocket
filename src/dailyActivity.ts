@@ -1,5 +1,8 @@
 export type DailyActivityKind = "gmail"|"outlook"|"recent"|"phone"|"domain"|"usb"|"fire"|"studio"|"folders"|"applications";
-export interface DailyActivity {id:string;kind:DailyActivityKind;at:string;summary:string;files?:string[];destination?:string;important?:boolean;}
+export type DailyActivityUndo =
+ | {type:"move";entries:Array<{from:string;to:string}>}
+ | {type:"trash-created";paths:string[]};
+export interface DailyActivity {id:string;kind:DailyActivityKind;at:string;summary:string;files?:string[];destination?:string;important?:boolean;undo?:DailyActivityUndo;}
 const eventName="folderrocket:daily-activity";
 export function dailyKey(scope:string,date=new Date()){return `folderrocket-daily-job-${scope}-${date.toLocaleDateString('sv-SE')}`;}
 export function readDailyActivities(scope:string,date=new Date()):DailyActivity[]{try{const value=JSON.parse(localStorage.getItem(dailyKey(scope,date))||"[]");return Array.isArray(value)?value:[];}catch{return[];}}

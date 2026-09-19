@@ -167,7 +167,7 @@ export default function DomainSourcePanel({title = "Domain", url = "", onUrlChan
             if (window.folderRocketDesktop?.saveDownload) {
                 const result = await window.folderRocketDesktop.saveDownload({suggestedName, bytes: new Uint8Array(await content.arrayBuffer())});
                 if (!result.saved && !result.canceled) throw new Error(result.message || "Unable to save this file.");
-                if(result.saved)recordDailyActivity({kind:"domain",summary:`Downloaded ${suggestedName}`,files:[suggestedName],destination:result.path});
+                if(result.saved)recordDailyActivity({kind:"domain",summary:`Downloaded ${suggestedName}`,files:[suggestedName],destination:result.path,undo:result.path?{type:"trash-created",paths:[result.path]}:undefined});
             } else {
                 const temporaryUrl = URL.createObjectURL(content);
                 const link = document.createElement("a");

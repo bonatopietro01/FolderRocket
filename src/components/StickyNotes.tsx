@@ -1,4 +1,4 @@
-import {useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent} from "react";
+import {useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent} from "react";
 import {LoaderCircle, PanelLeftClose, Sparkles, Trash2} from "lucide-react";
 import {API_BASE_URL} from "../api";
 import type {ManagedFolder} from "./FolderManagement";
@@ -70,12 +70,13 @@ function FloatingStickyNote({note, deleteArmed, floatingScale, displayPosition, 
     </article>;
 }
 
-function StickyBookmark({note, index, scale, onOpen}: {note: StickyNote; index: number; scale: number; onOpen: () => void}) {
+function StickyBookmark({note, index, scale, width, height, onOpen}: {note: StickyNote; index: number; scale: number; width: number; height: number; onOpen: () => void}) {
     const trimmed=note.text.trim();const label=note.title?.trim()||trimmed.split(/\s+/).slice(0,3).join(' ')||'Empty';
-    return <button type="button" className={`floatingStickyBookmark ${note.color}`} style={{left: 0, top: 132 + index * 35 * scale, transform: `scale(${scale})`, transformOrigin: "left top"}} onClick={onOpen} title={`Show post-it: ${label}`} aria-label={`Show hidden post-it: ${label}`}><span>{label}</span></button>;
+    const style = {left: 0, top: 132 + index * (height + 6) * scale, transform: `scale(${scale})`, transformOrigin: "left top", "--bookmark-width": `${width}px`, "--bookmark-height": `${height}px`} as CSSProperties;
+    return <button type="button" className={`floatingStickyBookmark ${note.color}`} style={style} onClick={onOpen} title={`Show post-it: ${label}`} aria-label={`Show hidden post-it: ${label}`}><span>{label}</span></button>;
 }
 
-export default function StickyNotes({storageScope, folders, aiEnabled, floatingScale, bookmarkScale, addRequest, aiAddRequest}: {storageScope: string; folders: ManagedFolder[]; aiEnabled: boolean; floatingScale: number; bookmarkScale: number; addRequest: number; aiAddRequest: number}) {
+export default function StickyNotes({storageScope, folders, aiEnabled, floatingScale, bookmarkScale, bookmarkWidth, bookmarkHeight, addRequest, aiAddRequest}: {storageScope: string; folders: ManagedFolder[]; aiEnabled: boolean; floatingScale: number; bookmarkScale: number; bookmarkWidth: number; bookmarkHeight: number; addRequest: number; aiAddRequest: number}) {
     const [notes, setNotes] = useState<StickyNote[]>(() => readNotes(storageScope));
     const [deleteId, setDeleteId] = useState<string | null>(null);
     const handledAddRequest = useRef(addRequest);
@@ -91,7 +92,9 @@ export default function StickyNotes({storageScope, folders, aiEnabled, floatingS
 
     useEffect(() => {
         const updateCalendarContext = (event: Event) => {
-            const values = (event as CustomEvent<{events?: CalendarContextEvent[]}>).detail?.events;
+            const detail = (event as CustomEvent<{storageScope?:string;events?: CalendarContextEvent[]}>).detail;
+            if (detail?.storageScope !== storageScope) return;
+            const values = detail.events;
             if (!Array.isArray(values)) return;
             calendarContext.current = values
                 .filter(item => item && typeof item.title === "string")
@@ -100,7 +103,7 @@ export default function StickyNotes({storageScope, folders, aiEnabled, floatingS
         };
         window.addEventListener("folderrocket-calendar-context", updateCalendarContext);
         return () => window.removeEventListener("folderrocket-calendar-context", updateCalendarContext);
-    }, []);
+    }, [storageScope]);
 
     const addNote = useCallback((color: NoteColor = "yellow", text = "", relatedFiles: string[] = []) => {
         setNotes(current => [createNote(current.length, color, text, relatedFiles), ...current]);
@@ -190,5 +193,5 @@ export default function StickyNotes({storageScope, folders, aiEnabled, floatingS
 
     const visibleNotes = notes.filter(note => !note.hidden);
     const hiddenNotes = notes.filter(note => note.hidden);
-    return <>{hiddenNotes.map((note, index) => <StickyBookmark key={`bookmark-${note.id}`} note={note} index={index} scale={bookmarkScale} onOpen={() => reveal(note.id, index)} />)}{visibleNotes.map(note => <FloatingStickyNote key={note.id} note={note} deleteArmed={deleteId === note.id} floatingScale={floatingScale} onChange={change => update(note.id, change)} onDelete={() => remove(note.id)} onHide={() => update(note.id, {hidden: true})} onAskAI={() => void askAi(note)} />)}</>;
+    return <>{hiddenNotes.map((note, index) => <StickyBookmark key={`bookmark-${note.id}`} note={note} index={index} scale={bookmarkScale} width={bookmarkWidth} height={bookmarkHeight} onOpen={() => reveal(note.id, index)} />)}{visibleNotes.map(note => <FloatingStickyNote key={note.id} note={note} deleteArmed={deleteId === note.id} floatingScale={floatingScale} onChange={change => update(note.id, change)} onDelete={() => remove(note.id)} onHide={() => update(note.id, {hidden: true})} onAskAI={() => void askAi(note)} />)}</>;
 }

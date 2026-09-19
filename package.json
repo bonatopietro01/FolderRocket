@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test": "npm --prefix backend test",
     "preview": "vite preview",
     "desktop": "npm run build && electron .",
     "auth:reset-admin": "node scripts/reset-local-admin.cjs",
@@ -56,6 +57,7 @@
         "to": "backend",
         "filter": [
           "**/*",
+          "!test{,/**}",
           "!node_modules{,/**}",
           "!data{,/**}",
           "!uploads{,/**}",

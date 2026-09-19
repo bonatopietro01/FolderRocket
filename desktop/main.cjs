@@ -249,7 +249,7 @@ function stopBackend() {
     catch { backendProcess.kill(); return; }
     backendShutdownTimer = setTimeout(() => {
         if (backendProcess && !backendProcess.killed) backendProcess.kill();
-    }, 1500);
+    }, 16000);
     backendShutdownTimer.unref?.();
 }
 

@@ -25,6 +25,7 @@ interface CalendarAttachment {
 
 interface GoogleCalendarSourcePanelProps {
     alertBlockId: string;
+    storageScope: string;
     weekStart?: string;
     onWeekStartChange: (value: string) => void;
 }
@@ -104,7 +105,7 @@ function FileKindIcon({name}: {name: string}) {
     return <span className="fileKindIcon generic"><File size={12}/></span>;
 }
 
-export default function GoogleCalendarSourcePanel({alertBlockId, weekStart, onWeekStartChange}: GoogleCalendarSourcePanelProps) {
+export default function GoogleCalendarSourcePanel({alertBlockId, storageScope, weekStart, onWeekStartChange}: GoogleCalendarSourcePanelProps) {
     const [events, setEvents] = useState<CalendarEvent[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -175,12 +176,13 @@ export default function GoogleCalendarSourcePanel({alertBlockId, weekStart, onWe
 
     useEffect(() => {
         const detail = {
+            storageScope,
             blockId: alertBlockId,
             events: events.slice(0, 20).map(event => ({title: event.title, start: event.start, end: event.end, location: event.location, attachments: (event.attachments ?? []).map(attachment => attachment.name)}))
         };
-        localStorage.setItem("folderrocket-calendar-context", JSON.stringify(detail));
+        localStorage.setItem(`folderrocket-calendar-context-${storageScope}`, JSON.stringify(detail));
         window.dispatchEvent(new CustomEvent("folderrocket-calendar-context", {detail}));
-    }, [alertBlockId, events]);
+    }, [alertBlockId, events, storageScope]);
 
     useEffect(() => {
         const closeConnectionOptions = (event: MouseEvent) => {

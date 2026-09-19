@@ -1,4 +1,4 @@
-import {lazy, Suspense, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode} from "react";
+import {lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode} from "react";
 import {BriefcaseBusiness, FolderCog, GripHorizontal, LayoutDashboard, Plus, RotateCcw, Shapes, WandSparkles} from "lucide-react";
 import {AccountMenu, type FolderRocketUser} from "./components/AuthGate";
 import {API_BASE_URL} from "./api";
@@ -47,6 +47,8 @@ const AI_MODE_KEY = "folderrocket-ai-mode";
 const APP_ZOOM_KEY = "folderrocket-app-zoom";
 const FLOATING_TOOLS_SCALE_KEY = "folderrocket-floating-tools-scale";
 const FLOATING_BOOKMARK_SCALE_KEY = "folderrocket-floating-bookmark-scale";
+const FLOATING_BOOKMARK_WIDTH_KEY = "folderrocket-floating-bookmark-width";
+const FLOATING_BOOKMARK_HEIGHT_KEY = "folderrocket-floating-bookmark-height";
 const MIN_DASHBOARD_HEIGHT = 440;
 const MAX_DASHBOARD_HEIGHT = 1400;
 
@@ -139,6 +141,13 @@ function readFloatingToolsScale(storageKey: string): number {
     } catch { return 1; }
 }
 
+function readBookmarkDimension(storageKey: string, fallback: number, minimum: number, maximum: number): number {
+    try {
+        const value = Number(localStorage.getItem(storageKey));
+        return Number.isFinite(value) && value >= minimum && value <= maximum ? Math.round(value) : fallback;
+    } catch { return fallback; }
+}
+
 function readAppZoom(storageKey: string): number {
     try {
         const value = Number(localStorage.getItem(storageKey));
@@ -156,15 +165,18 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     const appZoomStorageKey = `${APP_ZOOM_KEY}-${user.id}`;
     const floatingToolsScaleStorageKey = `${FLOATING_TOOLS_SCALE_KEY}-${user.id}`;
     const floatingBookmarkScaleStorageKey = `${FLOATING_BOOKMARK_SCALE_KEY}-${user.id}`;
+    const floatingBookmarkWidthStorageKey = `${FLOATING_BOOKMARK_WIDTH_KEY}-${user.id}`;
+    const floatingBookmarkHeightStorageKey = `${FLOATING_BOOKMARK_HEIGHT_KEY}-${user.id}`;
     const isCargoShipWindow = new URLSearchParams(window.location.search).has("folderrocketCargoShip");
     const [page, setPage] = useState<"dashboard" | "folders" | "processing" | "applications" | "daily">("dashboard");
     const [applicationChecking, setApplicationChecking] = useState(false);
+    const [dashboardSaveError, setDashboardSaveError] = useState("");
     const [folders, setFolders] = useState<Folder[]>(() => readFolders(foldersStorageKey, user.workspacePath, user.role === "admin"));
 
-    function navigate(next: "dashboard" | "folders" | "processing" | "applications" | "daily") {
+    const navigate=useCallback((next: "dashboard" | "folders" | "processing" | "applications" | "daily") => {
         if (next !== page && page === "applications" && applicationChecking && !window.confirm("A file check is still running. Leaving Applications will stop it, and you will need to press Continue checking when you return. Leave Applications?")) return;
         setPage(next);
-    }
+    },[applicationChecking,page]);
     const [dashboardWidths, setDashboardWidths] = useState<DashboardWidths | null>(() => readDashboardWidths(widthsStorageKey));
     const [dashboardHeight, setDashboardHeight] = useState<number | null>(() => readDashboardHeight(heightStorageKey));
     const [searchFolderIds, setSearchFolderIds] = useState<string[]>(() => readSearchFolderSelection(searchStorageKey));
@@ -177,6 +189,8 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     const [appZoom, setAppZoom] = useState(() => readAppZoom(appZoomStorageKey));
     const [floatingToolsScale, setFloatingToolsScale] = useState(() => readFloatingToolsScale(floatingToolsScaleStorageKey));
     const [floatingBookmarkScale, setFloatingBookmarkScale] = useState(() => readFloatingToolsScale(floatingBookmarkScaleStorageKey));
+    const [floatingBookmarkWidth, setFloatingBookmarkWidth] = useState(() => readBookmarkDimension(floatingBookmarkWidthStorageKey, 96, 64, 220));
+    const [floatingBookmarkHeight, setFloatingBookmarkHeight] = useState(() => readBookmarkDimension(floatingBookmarkHeightStorageKey, 29, 22, 72));
     const [noteAddRequest, setNoteAddRequest] = useState(0);
     const [aiNoteAddRequest, setAiNoteAddRequest] = useState(0);
     const [reminderAddRequest, setReminderAddRequest] = useState(0);
@@ -188,8 +202,8 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     useEffect(() => listenForDailyActivities(user.id, () => {}), [user.id]);
     useEffect(() => {
         const rememberCalendar = (event: Event) => {
-            const detail=(event as CustomEvent<{blockId?:string;events?:unknown[]}>).detail;
-            if(!detail?.blockId||!Array.isArray(detail.events))return;
+            const detail=(event as CustomEvent<{storageScope?:string;blockId?:string;events?:unknown[]}>).detail;
+            if(detail?.storageScope!==user.id||!detail.blockId||!Array.isArray(detail.events))return;
             const key=`folderrocket-daily-calendars-${user.id}`;
             let current:Record<string,unknown[]>={};try{current=JSON.parse(localStorage.getItem(key)||"{}");}catch{/* replace malformed cache */}
             localStorage.setItem(key,JSON.stringify({...current,[detail.blockId]:detail.events}));
@@ -205,9 +219,9 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     }, [usbStatus.drives]);
     useEffect(() => {
         const moved = (event: Event) => {
-            const detail=(event as CustomEvent<{moved?:Array<{name?:string}>;destination?:string;source?:string}>).detail || {};
+            const detail=(event as CustomEvent<{moved?:Array<{name?:string}>;destination?:string;source?:string;undo?:import("./dailyActivity").DailyActivityUndo}>).detail || {};
             const names=(detail.moved ?? []).map(file=>file.name || "file");
-            recordDailyActivity({kind:["gmail","outlook","recent","phone","usb"].includes(detail.source||"") ? detail.source as "gmail" : "folders",summary:`Moved ${names.length || 1} file${names.length===1?"":"s"}`,files:names,destination:detail.destination});
+            recordDailyActivity({kind:["gmail","outlook","recent","phone","usb"].includes(detail.source||"") ? detail.source as "gmail" : "folders",summary:`Moved ${names.length || 1} file${names.length===1?"":"s"}`,files:names,destination:detail.destination,undo:detail.undo});
         };
         window.addEventListener("folderrocket-files-moved", moved);
         return () => window.removeEventListener("folderrocket-files-moved", moved);
@@ -258,6 +272,8 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     useEffect(() => { localStorage.setItem(appZoomStorageKey, String(appZoom)); localStorage.setItem(APP_ZOOM_KEY, String(appZoom)); }, [appZoom, appZoomStorageKey]);
     useEffect(() => { localStorage.setItem(floatingToolsScaleStorageKey, String(floatingToolsScale)); }, [floatingToolsScale, floatingToolsScaleStorageKey]);
     useEffect(() => { localStorage.setItem(floatingBookmarkScaleStorageKey, String(floatingBookmarkScale)); }, [floatingBookmarkScale, floatingBookmarkScaleStorageKey]);
+    useEffect(() => { localStorage.setItem(floatingBookmarkWidthStorageKey, String(floatingBookmarkWidth)); }, [floatingBookmarkWidth, floatingBookmarkWidthStorageKey]);
+    useEffect(() => { localStorage.setItem(floatingBookmarkHeightStorageKey, String(floatingBookmarkHeight)); }, [floatingBookmarkHeight, floatingBookmarkHeightStorageKey]);
     const aiEnabled = aiConfigured && aiMode;
 
     useEffect(() => {
@@ -316,7 +332,13 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
                 headers: {"Content-Type": "application/json"},
                 credentials: "include",
                 body: JSON.stringify({settings: {folders, dashboardWidths, dashboardHeight, searchFolderIds, sourceBlocks, rightSourceBlocks}})
-            });
+            }).then(async response => {
+                if (!response.ok) {
+                    const data=await response.json().catch(()=>({})) as {message?:string};
+                    throw new Error(data.message||"Dashboard settings could not be saved.");
+                }
+                setDashboardSaveError("");
+            }).catch(error=>setDashboardSaveError(error instanceof Error?error.message:"Dashboard settings could not be saved."));
         }, 350);
         return () => window.clearTimeout(timer);
     }, [dashboardHeight, dashboardWidths, folders, preferencesReady, rightSourceBlocks, searchFolderIds, sourceBlocks]);
@@ -424,7 +446,7 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
         const deferred = (content: ReactNode) => <Suspense fallback={<p className="sourceLoading">Loading…</p>}>{content}</Suspense>;
         if (block.type === "gmail") return <GmailSourcePanel storageScope={`${user.id}-${block.id}`} alertBlockId={block.id} aiEnabled={aiEnabled} />;
         if (block.type === "outlook") return <OutlookSourcePanel storageScope={`${user.id}-${block.id}`} alertBlockId={block.id} aiEnabled={aiEnabled} />;
-        if (block.type === "calendar") return deferred(<GoogleCalendarSourcePanel alertBlockId={block.id} weekStart={block.calendarWeekStart} onWeekStartChange={calendarWeekStart => updateSourceBlock(column, block.id, {calendarWeekStart})} />);
+        if (block.type === "calendar") return deferred(<GoogleCalendarSourcePanel storageScope={user.id} alertBlockId={block.id} weekStart={block.calendarWeekStart} onWeekStartChange={calendarWeekStart => updateSourceBlock(column, block.id, {calendarWeekStart})} />);
         if (block.type === "recent") return deferred(<RecentFilesSourcePanel folders={folders.filter(folder => folder.storage !== "imaginary" && folder.path).map(folder => folder.path)} hours={block.recentHours} extraPaths={block.recentPaths} onSettings={(recentHours, recentPaths) => updateSourceBlock(column, block.id, {recentHours, recentPaths})}/>);
         if (block.type === "phone") return deferred(<PhoneSourcePanel hours={block.phoneHours} onHoursChange={phoneHours=>updateSourceBlock(column,block.id,{phoneHours})}/>);
         if (block.type === "usb") return deferred(<UsbSourcePanel onUseDrive={useUsbDriveAsFolder} driveStatus={usbStatus} />);
@@ -444,7 +466,7 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
         };
         window.addEventListener("message", openFileStudio);
         return () => window.removeEventListener("message", openFileStudio);
-    }, [applicationChecking, page]);
+    }, [navigate]);
 
     const cargoShipProps = {
         onOpenFileStudio: () => navigate("processing"),
@@ -469,9 +491,9 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
                 </div></div>
                 {page === "dashboard" && <button type="button" className="dashboardResetButton" onClick={resetDashboardLayout} title="Restore default dashboard size" aria-label="Restore default dashboard size"><RotateCcw size={14} /></button>}
             </nav>
-            <div className="appHeaderTools"><IntegrationSetup isAdmin={user.role === "admin"} onAIStatusChange={setAiConfigured} aiMode={aiMode} onAIModeChange={setAiMode} /><CargoShip {...cargoShipProps} /><AccountMenu user={user} onLogout={onLogout} appZoom={appZoom} onAppZoomChange={setDesktopZoom} floatingToolsScale={floatingToolsScale} onFloatingToolsScaleChange={setFloatingToolsScale} bookmarkScale={floatingBookmarkScale} onBookmarkScaleChange={setFloatingBookmarkScale} /></div>
+            <div className="appHeaderTools"><IntegrationSetup isAdmin={user.role === "admin"} onAIStatusChange={setAiConfigured} aiMode={aiMode} onAIModeChange={setAiMode} /><CargoShip {...cargoShipProps} /><AccountMenu user={user} onLogout={onLogout} appZoom={appZoom} onAppZoomChange={setDesktopZoom} floatingToolsScale={floatingToolsScale} onFloatingToolsScaleChange={setFloatingToolsScale} bookmarkScale={floatingBookmarkScale} onBookmarkScaleChange={setFloatingBookmarkScale} bookmarkWidth={floatingBookmarkWidth} onBookmarkWidthChange={setFloatingBookmarkWidth} bookmarkHeight={floatingBookmarkHeight} onBookmarkHeightChange={setFloatingBookmarkHeight} /></div>
         </header>
-        <DailyAgendaRail storageScope={user.id} onOpenDailyJob={()=>navigate("daily")}/><StickyNotes key={user.id} storageScope={user.id} folders={folders} aiEnabled={aiEnabled} floatingScale={floatingToolsScale} bookmarkScale={floatingBookmarkScale} addRequest={noteAddRequest} aiAddRequest={aiNoteAddRequest} /><div className="pageFrame"><main ref={dashboardRef} style={dashboardStyle} className={page === "dashboard" ? "dashboard" : "dashboard pageHidden"}>
+        {dashboardSaveError&&<div className="appSaveError" role="alert">{dashboardSaveError} Your local copy is still available.</div>}<DailyAgendaRail storageScope={user.id} onOpenDailyJob={()=>navigate("daily")}/><StickyNotes key={user.id} storageScope={user.id} folders={folders} aiEnabled={aiEnabled} floatingScale={floatingToolsScale} bookmarkScale={floatingBookmarkScale} bookmarkWidth={floatingBookmarkWidth} bookmarkHeight={floatingBookmarkHeight} addRequest={noteAddRequest} aiAddRequest={aiNoteAddRequest} /><div className="pageFrame"><main ref={dashboardRef} style={dashboardStyle} className={page === "dashboard" ? "dashboard" : "dashboard pageHidden"}>
             <DashboardSourceColumn className="sourcesColumn" title="Sources" blocks={sourceBlocks} onAdd={type => addSourceBlock("left", type)} onDelete={id => deleteSourceBlock("left", id)} onMove={(id, direction) => moveSourceBlock("left", id, direction)} onResize={(id, height) => updateSourceBlock("left", id, {height})} renderBlock={block => renderSourceBlock("left", block)} />
             <div className="dashboardResizer" role="separator" aria-label="Ridimensiona colonne sinistra e centrale" onPointerDown={event => startColumnResize("left", event)} />
             <section className="dashboardColumn foldersColumn">{dashboardBrowser ? <Suspense fallback={<p className="sourceLoading">Loading folder…</p>}><DashboardFolderBrowser key={dashboardBrowser.path} initialPath={dashboardBrowser.path} initialName={dashboardBrowser.name} onHome={()=>setDashboardBrowser(null)} sourceFolderPaths={folders.filter(item => item.storage !== "imaginary" && Boolean(item.path)).map(item => item.path)} storageScope={user.id} aiEnabled={aiEnabled}/></Suspense> : <div className="foldersContainer">{folderProjectGroups(folders).map(group=><div className={group.members.length>1?"dashboardProjectGroup linkedProject":"dashboardProjectGroup"} key={group.key}>{group.members.length>1&&<div className="dashboardProjectLabel"><span>{group.symbol}</span><small>{group.members[0].appearance?.workGroup || group.members[0].description}</small></div>}{group.members.map(folder => <div className={draggedFolderId === folder.id ? "folderOrderItem draggingFolder" : "folderOrderItem"} draggable onDragStart={event => { if (event.target !== event.currentTarget) return; setDraggedFolderId(folder.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("application/x-folderrocket-folder-order", folder.id); }} onDragOver={event => { if (event.dataTransfer.types.includes("application/x-folderrocket-folder-order")) event.preventDefault(); }} onDrop={event => { const sourceId = event.dataTransfer.getData("application/x-folderrocket-folder-order"); if (sourceId) { event.preventDefault(); event.stopPropagation(); moveFolder(sourceId, folder.id); } setDraggedFolderId(null); }} onDragEnd={() => setDraggedFolderId(null)} key={folder.id}><FileDropZone id={folder.id} name={folder.name} pathValue={folder.path} hidePath imaginary={folder.storage === "imaginary"} selected={Boolean(folder.path) && searchFolderIds.includes(folder.id)} sourceFolderPaths={folders.filter(item => item.storage !== "imaginary" && Boolean(item.path)).map(item => item.path)} storageScope={user.id} aiEnabled={aiEnabled} onVirtualFilesAdd={items => updateFolder(folder.id, {virtualFiles: [...(folder.virtualFiles ?? []), ...items.filter(item => !(folder.virtualFiles ?? []).some(file => file.path === item.path))]})} onPathChange={path => updateFolder(folder.id, {path, storage: "physical"})} /></div>)}</div>)}</div>}</section>
