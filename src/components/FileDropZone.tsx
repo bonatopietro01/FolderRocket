@@ -184,11 +184,7 @@ function FileDropZone({
 
 
     // Ultimo file inviato correttamente
-    const [
-        lastUploadedFile,
-        setLastUploadedFile
-    ] =
-        useState("");
+    const [, setLastUploadedFile] = useState("");
 
 
     // Aspetto visivo durante il drag
@@ -1541,6 +1537,8 @@ function FileDropZone({
         }
 
         if (imaginary) {
+            setUploadingFiles(true);
+            try {
             let virtualFiles = pendingVirtualFiles;
 
             if (files.length > 0) {
@@ -1560,6 +1558,9 @@ function FileDropZone({
             setLastUploadedFile(`${virtualFiles.length} file(s) kept in this imaginary folder`);
             setFiles([]);
             setPendingVirtualFiles([]);
+            } finally {
+                setUploadingFiles(false);
+            }
             return;
         }
 
@@ -2808,9 +2809,9 @@ function FileDropZone({
 
                             width: "90%",
 
-                            maxHeight: "72px",
+                            maxHeight: "50px",
 
-                            padding: "4px",
+                            padding: "2px",
 
                             border:
                                 "1px solid #d8e0ea",
@@ -2845,9 +2846,9 @@ function FileDropZone({
 
                                         style={{
 
-                                            minHeight: "25px",
+                                            minHeight: "20px",
 
-                                            padding: "2px 4px",
+                                            padding: "1px 3px",
 
                                             display: "flex",
 
@@ -2857,9 +2858,9 @@ function FileDropZone({
                                             alignItems:
                                                 "center",
 
-                                            gap: "6px",
+                                            gap: "4px",
 
-                                            fontSize: "11px"
+                                            fontSize: "10px"
 
                                         }}
 
@@ -2908,11 +2909,11 @@ function FileDropZone({
 
                                             style={{
 
-                                                width: "22px",
+                                                width: "18px",
 
-                                                minWidth: "22px",
+                                                minWidth: "18px",
 
-                                                height: "22px",
+                                                height: "18px",
 
                                                 padding: "0",
 
@@ -3027,40 +3028,15 @@ function FileDropZone({
                     uploadingFiles
                 }
 
+                aria-label={uploadingFiles ? "Sending files to Sauron" : queuedFileCount > 1 ? `Send ${queuedFileCount} files to Sauron` : "Send file to Sauron"}
+
             >
 
-                {
-                    uploadingFiles
-                        ? "Sending..."
-                        : queuedFileCount > 1
-                            ? `Send ${queuedFileCount} files to Sauron`
-                            : "Send file to Sauron"
-                }
+                <span>{queuedFileCount > 1 ? `Send ${queuedFileCount} files t` : "Send file t"}</span>
+                <span className={uploadingFiles ? "sauronButtonO loading" : "sauronButtonO"} aria-hidden="true">o</span>
+                <span> Sauron</span>
 
             </button>
-
-
-            {
-                lastUploadedFile && (
-
-                    <p
-
-                        style={{
-
-                            margin: "3px",
-
-                            fontSize: "12px"
-
-                        }}
-
-                    >
-                        Queue:
-                        {" "}
-                        {lastUploadedFile}
-                    </p>
-
-                )
-            }
 
         </div>
 

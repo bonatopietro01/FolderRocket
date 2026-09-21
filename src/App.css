@@ -3792,38 +3792,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .calendarSourceCard .calendarDayIndicators { min-height:0; gap:2px; padding:1px; }
 .calendarSourceCard .calendarDayIndicators small { font-size:8px; line-height:11px; }
 
-/* File Studio: Local conversion and Change format share one balanced panel layout. */
-.processingPage .conversionStack > .conversionPanel,
-.processingPage .conversionStack > .changeFormatPanel {
-  box-sizing:border-box;
-  display:flex;
-  flex:1 1 0;
-  min-height:215px;
-  flex-direction:column;
-  overflow:hidden;
-}
-.processingPage .conversionPanel > h2,
-.processingPage .changeFormatPanel > h2 {
-  flex:0 0 auto;
-  min-height:42px;
-  box-sizing:border-box;
-}
-.processingPage .conversionPanel .conversionQueue,
-.processingPage .changeFormatPanel .conversionQueue {
-  flex:1 1 0;
-  min-height:52px;
-  max-height:none;
-}
-.processingPage .conversionPanel > .convertButton,
-.processingPage .changeFormatPanel > .applyMotherFormat {
-  flex:0 0 auto;
-  width:100%;
-  min-height:35px;
-  box-sizing:border-box;
-  margin-top:auto;
-}
-
-/* The two conversion cards always divide the available File Studio space evenly. */
+/* File Studio conversion cards share one stable layout and divide the available space evenly. */
 .processingPage .conversionStack {
   display:flex!important;
   flex-direction:column!important;
@@ -3831,20 +3800,33 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
   overflow:hidden!important;
   gap:10px!important;
 }
-.processingPage .conversionStack > .conversionPanel,
-.processingPage .conversionStack > .changeFormatPanel {
+.processingPage .conversionStack > .conversionToolCard {
+  position:relative;
+  display:flex;
+  box-sizing:border-box;
   flex:1 1 0!important;
   flex-shrink:1!important;
   min-height:0!important;
   height:auto!important;
+  flex-direction:column;
+  overflow:hidden;
 }
-.processingPage .conversionPanel .conversionQueue,
-.processingPage .changeFormatPanel .conversionQueue {
+.processingPage .conversionToolCard > h2 {
+  flex:0 0 auto;
+  min-height:42px;
+  box-sizing:border-box;
+}
+.processingPage .conversionToolCard .conversionQueue {
+  flex:1 1 0;
   min-height:0!important;
+  max-height:none;
   overflow-y:auto!important;
 }
 .processingPage .conversionPanel > .convertButton,
 .processingPage .changeFormatPanel > .applyMotherFormat {
+  flex:0 0 auto;
+  width:100%;
+  box-sizing:border-box;
   display:flex;
   align-items:center;
   justify-content:center;
@@ -4668,3 +4650,628 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .dashboard .folderDropZone.aiEnabled .renameMenu.renameControlArea { top:auto!important; right:36px!important; bottom:calc(12% + 28px)!important; }
 .dashboard .folderDropZone:not(.aiEnabled) .renameMenu.renameControlArea { top:50%!important; right:36px!important; bottom:auto!important; transform:translateY(-50%); }
 .appSaveError{position:fixed;z-index:10020;top:64px;left:50%;transform:translateX(-50%);max-width:min(620px,calc(100vw - 32px));padding:8px 13px;border:1px solid #d69b91;border-radius:8px;background:#fff1ee;color:#8f3027;box-shadow:0 5px 18px #44120e26;font-size:12px;font-weight:700;}
+
+/* Compact Gmail and Recent Files rows without crowding their contents. */
+.sourceBlock-gmail .emailAttachment {
+  width:auto;
+  margin:0 0 3px;
+  box-sizing:border-box;
+  padding:3px 6px;
+  line-height:1.05;
+}
+.sourceBlock-gmail .openEmailMessage {
+  width:19px;
+  height:19px;
+  min-width:19px;
+}
+.sourceBlock-gmail .openEmailMessage svg { width:11px; height:11px; }
+.recentSourceCard .usbFileList .usbInspectorFile {
+  width:auto;
+  min-height:29px;
+  margin-left:0;
+  margin-right:0;
+  box-sizing:border-box;
+  grid-template-columns:19px minmax(0,1fr) auto 19px;
+  padding:2px 5px;
+}
+.recentSourceCard .usbFileList .recentFileFire,
+.recentSourceCard .usbFileList .recentFileOpen {
+  width:19px!important;
+  height:19px!important;
+  min-width:19px!important;
+  min-height:19px!important;
+  border-radius:5px;
+}
+.recentSourceCard .usbFileList .recentFileFire svg,
+.recentSourceCard .usbFileList .recentFileOpen svg {
+  width:11px!important;
+  height:11px!important;
+}
+
+/* The coloured folder row remains visible through the path control. */
+.folderTableRow .pathInput {
+  background:transparent;
+}
+.folderPathPreview {
+  min-width:0;
+  align-self:stretch;
+  display:flex;
+  align-items:center;
+  overflow:hidden;
+  padding:5px 7px;
+  color:#30485f;
+  font-size:12px;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.pathSplitControl {
+  grid-column:1/-1;
+  display:grid;
+  min-width:0;
+  grid-template-columns:minmax(0,1fr) 28px;
+}
+.pathSplitControl button {
+  height:30px;
+  border:0;
+  background:rgba(255,255,255,.34);
+  color:#425a70;
+  cursor:pointer;
+  font-size:10px;
+  font-weight:800;
+}
+.pathInsertButton {
+  overflow:hidden;
+  padding:0 8px;
+  text-align:left;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.pathMenuButton {
+  display:grid;
+  place-items:center;
+  padding:0;
+  border-left:1px solid rgba(83,108,131,.25)!important;
+}
+.pathSplitControl button:hover { background:rgba(255,255,255,.62); }
+.pathEditorPopover,
+.pathOptionsMenu {
+  position:absolute;
+  z-index:420;
+  top:calc(100% + 5px);
+  right:0;
+  box-sizing:border-box;
+  border:1px solid #b9c9d8;
+  border-radius:8px;
+  background:#fff;
+  box-shadow:0 12px 28px rgba(24,49,72,.24);
+}
+.pathEditorPopover {
+  display:grid;
+  width:min(620px,calc(100vw - 42px));
+  gap:7px;
+  padding:10px;
+}
+.pathEditorPopover label { color:#405a72; font-size:12px; font-weight:800; }
+.pathEditorPopover textarea {
+  width:100%;
+  min-height:52px;
+  box-sizing:border-box;
+  resize:vertical;
+  padding:7px 8px;
+  border:1px solid #aebfd0;
+  border-radius:6px;
+  background:#fff;
+  color:#18334d;
+  font:12px/1.35 Consolas,monospace;
+  overflow-wrap:anywhere;
+}
+.pathEditorPopover footer { display:flex; justify-content:flex-end; gap:6px; }
+.pathEditorPopover footer button,
+.pathOptionsMenu button {
+  border:1px solid #c5d2de;
+  border-radius:5px;
+  background:#f4f8fb;
+  color:#365169;
+  cursor:pointer;
+  font-size:10px;
+  font-weight:800;
+  padding:5px 8px;
+}
+.pathEditorPopover footer button[type="submit"] { border-color:#2c83c7; background:#1684e8; color:#fff; }
+.pathOptionsMenu {
+  display:grid;
+  width:132px;
+  gap:3px;
+  padding:5px;
+}
+.pathOptionsMenu button { border:0; text-align:left; }
+.pathOptionsMenu button:hover { background:#e6f3fd; }
+
+/* Give folder names and descriptions priority over the compact Path column. */
+.folderTableRow {
+  grid-template-columns:34px 1.35fr .85fr 1.45fr 62px;
+}
+.folderTableRow.orderingFolder,
+.folderTableRow.orderingHead {
+  grid-template-columns:14px 20px 1.35fr .85fr 1.45fr 62px;
+}
+.pathSplitControl { grid-template-columns:minmax(0,1fr) 24px; }
+.pathSplitControl button { height:28px; }
+.pathInsertButton { padding:0 6px; font-size:9px; }
+.pathMenuButton svg { width:11px; height:11px; }
+
+/* The complete-path editor floats above the table and always stays onscreen. */
+.pathEditorPopover {
+  position:fixed;
+  z-index:10010;
+  top:clamp(70px,12vh,130px);
+  right:auto;
+  left:50%;
+  width:min(680px,calc(100vw - 32px));
+  max-height:calc(100vh - 100px);
+  overflow:auto;
+  transform:translateX(-50%);
+  box-shadow:0 18px 48px rgba(20,42,64,.34);
+}
+
+/* Reordering adds only the drag handle; the remaining columns keep their layout. */
+.folderTableRow.orderingFolder,
+.folderTableRow.orderingHead {
+  min-width:676px;
+  column-gap:3px;
+  row-gap:4px;
+  box-sizing:border-box;
+}
+.folderTableRow.orderingFolder .folderOrderHandle {
+  width:14px;
+  height:28px;
+  min-width:14px;
+  border-radius:4px;
+}
+.folderTableRow.orderingFolder .folderOrderHandle svg { width:12px; height:12px; }
+.folderTableRow.orderingFolder .deleteFolder {
+  width:20px;
+  min-width:20px;
+  height:28px;
+  padding:0;
+  font-size:15px;
+}
+.folderTableRow.orderingFolder .folderPathPreview {
+  padding:4px 6px;
+  font-size:10px;
+}
+.folderTableRow.orderingFolder .folderAppearanceButton {
+  width:58px;
+  min-width:58px;
+}
+
+/* Local Conversion and Change Format use the same internal rhythm. */
+.processingPage .conversionToolCard {
+  gap:7px;
+  padding:0 9px 9px;
+}
+.processingPage .conversionToolCard > h2 {
+  justify-content:space-between;
+  gap:7px;
+  margin:0 -9px;
+  padding:7px 9px;
+}
+.conversionCardHeading {
+  display:flex;
+  min-width:0;
+  align-items:center;
+  gap:7px;
+}
+.conversionCardHeading > span {
+  display:grid;
+  min-width:0;
+  gap:1px;
+}
+.conversionCardHeading small {
+  overflow:hidden;
+  color:#826a99;
+  font-size:9px;
+  font-weight:600;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.processingPage .changeFormatSettingsToggle {
+  flex:0 0 27px;
+  width:27px;
+  height:27px;
+  padding:0;
+}
+.formatChoiceField {
+  display:grid!important;
+  gap:5px!important;
+  padding:7px;
+  border:1px solid #e1d6ec;
+  border-radius:7px;
+  background:#fcf9ff;
+}
+.formatFieldCopy {
+  display:grid;
+  gap:1px;
+}
+.formatFieldCopy strong { color:#5c4078; font-size:11px; }
+.formatFieldCopy small {
+  overflow:hidden;
+  color:#89779a;
+  font-size:9px;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.formatSelectShell {
+  display:grid;
+  min-width:0;
+  grid-template-columns:18px minmax(0,1fr);
+  align-items:center;
+  gap:5px;
+  color:#79549a;
+}
+.changeFormatPanel .formatSelectShell select {
+  min-width:0;
+  height:29px;
+  margin:0;
+  padding:4px 5px;
+  font-size:10px;
+}
+.studioQueueHeading {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  color:#715687;
+  font-size:10px;
+  font-weight:800;
+}
+.studioQueueHeading strong {
+  display:grid;
+  min-width:19px;
+  height:19px;
+  place-items:center;
+  border-radius:10px;
+  background:#eadcf6;
+  color:#633e82;
+  font-size:9px;
+}
+.processingPage .changeFormatPanel .formatFileQueue,
+.processingPage .conversionPanel .localConversionQueue {
+  display:grid;
+  align-content:start;
+  gap:3px;
+  margin:0;
+  padding:0;
+}
+.processingPage .conversionToolCard .formatQueueRow {
+  display:grid;
+  min-width:0;
+  grid-template-columns:minmax(0,1fr) auto 21px;
+  align-items:center;
+  gap:5px;
+  min-height:28px;
+  padding:3px 4px;
+  border:1px solid #e5dbea;
+  border-radius:6px;
+  background:#fff;
+  font-size:10px;
+}
+.processingPage .changeFormatPanel .formatQueueRow {
+  grid-template-columns:43px minmax(0,1fr) auto 21px;
+}
+.processingPage .changeFormatPanel .formatQueueRow.source {
+  border-color:#bca1d5;
+  background:#f6effc;
+}
+.formatRoleBadge,
+.fileFormatBadge {
+  border-radius:4px;
+  padding:2px 4px;
+  font-size:8px;
+  font-weight:900;
+  text-align:center;
+  white-space:nowrap;
+}
+.formatRoleBadge { background:#eee4f7; color:#684387; }
+.formatQueueRow.recipient .formatRoleBadge { background:#eef2f6; color:#607184; }
+.fileFormatBadge { background:#f2f5f8; color:#52677a; }
+.formatQueueName {
+  min-width:0;
+  overflow:hidden;
+  color:#3f5265;
+  font-size:10px;
+  font-weight:700;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.processingPage .conversionToolCard .formatQueueRow > button {
+  width:21px;
+  height:21px;
+  min-width:21px;
+}
+.conversionEmptyState {
+  padding:10px 6px;
+  color:#887897;
+  font-size:10px!important;
+  text-align:center;
+  white-space:normal!important;
+}
+.formatOptionSummary {
+  display:grid;
+  gap:5px;
+  padding:6px 7px;
+  border:1px solid #e1d4ef;
+  border-radius:7px;
+  background:#faf7ff;
+}
+.formatOptionSummary p { margin:0; color:#756586; font-size:9px; line-height:1.35; }
+.formatOptionSummary label { display:grid; grid-template-columns:auto 22px minmax(70px,1fr); align-items:center; gap:5px; font-size:9px; }
+.formatOptionSummary input { min-width:0; accent-color:#884bb5; }
+.processingPage .changeFormatPanel .applyMotherFormat {
+  border:1px solid #aa86ca;
+  border-radius:7px;
+  background:linear-gradient(180deg,#eadcf8,#dbc3f0);
+  color:#573476;
+  font-size:11px;
+  font-weight:800;
+  cursor:pointer;
+}
+.processingPage .changeFormatPanel .applyMotherFormat:disabled { cursor:default; opacity:.48; }
+
+.processingPage .conversionPanel {
+  border-color:#cde2d1;
+  color:#315f42;
+}
+.processingPage .conversionPanel > h2 {
+  background:linear-gradient(90deg,#c6edcf,#effbf1);
+  color:#276244;
+}
+.processingPage .conversionPanel .formatChoiceField {
+  border-color:#cee4d4;
+  background:#f8fcf9;
+}
+.processingPage .conversionPanel .formatFieldCopy strong { color:#315f42; }
+.processingPage .conversionPanel .formatSelectShell { color:#2f8050; }
+.processingPage .conversionPanel .studioQueueHeading { color:#3e7652; }
+.processingPage .conversionPanel .studioQueueHeading strong { background:#dff2e4; color:#276244; }
+.processingPage .conversionPanel .formatQueueRow { border-color:#d9e9dd; }
+.processingPage .conversionPanel > .convertButton {
+  border:1px solid #9ecbaa;
+  border-radius:7px;
+  background:linear-gradient(180deg,#e1f4e6,#cbe9d3);
+  color:#245f39;
+  font-size:11px;
+  font-weight:800;
+}
+
+/* Settings overlays the Change Format content, so opening it never resizes the card. */
+.processingPage .changeFormatPanel .changeFormatSettings {
+  position:absolute;
+  z-index:20;
+  top:47px;
+  right:9px;
+  left:9px;
+  max-height:calc(100% - 58px);
+  box-sizing:border-box;
+  margin:0;
+  overflow:auto;
+  box-shadow:0 12px 28px rgba(63,42,83,.24);
+}
+
+/* Preserve the established compact Rename panel independently of the conversion cards. */
+.processingPage .conversionStack > .convertedRenamePanel {
+  display:grid;
+  flex:0 0 auto!important;
+  min-height:0!important;
+  gap:3px;
+  margin:0;
+  padding:10px;
+  border:1px solid #a9cfea!important;
+  border-radius:8px;
+  background:#edf7ff!important;
+  color:#275f89!important;
+}
+.processingPage .convertedRenamePanel .studioRenameSelect {
+  display:inline-flex;
+  width:max-content;
+  align-items:center;
+  gap:6px;
+}
+.processingPage .convertedRenamePanel .conversionRenameBuilder {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:3px;
+}
+.processingPage .convertedRenamePanel .conversionRenamePreview {
+  padding:4px 5px;
+}
+.processingPage .convertedRenamePanel .conversionRenameActions {
+  display:flex;
+  justify-content:space-between;
+  gap:5px;
+}
+.processingPage .convertedRenameHeader {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:8px;
+  padding-bottom:6px;
+  border-bottom:1px solid #c9dfef;
+}
+.processingPage .convertedRenameHeader > span {
+  display:flex;
+  align-items:center;
+  gap:6px;
+  color:#176fa9;
+}
+.processingPage .convertedRenameHeader strong {
+  font-size:15px;
+  line-height:1;
+}
+.processingPage .convertedRenameHeader .studioRenameSelect {
+  width:auto;
+  min-width:0;
+}
+.processingPage .convertedRenameHeader .studioRenameSelect select {
+  max-width:112px;
+  padding:4px 6px;
+  border:1px solid #9fc7e2;
+  border-radius:6px;
+  background:#fff;
+  font-size:10px;
+}
+.processingPage .convertedRenamePanel .conversionRenameBuilder {
+  min-height:36px;
+  align-content:flex-start;
+  padding:5px;
+  border:1px solid #c9ddeb;
+  border-radius:7px;
+  background:rgba(255,255,255,.72);
+}
+.processingPage .convertedRenamePanel .conversionRenamePart {
+  min-height:25px;
+  box-sizing:border-box;
+  padding:3px 7px;
+  border:1px solid #a9c9df;
+  border-radius:6px;
+  background:#e5f2fb;
+  color:#255f89;
+  box-shadow:0 1px 2px rgba(34,82,116,.08);
+  font-size:10px;
+  font-weight:800;
+}
+.processingPage .convertedRenamePanel .conversionRenamePart.converted {
+  border-color:#c9addd;
+  background:#f0e6f8;
+  color:#70458e;
+}
+.processingPage .convertedRenamePanel .conversionRenamePart.text {
+  border-color:#e2c888;
+  background:#fff5d9;
+  color:#795b12;
+}
+.processingPage .convertedRenamePanel .conversionRenamePart.date {
+  border-color:#a9d4c3;
+  background:#e6f6ef;
+  color:#26765a;
+}
+.processingPage .convertedRenamePanel .conversionRenamePart input {
+  min-width:64px;
+  height:18px;
+  padding:0;
+}
+.renamePhraseEmpty {
+  align-self:center;
+  color:#7991a3;
+  font-size:9px;
+  font-style:italic;
+}
+
+/* Sauron's loading state lives inside the letter "o" without adding status text below. */
+.dashboard .folderDropZone > .uploadFileButton {
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:0;
+  line-height:1;
+}
+.sauronButtonO {
+  display:inline-grid;
+  width:.72em;
+  height:1em;
+  place-items:center;
+  line-height:1;
+}
+.sauronButtonO.loading {
+  width:10px;
+  height:10px;
+  margin:0 1px;
+  box-sizing:border-box;
+  border:2px solid rgba(255,255,255,.48);
+  border-top-color:#fff;
+  border-radius:50%;
+  color:transparent;
+  font-size:0;
+  animation:sauronButtonSpin .72s linear infinite;
+}
+@keyframes sauronButtonSpin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce) {
+  .sauronButtonO.loading { animation-duration:1.5s; }
+}
+
+/* Reorder mode preserves the normal five-column row exactly. The drag handle
+   temporarily occupies the delete slot instead of creating a new column. */
+.folderTableRow.orderingFolder,
+.folderTableRow.orderingHead {
+  min-width:676px;
+  grid-template-columns:34px 1.35fr .85fr 1.45fr 62px;
+  column-gap:4px;
+  row-gap:4px;
+  border-left:0;
+}
+.folderTableRow.orderingFolder .deleteFolder,
+.folderTableRow.orderingHead > span:nth-child(2) {
+  display:none;
+}
+.folderTableRow.orderingFolder .folderOrderHandle {
+  width:30px;
+  min-width:30px;
+  height:30px;
+  margin:0 auto;
+  border:1px solid #b8c2cf;
+  border-radius:7px;
+  background:rgba(255,255,255,.64);
+  color:#287bbb;
+}
+.folderTableRow.orderingFolder .folderOrderHandle svg {
+  width:14px;
+  height:14px;
+}
+.folderTableRow.orderingFolder .pathInput {
+  height:31px;
+  box-sizing:border-box;
+}
+.folderTableRow.orderingFolder .folderPathPreview,
+.folderTableRow.orderingFolder .folderAppearanceButton {
+  height:29px;
+  box-sizing:border-box;
+}
+
+/* Style is the right-hand action of the Path field, not a separate button. */
+.folderTableRow.orderingFolder .pathInput {
+  grid-template-columns:minmax(0,1fr) 58px;
+  overflow:visible;
+  border-color:rgba(97,116,135,.34);
+  background:rgba(255,255,255,.28);
+}
+.folderTableRow.orderingFolder .folderPathPreview {
+  overflow:hidden;
+  border-radius:5px 0 0 5px;
+  background:transparent;
+  color:#40576c;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.folderTableRow.orderingFolder .folderAppearanceButton {
+  display:flex;
+  width:100%;
+  min-width:0;
+  align-items:center;
+  justify-content:center;
+  gap:3px;
+  padding:0 5px;
+  border:0;
+  border-left:1px solid rgba(105,83,126,.25);
+  border-radius:0 5px 5px 0;
+  background:linear-gradient(180deg,rgba(247,240,253,.9),rgba(232,218,245,.9));
+  color:#654482;
+  font-size:9px;
+  font-weight:800;
+  cursor:pointer;
+}
+.folderTableRow.orderingFolder .folderAppearanceButton:hover,
+.folderTableRow.orderingFolder .folderAppearanceButton.active {
+  background:linear-gradient(180deg,#eadcf7,#d8bdea);
+  color:#4e276f;
+}
+.folderTableRow.orderingFolder .folderAppearanceButton svg { flex:0 0 auto; }
