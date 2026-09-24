@@ -233,6 +233,8 @@ function FileDropZone({
     const [archiveMenuOpen, setArchiveMenuOpen] = useState(false);
     const [folderSettingsOpen, setFolderSettingsOpen] = useState(false);
     const [renameMenuOpen, setRenameMenuOpen] = useState(false);
+    const [showArchiveControl, setShowArchiveControl] = useState(() => localStorage.getItem(`folderrocket-show-archive-${storageScope}-${name}`) === "true");
+    const [showDeadlineControl, setShowDeadlineControl] = useState(() => localStorage.getItem(`folderrocket-show-deadlines-${storageScope}-${name}`) === "true");
     const [archiveColumnPendingRemoval, setArchiveColumnPendingRemoval] = useState<string | null>(null);
     const [archiveColumns, setArchiveColumns] = useState<ArchiveColumn[]>(() => {
         try { return JSON.parse(localStorage.getItem(`folderrocket-archive-columns-${storageScope}-${name}`) ?? "null") ?? DEFAULT_ARCHIVE_CONFIG; }
@@ -369,15 +371,16 @@ function FileDropZone({
     }, [deadlineCheckEnabled, name, storageScope]);
 
     useEffect(() => {
-        localStorage.setItem(`folderrocket-deadline-levels-${storageScope}-${name}`, JSON.stringify(deadlineLevels));
-    }, [deadlineLevels, name, storageScope]);
+        localStorage.setItem(`folderrocket-show-archive-${storageScope}-${name}`, String(showArchiveControl));
+    }, [name, showArchiveControl, storageScope]);
 
     useEffect(() => {
-        if (!aiEnabled) return;
-        let active=true;
-        queueMicrotask(()=>{if(active){setArchiveEnabled(true);setDeadlineCheckEnabled(true);}});
-        return()=>{active=false;};
-    }, [aiEnabled]);
+        localStorage.setItem(`folderrocket-show-deadlines-${storageScope}-${name}`, String(showDeadlineControl));
+    }, [name, showDeadlineControl, storageScope]);
+
+    useEffect(() => {
+        localStorage.setItem(`folderrocket-deadline-levels-${storageScope}-${name}`, JSON.stringify(deadlineLevels));
+    }, [deadlineLevels, name, storageScope]);
 
     useEffect(() => {
         function closeArchiveMenu(event: globalThis.MouseEvent) {
@@ -569,6 +572,7 @@ function FileDropZone({
 
 
             setArchiveEnabled(true);
+            setShowArchiveControl(true);
 
 
             alert(
@@ -601,6 +605,49 @@ function FileDropZone({
 
         }
 
+    }
+
+    async function setArchiveFeatureActive(active: boolean) {
+        if (!active) {
+            setArchiveEnabled(false);
+            setShowArchiveControl(false);
+            setArchiveMenuOpen(false);
+            return;
+        }
+
+        if (imaginary) return;
+
+        if (!path.trim()) {
+            setArchiveEnabled(false);
+            setShowArchiveControl(false);
+            alert("Inserisci prima il percorso della cartella");
+            return;
+        }
+
+        try {
+            setSyncingArchive(true);
+
+            const response = await fetch(`${API_BASE_URL}/sync-archive`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({path: path.trim(), archiveColumns})
+            });
+            const data = await readJsonResponse<BasicResponse>(response);
+
+            if (!response.ok) {
+                throw new Error(data.message ?? "Impossibile creare archivio.xlsx");
+            }
+
+            setArchiveEnabled(true);
+            setShowArchiveControl(true);
+            alert(data.message ?? "archivio.xlsx creato");
+        } catch (error) {
+            setArchiveEnabled(false);
+            setShowArchiveControl(false);
+            alert(error instanceof Error ? error.message : "Impossibile creare archivio.xlsx");
+        } finally {
+            setSyncingArchive(false);
+        }
     }
 
 
@@ -747,6 +794,67 @@ function FileDropZone({
 
         }
 
+    }
+
+    async function setDeadlineFeatureActive(active: boolean) {
+        if (!active) {
+            setDeadlineCheckEnabled(false);
+            setShowDeadlineControl(false);
+            setDeadlineMenuOpen(false);
+            setVisibleDeadlineStatus(null);
+            return;
+        }
+
+        if (imaginary) return;
+
+        if (!path.trim()) {
+            setDeadlineCheckEnabled(false);
+            setShowDeadlineControl(false);
+            alert("Inserisci prima il percorso della cartella");
+            return;
+        }
+
+        if (!sortedDeadlineLevels.length) {
+            setDeadlineCheckEnabled(false);
+            setShowDeadlineControl(false);
+            alert("Aggiungi almeno un livello di gravità valido");
+            return;
+        }
+
+        try {
+            setCheckingDeadlines(true);
+
+            const response = await fetch(`${API_BASE_URL}/check-deadlines`, {
+                method: "POST",
+                headers: {"Content-Type": "application/json"},
+                body: JSON.stringify({
+                    path: path.trim(),
+                    watchDays: Math.max(...sortedDeadlineLevels.map(level => level.days)),
+                    urgentDays: Math.min(...sortedDeadlineLevels.map(level => level.days)),
+                    levels: sortedDeadlineLevels
+                })
+            });
+            const data = await readJsonResponse<DeadlineResponse>(response);
+
+            if (!response.ok) {
+                throw new Error(data.message ?? "Impossibile creare scadenze.xlsx");
+            }
+
+            setUrgentCount(data.urgentCount ?? 0);
+            setWatchCount(data.watchCount ?? 0);
+            setMissingCount(data.missingCount ?? 0);
+            setDeadlineResults(Array.isArray(data.results) ? data.results : []);
+            setVisibleDeadlineStatus(null);
+            setDeadlineCheckEnabled(true);
+            setShowDeadlineControl(true);
+            alert(data.message ?? "scadenze.xlsx creato");
+        } catch (error) {
+            setDeadlineCheckEnabled(false);
+            setShowDeadlineControl(false);
+            alert(error instanceof Error ? error.message : "Impossibile creare scadenze.xlsx");
+        } finally {
+            setCheckingDeadlines(false);
+        }
     }
 
     async function createManualDeadline(
@@ -1493,7 +1601,7 @@ function FileDropZone({
             const response = await fetch(`${API_BASE_URL}/sync-archive`, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({path: path.trim(), archiveColumns})});
             const data = await readJsonResponse<BasicResponse>(response);
             if (!response.ok) throw new Error(data.message ?? "Unable to update archive.xlsx");
-            setArchiveEnabled(true); setArchiveMenuOpen(false); alert(data.message ?? "Archive updated");
+            setArchiveEnabled(true); setShowArchiveControl(true); setArchiveMenuOpen(false); alert(data.message ?? "Archive updated");
         } catch (error) { alert(error instanceof Error ? error.message : "Unable to update archive.xlsx"); }
         finally { setSyncingArchive(false); }
     }
@@ -1919,7 +2027,7 @@ function FileDropZone({
                 SCADENZE — BASSO A SINISTRA
             ========================================== */}
 
-            <div
+            {!imaginary && (showDeadlineControl || deadlineMenuOpen || visibleDeadlineStatus) && <div
 
                 className="deadlineControls"
 
@@ -1942,7 +2050,7 @@ function FileDropZone({
                             ? 220
                             : 20,
 
-                    display: imaginary ? "none" : "flex",
+                    display: "flex",
 
                     alignItems: "center",
 
@@ -2495,14 +2603,14 @@ function FileDropZone({
                     )
                 }
 
-            </div>
+            </div>}
 
 
             {/* ==========================================
                 ARCHIVIO — ALTO A DESTRA
             ========================================== */}
 
-            {!imaginary && <button
+            {!imaginary && showArchiveControl && <button
                 type="button"
                 className={`folderUtilityButton archiveControlButton archiveControlArea${archiveEnabled ? " isActive" : ""}`}
                 onClick={toggleArchive}
@@ -2541,8 +2649,11 @@ function FileDropZone({
                     <SlidersHorizontal size={14}/>
                 </button>
                 {folderSettingsOpen && <div className="folderSettingsMenu archiveControlArea" onClick={event => event.stopPropagation()}>
-                    <button type="button" onClick={() => { setFolderSettingsOpen(false); setDeadlineMenuOpen(false); setArchiveMenuOpen(true); }}>Archivio</button>
-                    <button type="button" onClick={() => { setFolderSettingsOpen(false); setArchiveMenuOpen(false); setDeadlineMenuOpen(true); }}>Scadenze</button>
+                    <strong>Controlli cartella</strong>
+                    <label className="folderControlVisibility"><input type="checkbox" checked={showArchiveControl && archiveEnabled} disabled={syncingArchive} onChange={event => void setArchiveFeatureActive(event.target.checked)}/><Archive size={13}/><span>{syncingArchive ? "Creazione Archivio…" : "Attiva Archivio"}</span></label>
+                    <label className="folderControlVisibility"><input type="checkbox" checked={showDeadlineControl && deadlineCheckEnabled} disabled={checkingDeadlines} onChange={event => void setDeadlineFeatureActive(event.target.checked)}/><span aria-hidden="true">⚠️</span><span>{checkingDeadlines ? "Creazione Scadenze…" : "Attiva Scadenze"}</span></label>
+                    <button type="button" onClick={() => { setFolderSettingsOpen(false); setDeadlineMenuOpen(false); setArchiveMenuOpen(true); }}>Configura Archivio</button>
+                    <button type="button" onClick={() => { setFolderSettingsOpen(false); setArchiveMenuOpen(false); setDeadlineMenuOpen(true); }}>Configura Scadenze</button>
                 </div>}
                 <button type="button" className={`folderUtilityButton renameControlButton renameControlArea${renameMenuOpen ? " isActive" : ""}`} title="Add rename" onClick={event => { event.stopPropagation(); setRenameMenuOpen(current => !current); }}>
                     <Pencil size={15}/>

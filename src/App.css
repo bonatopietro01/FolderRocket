@@ -3736,6 +3736,11 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .folderSettingsMenu { position:absolute; top:31px; right:32px; z-index:1503; display:grid; width:122px; gap:5px; padding:7px; border:1px solid #9fc4df; border-radius:8px; background:#fff; box-shadow:0 10px 25px rgba(24,49,74,.22); }
 .folderSettingsMenu button { min-height:26px; border:1px solid #c9dbe9; border-radius:5px; background:#f5faff; color:#175f91; cursor:pointer; font-size:11px; font-weight:800; }
 .folderSettingsMenu button:hover { border-color:#1684e8; background:#e6f4ff; }
+.folderSettingsMenu:has(.folderControlVisibility) { width:178px; }
+.folderSettingsMenu > strong { color:#35566f; font-size:11px; }
+.folderControlVisibility { display:grid; grid-template-columns:15px 16px minmax(0,1fr); align-items:center; gap:5px; min-height:27px; padding:3px 5px; border:1px solid #d6e3ed; border-radius:5px; background:#fbfdff; color:#405f76; cursor:pointer; font-size:10px; font-weight:800; }
+.folderControlVisibility input { width:13px; height:13px; margin:0; accent-color:#1684e8; }
+.folderControlVisibility svg { color:#5b7b94; }
 
 /* Folder actions use one integrated 24 px treatment, rather than floating chips. */
 .folderDropZone .archiveControlButton,.folderDropZone .folderSettingsButton,.folderDropZone .renameControlButton,.folderDropZone .deadlineControls .deadlineButton.deadlineCompact { box-sizing:border-box; width:24px!important; height:24px!important; min-width:24px!important; min-height:24px!important; border:1px solid #d2dee8!important; border-radius:6px!important; background:#f5f8fb!important; box-shadow:none!important; }
