@@ -1,7 +1,7 @@
 import {useFilePreview} from '../useFilePreview';
 import {additionalFileIcon} from './AdditionalFileIcons';
-import {useEffect, useMemo, useState} from "react";
-import {Archive, ArrowRight, ExternalLink, File, FileCog, FileSpreadsheet, FileText, Flame, FolderCheck, FolderOpen, Image, Pencil, RotateCw, Send, X} from "lucide-react";
+import {useEffect, useMemo, useRef, useState} from "react";
+import {Archive, ArrowRight, ChevronDown, ExternalLink, File, FileCog, FileSpreadsheet, FileText, Flame, FolderCheck, FolderOpen, Image, Pencil, RotateCw, Send, X} from "lucide-react";
 import {API_BASE_URL} from "../api";
 import type {ManagedFolder} from "./FolderManagement";
 import FireMountain from "./FireMountain";
@@ -81,6 +81,8 @@ export default function ProcessingWorkspace({folders, onUpdate, storageScope = "
     const [previewFile, setPreviewFile] = useState<FileEntry | null>(null);
     const previewContent = useFilePreview(previewFile?.path);
     const [renameParts, setRenameParts] = useState<RenamePart[]>(() => readRenameParts(storageScope));
+    const [renameMenuOpen, setRenameMenuOpen] = useState(false);
+    const renameMenuRef = useRef<HTMLDivElement>(null);
     const [deliveryFile, setDeliveryFile] = useState<FileEntry | null>(null);
     const [deliveryFolderIds, setDeliveryFolderIds] = useState<string[]>([]);
     const [deliveryBusy, setDeliveryBusy] = useState(false);
@@ -104,6 +106,16 @@ export default function ProcessingWorkspace({folders, onUpdate, storageScope = "
     }, [selected?.id, selected?.path, selected?.storage, selected?.virtualFiles]);
 
     useEffect(() => { localStorage.setItem(`${RENAME_TEMPLATE_KEY}-${storageScope}`, JSON.stringify(renameParts)); }, [renameParts, storageScope]);
+    useEffect(() => {
+        if (!renameMenuOpen) return;
+        const closeOnOutsideClick = (event: PointerEvent) => {
+            if (event.target instanceof Node && !renameMenuRef.current?.contains(event.target)) setRenameMenuOpen(false);
+        };
+        const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setRenameMenuOpen(false); };
+        document.addEventListener("pointerdown", closeOnOutsideClick);
+        document.addEventListener("keydown", closeOnEscape);
+        return () => { document.removeEventListener("pointerdown", closeOnOutsideClick); document.removeEventListener("keydown", closeOnEscape); };
+    }, [renameMenuOpen]);
 
     const fileTypeCounts = useMemo(() => Object.entries(files.reduce<Record<string,number>>((counts,file)=>{const extension=extensionOf(file.name);counts[extension]=(counts[extension]||0)+1;return counts;},{})).sort(([left],[right])=>left.localeCompare(right)),[files]);
     const activeType = type === "all" || fileTypeCounts.some(([extension])=>extension===type) ? type : "all";
@@ -244,7 +256,7 @@ export default function ProcessingWorkspace({folders, onUpdate, storageScope = "
             </section>
             <ChangeFormatPanel files={formatQueue} onRemove={path=>setFormatQueue(current=>current.filter(file=>file.path!==path))} onComplete={async (output,sourceFiles)=>{const result=await applyRenameTemplate(output);setConverted(result.renamedFiles);setConvertedSources(sourceFiles);recordDailyActivity({kind:"studio",summary:`Formatted ${result.renamedFiles.length} file${result.renamedFiles.length===1?"":"s"}`,files:result.renamedFiles.map(file=>file.name),undo:result.renamedFiles.length?{type:"trash-created",paths:result.renamedFiles.map(file=>file.path)}:undefined});if(result.failures.length)setStatus(`${result.failures.length} files could not be renamed.`);}}/>
             <section className="convertedRenamePanel">
-                <header className="convertedRenameHeader"><span><Pencil size={16}/><strong>Rename</strong></span><label className="studioRenameSelect"><select value="" onChange={event => { const next = event.target.value as RenamePart["type"] | ""; if (next) addRenamePart(next); }} aria-label="Add rename block"><option value="">Add block…</option><option value="original">Original name</option><option value="converted">_converted</option><option value="text">Text</option><option value="date">Date</option></select></label></header>
+                <header className="convertedRenameHeader"><div className="conversionRenameMenuRoot" ref={renameMenuRef}><button type="button" className="conversionRenameMenuButton" aria-expanded={renameMenuOpen} aria-haspopup="menu" onClick={() => setRenameMenuOpen(current => !current)}><Pencil size={16}/><strong>Rename</strong><ChevronDown size={14}/></button>{renameMenuOpen && <div className="conversionRenameMenu" role="menu" aria-label="Rename components">{([{type: "original", label: "Original name"}, {type: "converted", label: "_converted"}, {type: "text", label: "Text"}, {type: "date", label: "Date"}] as const).map(option => <button type="button" role="menuitem" key={option.type} onClick={() => { addRenamePart(option.type); setRenameMenuOpen(false); }}>{option.label}</button>)}</div>}</div></header>
                 <div className="conversionRenameBuilder" aria-label="Rename phrase">{renameParts.length ? renameParts.map(part => <span key={part.id} className={`conversionRenamePart ${part.type}`}>{part.type === "original" ? "Original name" : part.type === "converted" ? "_converted" : part.type === "date" ? new Date().toLocaleDateString("en-GB") : <input value={part.value ?? ""} onChange={event => updateRenamePart(part.id, event.target.value)} aria-label="Rename text" />}</span>) : <span className="renamePhraseEmpty">Add blocks to compose the new name</span>}</div>
                 <span className="conversionRenamePreview" title={renamePreview}>Example: {renamePreview}</span>
                 <div className="conversionRenameActions"><button type="button" onClick={() => setRenameParts(emptyRenameParts())} disabled={!renameParts.length}>Reset template</button><button type="button" onClick={() => setRenameParts(current => current.slice(0, -1))} disabled={!renameParts.length}>Delete last</button></div>

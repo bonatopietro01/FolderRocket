@@ -1,4 +1,4 @@
-import {useEffect, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type RefObject} from "react";
+import {useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type RefObject} from "react";
 import {CalendarDays, ChevronDown, ChevronLeft, ChevronRight, EyeOff, FilePlus2, FileText, FolderOpen, MailPlus, Minus, Rocket, RotateCw, ScanSearch, Send, Settings2, SlidersHorizontal, StickyNote, Trash2, X, Zap} from "lucide-react";
 import {API_BASE_URL} from "../api";
 import {browserBridgeDropId, resolveBrowserBridgeDrop} from "../browserBridge";
@@ -16,8 +16,8 @@ type CargoItem = CargoFile | CargoPath | CargoAttachment;
 type CargoMode = "transport" | "calendar" | "note" | "text" | "email" | "convert" | "lens";
 type CargoCalendarEvent = {title: string; start: string; end: string; location: string; attachments: string[]};
 type CargoReminder = {id: string; text: string; reminderAt: string};
-type CargoPostIt = {id: string; title?: string; text: string; color?: string; ai?: boolean; reminder?: boolean; reminderAt?: string; hidden?: boolean};
-type CargoPostItFilter = "all" | "standard" | "ai" | "reminder";
+type CargoPostItMode = "simple" | "ai" | "reminder";
+type CargoNoteDraft = {title: string; text: string; color: "yellow" | "purple" | "blue" | "green"; aiPrompt: string; reminderTitle: string; reminderText: string; reminderAt: string};
 
 const CARGO_TOOL_KEYS = ["transport", "calendar", "note", "text", "email", "convert", "lens"] as const;
 function normaliseCargoTools(value: unknown): string[] {
@@ -28,11 +28,14 @@ function normaliseCargoTools(value: unknown): string[] {
 function sameCargoTools(left: string[], right: string[]) {
     return left.length === right.length && left.every((tool, index) => tool === right[index]);
 }
-function readCargoPostIts(scope: string): CargoPostIt[] {
+function readCargoNoteDraft(scope: string): CargoNoteDraft {
     try {
-        const value = JSON.parse(localStorage.getItem(`folderrocket-sticky-notes-${scope}`) || "[]");
-        return Array.isArray(value) ? value.filter((note): note is CargoPostIt => Boolean(note) && typeof note.id === "string" && typeof note.text === "string") : [];
-    } catch { return []; }
+        const saved = JSON.parse(localStorage.getItem(noteDraftKey(scope)) || "{}") as Partial<CargoNoteDraft>;
+        const color = ["yellow", "purple", "blue", "green"].includes(saved.color ?? "") ? saved.color! : "yellow";
+        return {title: String(saved.title || ""), text: String(saved.text || ""), color, aiPrompt: String(saved.aiPrompt || ""), reminderTitle: String(saved.reminderTitle || ""), reminderText: String(saved.reminderText || ""), reminderAt: String(saved.reminderAt || "")};
+    } catch {
+        return {title: "", text: "", color: "yellow", aiPrompt: "", reminderTitle: "", reminderText: "", reminderAt: ""};
+    }
 }
 
 interface RemoteAttachment { attachmentId: string; messageId: string; mimeType: string; name: string; size?: number; sourceBlockId?: string; }
@@ -130,11 +133,14 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, wo
     const [dropActive, setDropActive] = useState(false);
     const [text, setText] = useState("");
     const [fileName, setFileName] = useState("FolderRocket note");
-    const [noteTitle, setNoteTitle] = useState(() => { try { return String(JSON.parse(localStorage.getItem(noteDraftKey(storageScope)) || "{}").title || ""); } catch { return ""; } });
-    const [noteText, setNoteText] = useState(() => { try { return String(JSON.parse(localStorage.getItem(noteDraftKey(storageScope)) || "{}").text || ""); } catch { return ""; } });
-    const [noteColor, setNoteColor] = useState<"yellow" | "purple" | "blue" | "green">(() => { try { const color = JSON.parse(localStorage.getItem(noteDraftKey(storageScope)) || "{}").color; return ["yellow", "purple", "blue", "green"].includes(color) ? color : "yellow"; } catch { return "yellow"; } });
-    const [postItFilter, setPostItFilter] = useState<CargoPostItFilter>("all");
-    const [postIts, setPostIts] = useState<CargoPostIt[]>(() => readCargoPostIts(storageScope));
+    const [noteDrafts, setNoteDrafts] = useState<Record<string, CargoNoteDraft>>(() => ({[storageScope]: readCargoNoteDraft(storageScope)}));
+    const [postItMode, setPostItMode] = useState<CargoPostItMode>("simple");
+    const noteDraft = useMemo(() => noteDrafts[storageScope] ?? readCargoNoteDraft(storageScope), [noteDrafts, storageScope]);
+    const currentNoteDraft = noteDrafts[storageScope];
+    const {title: noteTitle, text: noteText, color: noteColor, aiPrompt, reminderTitle, reminderText, reminderAt} = noteDraft;
+    function updateNoteDraft(change: Partial<CargoNoteDraft>) {
+        setNoteDrafts(current => ({...current, [storageScope]: {...(current[storageScope] ?? readCargoNoteDraft(storageScope)), ...change}}));
+    }
     const [textFormat, setTextFormat] = useState<"note" | "txt" | "pdf" | "docx">("txt");
     const [recipient, setRecipient] = useState("");
     const [emailSubject, setEmailSubject] = useState("FolderRocket note");
@@ -299,18 +305,7 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, wo
         queueMicrotask(()=>{if(active)setMode(enabledTools[0] as CargoMode);});
         return()=>{active=false;};
     }, [enabledTools, mode]);
-    useEffect(() => { localStorage.setItem(noteDraftKey(storageScope), JSON.stringify({title:noteTitle, text:noteText, color:noteColor})); }, [noteColor, noteText, noteTitle, storageScope]);
-    useEffect(() => {
-        const reload = () => setPostIts(readCargoPostIts(storageScope));
-        const onUpdated = (event: Event) => {
-            const detail = (event as CustomEvent<{storageScope?: string}>).detail;
-            if (!detail?.storageScope || detail.storageScope === storageScope) reload();
-        };
-        const onStorage = (event: StorageEvent) => { if (event.key === `folderrocket-sticky-notes-${storageScope}`) reload(); };
-        window.addEventListener("folderrocket:sticky-notes-updated", onUpdated);
-        window.addEventListener("storage", onStorage);
-        return () => { window.removeEventListener("folderrocket:sticky-notes-updated", onUpdated); window.removeEventListener("storage", onStorage); };
-    }, [storageScope]);
+    useEffect(() => { if (currentNoteDraft) localStorage.setItem(noteDraftKey(storageScope), JSON.stringify(currentNoteDraft)); }, [currentNoteDraft, storageScope]);
 
     useEffect(() => {
         if (!open) return;
@@ -468,27 +463,23 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, wo
             channel.postMessage(detail);
             channel.close();
         }
-        setNoteTitle("");
-        setNoteText("");
-        setMessage("Post-it added to the workspace.");
+        updateNoteDraft({title: "", text: ""});
     }
 
     function createAiPostIt() {
-        const detail = {type: "ai", storageScope};
+        const detail = {type: "ai", storageScope, prompt: aiPrompt.trim()};
         window.dispatchEvent(new CustomEvent("folderrocket:create-ai-sticky-note", {detail}));
         if ("BroadcastChannel" in window) { const channel = new BroadcastChannel("folderrocket-sticky-notes"); channel.postMessage(detail); channel.close(); }
-        setMessage(aiEnabled ? "AI post-it added to this planet." : "Enable AI for this planet to create an AI post-it.");
+        if (aiEnabled) updateNoteDraft({aiPrompt: ""});
     }
 
     function createReminderPostIt() {
-        const detail = {type: "reminder", storageScope};
+        if (!reminderAt || !reminderText.trim()) return;
+        const detail = {type: "reminder", storageScope, title: reminderTitle.trim(), text: reminderText.trim(), reminderAt};
         window.dispatchEvent(new CustomEvent("folderrocket:create-reminder-note", {detail}));
         if ("BroadcastChannel" in window) { const channel = new BroadcastChannel("folderrocket-sticky-notes"); channel.postMessage(detail); channel.close(); }
-        setMessage("Reminder post-it added to this planet.");
+        updateNoteDraft({reminderTitle: "", reminderText: "", reminderAt: ""});
     }
-
-    const visiblePostIts = postIts.filter(note => postItFilter === "all"
-        || (postItFilter === "reminder" ? Boolean(note.reminder) : postItFilter === "ai" ? Boolean(note.ai) : !note.reminder && !note.ai));
 
     async function createEmailDraft() {
         const source = emailSources.find(item => `${item.provider}:${item.blockId}` === emailSourceKey);
@@ -837,24 +828,31 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, wo
             <button type="button" className="cargoClear" onClick={() => setItems([])}>Clear cargo</button>
         </div>}
         {mode === "note" && <div className="cargoPostItWorkspace">
-            <div className="cargoPostItTypeBar" role="tablist" aria-label="Post-it type filter">{([ ["all","All"],["standard","Notes"],["ai","AI"],["reminder","Reminders"] ] as [CargoPostItFilter,string][]).map(([key,label])=><button type="button" role="tab" aria-selected={postItFilter===key} className={postItFilter===key?"active":""} key={key} onClick={()=>setPostItFilter(key)}>{label}</button>)}</div>
-            <div className="cargoPostItList" aria-label="Post-it salvati in questo pianeta">{visiblePostIts.slice(0,8).map(note=>{
-                const kind = note.reminder ? "Reminder" : note.ai ? "AI" : "Note";
-                const label = note.title?.trim() || note.text.trim().replace(/\s+/g," ") || "Empty post-it";
-                return <button type="button" className={`cargoPostItSummary ${note.reminder?"reminder":note.ai?"ai":"standard"}`} key={note.id} title={`${kind}: ${label}`} onClick={()=>{
-                    const detail={type:"reveal",storageScope,id:note.id};
-                    window.dispatchEvent(new CustomEvent("folderrocket:reveal-sticky-note",{detail}));
-                    if("BroadcastChannel" in window){const channel=new BroadcastChannel("folderrocket-sticky-notes");channel.postMessage(detail);channel.close();}
-                }}><span><b>{kind}</b>{note.reminderAt&&<time>{new Date(note.reminderAt).toLocaleString([], {day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</time>}</span><strong>{label}</strong></button>;
-            })}{visiblePostIts.length>8&&<small>+{visiblePostIts.length-8} more post-it</small>}{!visiblePostIts.length&&<small>No {postItFilter==="all"?"":`${postItFilter} `}post-it in this planet yet.</small>}</div>
-            <div className={`cargoPostIt ${noteColor}`}><input value={noteTitle} onChange={event => setNoteTitle(event.target.value)} placeholder="Post-it title" maxLength={80}/><textarea value={noteText} onChange={event => setNoteText(event.target.value)} placeholder="Write a quick note…" /><div className="cargoPostItActions"><span>{(["yellow", "purple", "blue", "green"] as const).map(color => <button type="button" key={color} className={color === noteColor ? `color-${color} active` : `color-${color}`} onClick={() => setNoteColor(color)} title={`${color} post-it`} aria-label={`${color} post-it`}/>)}</span><button type="button" onClick={createPostIt} disabled={!noteText.trim()}><StickyNote size={14}/>Add post-it</button></div><small>The draft stays in CargoRocket until you add it.</small></div>
-            <div className="cargoPostItExtraActions"><button type="button" onClick={createAiPostIt} disabled={!aiEnabled} title={!aiEnabled?"Turn on AI for this planet first":"Create an AI post-it"}><span>AI</span>AI post-it</button><button type="button" onClick={createReminderPostIt}><span>!</span>Reminder</button></div>
+            {postItMode === "simple" && <div className={`cargoPostIt ${noteColor}`}>
+                <input value={noteTitle} onChange={event => updateNoteDraft({title: event.target.value})} placeholder="Post-it title" maxLength={80}/>
+                <textarea value={noteText} onChange={event => updateNoteDraft({text: event.target.value})} placeholder="Write a quick note…" />
+                <div className="cargoPostItActions"><span>{(["yellow", "purple", "blue", "green"] as const).map(color => <button type="button" key={color} className={color === noteColor ? `color-${color} active` : `color-${color}`} onClick={() => updateNoteDraft({color})} title={`${color} post-it`} aria-label={`${color} post-it`}/>)}</span><button type="button" onClick={createPostIt} disabled={!noteText.trim()}><StickyNote size={14}/>Add post-it</button></div>
+            </div>}
+            {postItMode === "ai" && <div className="cargoPostIt ai">
+                <label><span>AI post-it prompt</span><textarea value={aiPrompt} onChange={event => updateNoteDraft({aiPrompt: event.target.value})} placeholder="What should the AI help you with?" maxLength={400}/></label>
+                <div className="cargoPostItActions"><span>Uses this planet’s shared AI connection</span><button type="button" onClick={createAiPostIt} disabled={!aiEnabled} title={!aiEnabled ? "Turn on AI for this planet first" : "Create an AI post-it"}><StickyNote size={14}/>Create AI post-it</button></div>
+            </div>}
+            {postItMode === "reminder" && <div className="cargoPostIt reminder">
+                <input value={reminderTitle} onChange={event => updateNoteDraft({reminderTitle: event.target.value})} placeholder="Reminder title" maxLength={80}/>
+                <textarea value={reminderText} onChange={event => updateNoteDraft({reminderText: event.target.value})} placeholder="What should you remember?" maxLength={400}/>
+                <label className="cargoReminderDate"><span>Reminder date and time</span><input type="datetime-local" value={reminderAt} onChange={event => updateNoteDraft({reminderAt: event.target.value})}/></label>
+                <div className="cargoPostItActions"><span>Reminder post-it</span><button type="button" onClick={createReminderPostIt} disabled={!reminderText.trim() || !reminderAt}><StickyNote size={14}/>Create reminder</button></div>
+            </div>}
+            <div className="cargoPostItExtraActions" aria-label="Choose post-it type">
+                <button type="button" className={postItMode === "ai" ? "active aiMode" : "aiMode"} aria-pressed={postItMode === "ai"} title={!aiEnabled && postItMode !== "ai" ? "Turn on AI for this planet first" : postItMode === "ai" ? "Switch to a simple post-it" : "Create an AI post-it"} disabled={!aiEnabled && postItMode !== "ai"} onClick={() => setPostItMode(current => current === "ai" ? "simple" : "ai")}><span>{postItMode === "ai" ? "↩" : "AI"}</span>{postItMode === "ai" ? "Post-it semplice" : "AI Post-it"}</button>
+                <button type="button" className={postItMode === "reminder" ? "active reminderMode" : "reminderMode"} aria-pressed={postItMode === "reminder"} title={postItMode === "reminder" ? "Switch to a simple post-it" : "Create a reminder post-it"} onClick={() => setPostItMode(current => current === "reminder" ? "simple" : "reminder")}><span>{postItMode === "reminder" ? "↩" : "!"}</span>{postItMode === "reminder" ? "Post-it semplice" : "Reminder"}</button>
+            </div>
         </div>}
         {mode === "text" && <div className="cargoForm"><input value={fileName} onChange={event => setFileName(event.target.value)} placeholder="File name or note title" /><textarea value={text} onChange={event => setText(event.target.value)} placeholder="Paste or write text here…" /><div><select value={textFormat} onChange={event => setTextFormat(event.target.value as "note" | "txt" | "pdf" | "docx")}><option value="note">Post-it note</option><option value="txt">TXT file</option><option value="pdf">PDF file</option><option value="docx">Word document</option></select><button type="button" onClick={() => void createTextFile()} disabled={!text.trim() || working}><FilePlus2 size={14} />{textFormat === "note" ? "Create note" : "Create"}</button></div></div>}
         {mode === "email" && <div className="cargoForm cargoEmailForm"><select value={emailSourceKey} onChange={event => setEmailSourceKey(event.target.value)} disabled={!emailSources.length}><option value="">{emailSources.length ? "Choose connected mailbox" : "No connected mailbox"}</option>{emailSources.map(source => <option key={`${source.provider}:${source.blockId}`} value={`${source.provider}:${source.blockId}`}>{source.label}</option>)}</select><input value={recipient} onChange={event => setRecipient(event.target.value)} placeholder="To: name@example.com" /><input value={emailSubject} onChange={event => setEmailSubject(event.target.value)} placeholder="Email subject" /><textarea value={text} onChange={event => setText(event.target.value)} placeholder="Write the email text here…" /><div className="cargoEmailAttachments">{items.length ? items.map(item=><span key={item.id}><FileText size={12}/>{item.name}<button type="button" onClick={()=>setItems(current=>current.filter(value=>value.id!==item.id))}>×</button></span>):<em>Drop files here to attach them to the draft.</em>}</div><button type="button" onClick={() => void createEmailDraft()} disabled={!emailSources.length || !text.trim() || working}><Send size={14} />{working ? "Saving draft…" : "Save draft with attachments"}</button></div>}
         {mode === "convert" && <div className="cargoConvert"><p>Convert files on this PC.</p><select value={convertFormat} onChange={event => setConvertFormat(event.target.value)}><option value="pdf">PDF</option><option value="txt">TXT</option><option value="xlsx">XLSX</option><option value="csv">CSV</option></select><button type="button" onClick={() => void convertItems()} disabled={working}><RotateCw className={working ? "cargoSpin" : ""} size={15} />{working ? "Converting…" : "Convert cargo"}</button><button type="button" className="cargoStudioLink" onClick={onOpenFileStudio}><SlidersHorizontal size={14} />Open File Studio</button></div>}
         {mode === "lens" && aiEnabled && <div className="cargoLens"><p>Lens captures the FolderRocket area directly behind CargoRocket only when you press a button. Save it as a PNG, read its text with AI, or turn the reading into a file.</p><div className="cargoLensActions"><button type="button" onClick={() => void captureBehindShip()} disabled={lensWorking}>Capture screenshot</button><button type="button" onClick={() => void saveLensScreenshot()} disabled={lensWorking}>{lensWorking ? "Working…" : "Save PNG"}</button></div>{lensImage && <img className="cargoLensPreview" src={lensImage} alt="Captured area behind CargoRocket" />}<textarea value={lensQuery} onChange={event => setLensQuery(event.target.value)} placeholder="Ask what is behind CargoRocket, or leave empty to read and summarise the text…" /><button type="button" onClick={() => void analyseBehindShip()} disabled={lensWorking}><ScanSearch size={14}/>{lensWorking ? "Analysing…" : "Read text / analyse with AI"}</button>{lensError && <small className="cargoLensError">{lensError}</small>}{lensAnalysis && <><div className="cargoLensResult">{lensAnalysis}</div><div className="cargoLensSaveText"><select value={lensFormat} onChange={event => setLensFormat(event.target.value as "txt" | "docx" | "pdf")}><option value="txt">TXT</option><option value="docx">Word</option><option value="pdf">PDF</option></select><button type="button" onClick={() => void saveLensText()} disabled={lensWorking}>Save reading</button></div></>}</div>}
-        {activeReminder && <div className="cargoReminderAlert"><strong>Reminder</strong><span>{activeReminder.text}</span><small>{new Date(activeReminder.reminderAt).toLocaleString()}</small><button type="button" onClick={() => setActiveReminder(null)}><X size={13}/>Close</button></div>}{message && <p className="cargoMessage">{message}</p>}
+        {activeReminder && <div className="cargoReminderAlert"><strong>Reminder</strong><span>{activeReminder.text}</span><small>{new Date(activeReminder.reminderAt).toLocaleString()}</small><button type="button" onClick={() => setActiveReminder(null)}><X size={13}/>Close</button></div>}{message && mode !== "note" && <p className="cargoMessage">{message}</p>}
         <button type="button" className="cargoShipResize" onPointerDown={startResize} title="Drag to resize CargoRocket" aria-label="Resize CargoRocket" />
     </section>;
     if (standalone) return <main className="cargoShipStandaloneWindow">{minimized && <button ref={dockRef} type="button" className="cargoShipDock cargoShipDockStandalone" onPointerDown={startStandaloneDockDrag} onClick={() => { if (!dockMovedRef.current) openShip(); }} title="Open or move CargoRocket"><Rocket size={25}/>{items.length > 0 && <small>{items.length}</small>}</button>}{open && shipPanel}</main>;

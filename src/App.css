@@ -2421,7 +2421,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .processingQuickPreview small { color:#708196; font-size:10px; }.processingQuickPreview em { color:#27824d; font-size:10px; font-style:normal; font-weight:800; }.processingQuickPreview p { margin:0; color:#8492a1; font-size:10px; line-height:1.25; }
 .processingPreviewContent { display:block !important; min-height:0; overflow:auto; border:1px solid #dbe7f1; border-radius:5px; background:rgba(255,255,255,.68); }.processingPreviewContent pre { margin:0; padding:5px; color:#40566d; font:9px/1.35 Consolas, monospace; white-space:pre-wrap; word-break:break-word; }.processingPreviewContent > p { padding:6px; }.processingPreviewContent img { display:block; width:100%; min-height:100%; object-fit:contain; }.processingPreviewContent iframe { display:block; width:100%; height:100%; min-height:112px; border:0; background:#fff; }
 .processingFile { cursor:pointer; }.processingFile.selectedProcessingFile { background:#e8f5ff; box-shadow:inset 3px 0 #4a9dde; }.convertedFile.selectedProcessingFile { background:#eaf8f0; box-shadow:inset 3px 0 #26975a; }
-.convertedRenamePanel { display:grid; flex:0 0 auto; gap:5px; margin-top:8px; padding:7px; border:1px solid #dfd3ee; border-radius:8px; background:#faf7ff; }.convertedRenamePanel > div:first-child { display:flex; align-items:center; gap:5px; color:#69449b; font-size:11px; }.renameTargetName,.conversionRenamePreview { overflow:hidden; color:#52667a; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }.conversionRenameBuilder { display:flex; flex-wrap:wrap; align-items:center; gap:3px; }.conversionRenamePart { display:inline-flex; min-width:0; align-items:center; min-height:23px; padding:2px 5px; border:1px solid #cfc0e2; border-radius:5px; background:#fff; color:#604580; font-size:9px; }.conversionRenamePart.date { color:#26765a; border-color:#b6dacb; }.conversionRenamePart input { width:52px; min-width:0; border:0; outline:0; background:transparent; color:#604580; font:inherit; }.conversionRenameBuilder select { width:auto; min-width:77px; margin:0; padding:4px; border-color:#bbd4ea; color:#2671a8; font-size:9px; }.conversionRenamePreview { padding:4px 5px; border-radius:5px; background:#f0ebf8; color:#56416f; }.conversionRenameActions { display:flex; justify-content:space-between; gap:5px; }.conversionRenameActions button { min-height:24px; padding:4px 7px; border:0; border-radius:5px; background:#e8e1f2; color:#634a86; cursor:pointer; font-size:10px; font-weight:800; }.conversionRenameActions button:last-child { background:#7b55a8; color:#fff; }.conversionRenameActions button:disabled { cursor:not-allowed; opacity:.52; }
+.convertedRenamePanel { display:grid; flex:0 0 auto; gap:5px; margin-top:8px; padding:7px; border:1px solid #dfd3ee; border-radius:8px; background:#faf7ff; }.renameTargetName,.conversionRenamePreview { overflow:hidden; color:#52667a; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }.conversionRenameBuilder { display:flex; flex-wrap:wrap; align-items:center; gap:3px; }.conversionRenamePart { display:inline-flex; min-width:0; align-items:center; min-height:23px; padding:2px 5px; border:1px solid #cfc0e2; border-radius:5px; background:#fff; color:#604580; font-size:9px; }.conversionRenamePart.date { color:#26765a; border-color:#b6dacb; }.conversionRenamePart input { width:52px; min-width:0; border:0; outline:0; background:transparent; color:#604580; font:inherit; }.conversionRenamePreview { padding:4px 5px; border-radius:5px; background:#f0ebf8; color:#56416f; }.conversionRenameActions { display:flex; justify-content:space-between; gap:5px; }.conversionRenameActions button { min-height:24px; padding:4px 7px; border:0; border-radius:5px; background:#e8e1f2; color:#634a86; cursor:pointer; font-size:10px; font-weight:800; }.conversionRenameActions button:last-child { background:#7b55a8; color:#fff; }.conversionRenameActions button:disabled { cursor:not-allowed; opacity:.52; }
 .conversionStack .conversionPanel { overflow:hidden; }
 
 /* Folder Management: multi-folder view and expandable subfolder tree. */
@@ -2809,7 +2809,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .processingPreviewCaption strong { flex:1 1 auto; min-width:0; }.processingPreviewCaption em { flex:0 0 auto; color:#27824d; font-size:9px; font-style:normal; font-weight:800; }
 
 /* The rename builder appears only for a converted file and stays compact above Convert. */
-.convertedRenamePanel { gap:3px; margin:5px 0 2px; padding:5px; }.convertedRenamePanel > div:first-child { font-size:12px; }.convertedRenamePanel > small { color:#738196; font-size:8px; line-height:1.15; }.conversionRenamePart { min-height:19px; padding:1px 4px; }.conversionRenameBuilder select { min-width:67px; padding:3px; }.conversionRenameActions button { min-height:20px; padding:3px 6px; }
+.convertedRenamePanel { gap:3px; margin:5px 0 2px; padding:5px; }.convertedRenamePanel > small { color:#738196; font-size:8px; line-height:1.15; }.conversionRenamePart { min-height:19px; padding:1px 4px; }.conversionRenameActions button { min-height:20px; padding:3px 6px; }
 
 /* Calendar and USB sources use the same compact, resizable source-block system. */
 .sourcePickerCalendarIcon { color:#c87817; }.sourcePickerUsbIcon { color:#159273; }
@@ -2820,7 +2820,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 /* Compact source controls: every essential command is visible without a
    separate status strip taking up vertical room. */
 .emailSourceCard .sourceHeader { gap:4px; min-width:0; }
-.emailHeaderStatus { margin-left:auto; color:#197446; font-size:9px; font-weight:900; letter-spacing:.02em; white-space:nowrap; }
 .emailSourceCard .emailDisconnectButton { flex:0 0 auto; margin:0; padding:3px 5px; border-radius:5px; font-size:9px; line-height:1.1; }
 .emailToolbar { min-height:32px; box-sizing:border-box; flex-wrap:nowrap; gap:4px; padding:4px 7px; overflow-x:auto; scrollbar-width:none; }
 .emailToolbar::-webkit-scrollbar { display:none; }
@@ -2867,7 +2866,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
    coloured header while the block menu retains its own clear corner. */
 .sourceBlock-gmail .sourceHeader,.sourceBlock-outlook .sourceHeader { padding-right:35px; overflow:hidden; }
 .emailSourceCard .gmailWarningToggle { order:0; flex:0 0 auto; width:23px; height:23px; }
-.emailSourceCard .emailHeaderStatus { margin-left:auto; }
 .emailHeaderReading { flex:0 0 auto; color:#53687d; font-size:9px; }
 .emailSourceCard .gmailAnalysisStatus { max-width:74px; overflow:hidden; text-overflow:ellipsis; }
 
@@ -2883,7 +2881,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .emailDisconnectButton.armed { border-color:#b9342d; background:#c9443a; color:#fff; }
 .emailAlertSlots { display:flex; width:82px; min-width:82px; height:23px; align-items:center; gap:2px; padding:0 2px; box-sizing:border-box; }
 .emailAlertSlots .gmailAlertCount,.emailAlertSlots .emailAlertReadyDot { flex:0 0 auto; }
-.emailSourceCard .emailHeaderStatus { margin-left:0; }
 .calendarConnectionControls { position:relative; z-index:4; }
 
 /* An empty Search source is intentionally only a title row plus Fire Mountain.
@@ -2952,7 +2949,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 
 /* Keep the connected mailbox controls in one predictable order: status,
    disconnect action, then a compact clickable Virtual Reading state. */
-.emailSourceCard .emailHeaderStatus { margin-left:0; flex:0 0 auto; }
 .emailHeaderReading { display:inline-flex; flex:0 0 auto; align-items:center; gap:3px; color:#53687d; font-size:9px; font-weight:800; white-space:nowrap; }
 .emailVirtualReadingToggle { min-width:24px; min-height:19px; padding:2px 4px; border:1px solid #b9c8d6; border-radius:5px; background:#fff; color:#667788; cursor:pointer; font:inherit; font-size:8px; font-weight:900; line-height:1; }
 .emailVirtualReadingToggle.active { border-color:#4a9ade; background:#e4f3ff; color:#1766af; }
@@ -3036,7 +3032,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
    block-menu side instead of crowding the bell. */
 .emailSourceCard .emailAlertSlots { width:104px; min-width:104px; margin-left:8px; padding:0 4px; }
 .emailSourceCard .emailAlertSlots.analyzing { justify-content:center; color:#1676d2; font-size:10px; font-weight:800; white-space:nowrap; animation:gmailAnalysisPulse 1s ease-in-out infinite; }
-.emailSourceCard .emailHeaderStatus { margin-left:auto; }
 .emailSourceCard .emailHeaderReading { margin-left:2px; }
 
 /* An idle Search + Fire block is genuinely compact: one title row and the
@@ -3313,7 +3308,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .conversionHeaderSpinner { width:22px!important; height:22px!important; box-sizing:border-box; padding:4px; border-radius:50%; }
 .conversionHeaderSpinner.local { background:#dff2e4; color:#2f8f52; }.conversionHeaderSpinner.format { background:#eee3f8; color:#8854ac; }
 .convertedRenamePanel { border-color:#a9cfea!important; background:#edf7ff!important; color:#275f89!important; }
-.convertedRenamePanel>div:first-child { color:#176fa9; }
 .floatingStickyNote .stickyNoteTitle { width:100%; flex:0 0 auto; box-sizing:border-box; margin:0 0 3px; padding:2px 4px; overflow:hidden; border:0; background:transparent; color:#382f19; font-size:12px; font-weight:800; text-overflow:ellipsis; outline:none; }
 .floatingStickyNote .stickyNoteTitle::placeholder { color:#746a4c; font-weight:700; opacity:.7; }
 .floatingStickyBookmark:hover { width:calc(var(--bookmark-width,96px) + 30px); }
@@ -3480,8 +3474,13 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .dailySectionLogo.work { background:#dceeff; color:#1464ac; }
 .dailyPriorities { border-top:4px solid #dca42e; }
 .dailySummary { border-top:4px solid #378bd0; }
-.studioRenameSelect { display:inline-flex; align-items:center; gap:6px; width:max-content; color:#176fa9; }
-.studioRenameSelect select { border:0; background:transparent; color:#176fa9; cursor:pointer; font-size:15px; font-weight:800; outline:0; }
+.conversionRenameMenuRoot { position:relative; display:inline-flex; }
+.conversionRenameMenuButton { display:inline-flex; align-items:center; gap:7px; padding:4px 6px; border:0; border-radius:6px; background:transparent; color:#176fa9; cursor:pointer; }
+.conversionRenameMenuButton:hover,.conversionRenameMenuButton[aria-expanded="true"] { background:#dceefa; }
+.conversionRenameMenuButton strong { font-size:15px; line-height:1; }
+.conversionRenameMenu { position:absolute; top:auto; bottom:calc(100% + 5px); left:0; z-index:40; display:grid; min-width:170px; gap:2px; padding:5px; border:1px solid #b8d6e9; border-radius:7px; background:#fff; box-shadow:0 8px 24px rgba(29,70,99,.2); }
+.conversionRenameMenu button { min-height:30px; padding:6px 8px; border:0; border-radius:5px; background:transparent; color:#345b75; cursor:pointer; font:inherit; font-size:12px; text-align:left; }
+.conversionRenameMenu button:hover,.conversionRenameMenu button:focus-visible { background:#eaf5fc; color:#176fa9; outline:0; }
 .dashboardSourceBlock .sourceHeader .sourceTitle,.dashboardSourceBlock .resultsHeader strong { font-size:16px; }
 .applicationRemoveButton.armed { border-color:#c6372e!important; background:#c6372e!important; color:#fff!important; box-shadow:0 0 0 3px #f7c9c6; }
 .dailyActivityActions { display:flex; flex-wrap:wrap; gap:5px; grid-column:1/-1; margin-top:3px; }
@@ -3565,7 +3564,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 /* Reserve space for the Gmail title and Virtual toggle on one row. */
 .sourceBlock-gmail .emailAlertSlots { flex:0 1 auto; width:auto; min-width:0; margin-left:2px; padding:0; }
 .sourceBlock-gmail .emailHeaderReading { flex:0 0 auto; margin-left:2px; }
-.sourceBlock-gmail .emailHeaderStatus { margin-left:auto; }
 
 /* Calendar: separate the title/actions from week navigation. */
 .calendarSourceCard .calendarSourceHeader { display:flex; flex-wrap:wrap; align-items:center; gap:7px; padding:9px 35px 9px 10px; }
@@ -5109,12 +5107,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
   background:#edf7ff!important;
   color:#275f89!important;
 }
-.processingPage .convertedRenamePanel .studioRenameSelect {
-  display:inline-flex;
-  width:max-content;
-  align-items:center;
-  gap:6px;
-}
 .processingPage .convertedRenamePanel .conversionRenameBuilder {
   display:flex;
   flex-wrap:wrap;
@@ -5137,28 +5129,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
   padding-bottom:6px;
   border-bottom:1px solid #c9dfef;
 }
-.processingPage .convertedRenameHeader > span {
-  display:flex;
-  align-items:center;
-  gap:6px;
-  color:#176fa9;
-}
-.processingPage .convertedRenameHeader strong {
-  font-size:15px;
-  line-height:1;
-}
-.processingPage .convertedRenameHeader .studioRenameSelect {
-  width:auto;
-  min-width:0;
-}
-.processingPage .convertedRenameHeader .studioRenameSelect select {
-  max-width:112px;
-  padding:4px 6px;
-  border:1px solid #9fc7e2;
-  border-radius:6px;
-  background:#fff;
-  font-size:10px;
-}
+.processingPage .convertedRenameHeader .conversionRenameMenuButton strong { font-size:15px; line-height:1; }
 .processingPage .convertedRenamePanel .conversionRenameBuilder {
   min-height:36px;
   align-content:flex-start;
@@ -5362,21 +5333,21 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 /* Portal the folder controls out of clipped dashboard cards and clamp them to the viewport. */
 .folderSettingsMenu { position:fixed!important; top:var(--folder-settings-top,8px)!important; left:var(--folder-settings-left,8px)!important; right:auto!important; bottom:auto!important; z-index:10050!important; width:min(264px,calc(100vw - 16px))!important; max-height:calc(100dvh - 16px)!important; overflow:auto; box-sizing:border-box; }
 
-/* CargoRocket can browse the active planet's three post-it kinds without copying them. */
-.cargoPostItWorkspace { display:flex; min-height:0; flex:1 1 auto; flex-direction:column; gap:6px; overflow:auto; }
-.cargoPostItTypeBar { display:flex; flex:0 0 auto; gap:3px; padding:3px; border:1px solid #e1e8ee; border-radius:7px; background:#f6f9fb; }
-.cargoPostItTypeBar button { min-height:24px; flex:1 1 0; padding:3px 5px; border:0; border-radius:5px; background:transparent; color:#5e7181; cursor:pointer; font-size:9px; font-weight:800; }
-.cargoPostItTypeBar button.active { background:#e6eef5; color:#244d6c; box-shadow:0 1px 3px #19365020; }
-.cargoPostItList { display:grid; max-height:102px; flex:0 0 auto; gap:3px; overflow:auto; }
-.cargoPostItSummary { display:grid; min-width:0; gap:2px; padding:5px 7px; border:1px solid #e2e8ee; border-left:3px solid #d1a53b; border-radius:5px; background:#fffaf0; color:#495f70; cursor:pointer; text-align:left; }
-.cargoPostItSummary.ai { border-left-color:#945bb7; background:#faf5ff; }
-.cargoPostItSummary.reminder { border-left-color:#ec9e43; background:#fff4e3; }
-.cargoPostItSummary > span { display:flex; align-items:center; justify-content:space-between; color:#6d7f8e; font-size:8px; }
-.cargoPostItSummary > strong { overflow:hidden; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
-.cargoPostItList > small { color:#728393; font-size:9px; }
-.cargoPostItExtraActions { display:flex; flex:0 0 auto; gap:6px; }
-.cargoPostItExtraActions button { display:flex; min-height:26px; flex:1; align-items:center; justify-content:center; gap:5px; border:1px solid #e7c18f; border-radius:6px; background:#fff0d9; color:#8b5921; cursor:pointer; font-size:9px; font-weight:800; }
-.cargoPostItExtraActions button:first-child { border-color:#d8c6e8; background:#f6edff; color:#6b4789; }
-.cargoPostItExtraActions button:disabled { opacity:.5; cursor:default; }
-.cargoPostItExtraActions button > span { display:grid; width:17px; height:17px; place-items:center; border:1px solid currentColor; border-radius:50%; font-size:8px; }
+/* CargoRocket creates planet-scoped post-its without listing or previewing saved notes. */
+.cargoPostItWorkspace { display:flex; min-height:0; flex:1 1 auto; flex-direction:column; gap:7px; overflow:auto; }
 .cargoPostItWorkspace > .cargoPostIt { flex:1 0 100px; }
+.cargoPostIt.ai { border:1px solid #d8c5eb; background:#f3eaff; }
+.cargoPostIt.reminder { border:1px solid #edc28d; background:#fff0dc; }
+.cargoPostIt > label { display:grid; min-height:0; gap:4px; color:#765528; font-size:10px; font-weight:800; }
+.cargoPostIt > label textarea { flex:1 1 auto; }
+.cargoPostIt .cargoReminderDate { flex:0 0 auto; }
+.cargoPostIt .cargoReminderDate input { min-height:30px; font-size:11px; }
+.cargoPostIt.ai .cargoPostItActions > button { background:#70449c; }
+.cargoPostIt.reminder .cargoPostItActions > button { background:#d98632; }
+.cargoPostItExtraActions { display:flex; flex:0 0 auto; gap:6px; }
+.cargoPostItExtraActions button { display:flex; min-height:30px; flex:1 1 0; align-items:center; justify-content:center; gap:5px; padding:4px 6px; border:1px solid #e7c18f; border-radius:7px; background:#fff0d9; color:#8b5921; cursor:pointer; font-size:10px; font-weight:800; }
+.cargoPostItExtraActions button.aiMode { border-color:#d8c6e8; background:#f6edff; color:#6b4789; }
+.cargoPostItExtraActions button.reminderMode { border-color:#e7c18f; background:#fff0d9; color:#8b5921; }
+.cargoPostItExtraActions button.active { box-shadow:0 0 0 2px rgba(64,109,146,.16); }
+.cargoPostItExtraActions button:disabled { opacity:.5; cursor:default; }
+.cargoPostItExtraActions button > span { display:grid; width:18px; height:18px; flex:0 0 auto; place-items:center; border:1px solid currentColor; border-radius:50%; font-size:8px; }
