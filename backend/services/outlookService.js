@@ -1,6 +1,6 @@
 const crypto = require("crypto");
 const fs = require("fs");
-const {getConnection, migrateLegacyConnectionToBlock, removeConnection, saveConnection} = require("./emailTokenStore");
+const {getConnection, listConnections, migrateLegacyConnectionToBlock, removeConnection, saveConnection, saveConnectionEmail} = require("./emailTokenStore");
 
 const GRAPH_API_BASE = "https://graph.microsoft.com/v1.0";
 const AUTHORITY = "https://login.microsoftonline.com/common/oauth2/v2.0";
@@ -108,6 +108,10 @@ async function exchangeAuthorizationCode(code, state, expectedUserId) {
         expiresAt: Date.now() + Number(data.expires_in || 3600) * 1000
     };
     saveUserConnection(authorization.userId, authorization.blockId, connection);
+    try {
+        const email = await getEmailIdentity(authorization.userId, authorization.blockId);
+        saveConnectionEmail("outlook", authorization.userId, authorization.blockId, email);
+    } catch { /* Keep a valid token if the identity lookup is temporarily unavailable. */ }
     return {
         blockId: authorization.blockId,
         frontendOrigin: authorization.frontendOrigin
@@ -304,6 +308,14 @@ async function getEmailIdentity(userId, blockId = "") {
         : (typeof profile.userPrincipalName === "string" ? profile.userPrincipalName : "");
 }
 
+async function listConnectedAccounts(userId) {
+    return listConnections("outlook", userId).slice(0, 30).map(connection => ({
+        blockId: connection.blockId,
+        email: connection.email,
+        label: connection.email || `Account collegato · ${connection.blockId.slice(-6)}`
+    }));
+}
+
 async function createDraft({to, subject, text, attachments = []}, userId, blockId = "") {
     const recipients = String(to ?? "").split(/[;,]/).map(value => value.trim()).filter(Boolean);
     if (!recipients.length) throw new Error("Add at least one recipient.");
@@ -323,4 +335,4 @@ async function createDraft({to, subject, text, attachments = []}, userId, blockI
     return draft;
 }
 
-module.exports = {createDraft, disconnect, downloadAttachment, exchangeAuthorizationCode, getAuthorizationUrl, getEmailIdentity, getMessageText, getStatus, listAttachments, listInboxMessages};
+module.exports = {createDraft, disconnect, downloadAttachment, exchangeAuthorizationCode, getAuthorizationUrl, getEmailIdentity, getMessageText, getStatus, listAttachments, listConnectedAccounts, listInboxMessages};

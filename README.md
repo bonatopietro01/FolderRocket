@@ -77,6 +77,13 @@ Set-Location backend
 node --check server.js
 ```
 
+## Code graph (optional)
+
+To map source-code relationships locally with Graphify, see
+[docs/GRAPHIFY.md](docs/GRAPHIFY.md). After installing the external CLI, run
+`npm run graph:build`. This is a code-only development tool and is not included
+in the FolderRocket desktop app.
+
 ## Project context
 
 Read [CODEX.md](CODEX.md) before changing the application architecture or file-management behavior.

@@ -148,7 +148,11 @@ async function fetchPublicResponse(url, accept) {
             current = await getPublicUrl(new URL(location, current).href);
             continue;
         }
-        if (!response.ok) throw new Error(`The page returned ${response.status}.`);
+        if (!response.ok) {
+            const error = new Error(`The page returned ${response.status}.`);
+            error.status = response.status;
+            throw error;
+        }
         return {response, sourceUrl: current.href};
     }
     throw new Error("The page redirected too many times.");

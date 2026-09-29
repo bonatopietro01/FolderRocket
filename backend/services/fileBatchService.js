@@ -12,6 +12,8 @@ async function moveFilePortable(sourcePath, targetPath) {
         if (!error || error.code !== "EXDEV") throw error;
         await fs.promises.copyFile(sourcePath, targetPath, fs.constants.COPYFILE_EXCL);
         try {
+            const [sourceStats, targetStats] = await Promise.all([fs.promises.stat(sourcePath), fs.promises.stat(targetPath)]);
+            if (sourceStats.size !== targetStats.size) throw new Error(`The copied file ${path.basename(sourcePath)} failed size verification.`);
             await fs.promises.unlink(sourcePath);
         } catch (unlinkError) {
             await fs.promises.unlink(targetPath).catch(() => {});
@@ -22,8 +24,14 @@ async function moveFilePortable(sourcePath, targetPath) {
 
 async function executeMoveBatch(operations) {
     const completed = [];
+    const backups = [];
     try {
         for (const operation of operations) {
+            if (operation.replaceExisting && await pathExists(operation.targetPath)) {
+                const backupPath = `${operation.targetPath}.folderrocket-backup-${require("crypto").randomUUID()}`;
+                await fs.promises.rename(operation.targetPath, backupPath);
+                backups.push({targetPath: operation.targetPath, backupPath});
+            }
             if (!operation.samePath) await moveFilePortable(operation.sourcePath, operation.targetPath);
             completed.push(operation);
         }
@@ -33,8 +41,12 @@ async function executeMoveBatch(operations) {
                 await moveFilePortable(operation.targetPath, operation.sourcePath).catch(() => {});
             }
         }
+        for (const backup of backups.reverse()) {
+            if (await pathExists(backup.backupPath)) await fs.promises.rename(backup.backupPath, backup.targetPath).catch(() => {});
+        }
         throw error;
     }
+    await Promise.all(backups.map(backup => fs.promises.unlink(backup.backupPath).catch(() => {})));
     return completed.map(operation => ({name:path.basename(operation.targetPath),path:operation.targetPath,sourcePath:operation.sourcePath}));
 }
 

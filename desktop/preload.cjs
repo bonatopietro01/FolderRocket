@@ -1,6 +1,7 @@
-const {contextBridge, ipcRenderer} = require("electron");
+const {contextBridge, ipcRenderer, webUtils} = require("electron");
 
 contextBridge.exposeInMainWorld("folderRocketDesktop", {
+    getPathForFile: file => webUtils.getPathForFile(file),
     openExternal: url => ipcRenderer.invoke("folderrocket:open-external", url),
     saveDownload: payload => ipcRenderer.invoke("folderrocket:save-download", payload),
     listDisplaySources: () => ipcRenderer.invoke("folderrocket:list-display-sources"),
@@ -37,5 +38,12 @@ contextBridge.exposeInMainWorld("folderRocketDesktop", {
         const listener = (_event, provider) => callback(String(provider || ""));
         ipcRenderer.on("folderrocket:oauth-complete", listener);
         return () => ipcRenderer.removeListener("folderrocket:oauth-complete", listener);
+    },
+    listElectronDiagnostics: () => ipcRenderer.invoke("folderrocket:diagnostics:list-electron"),
+    clearElectronDiagnostics: () => ipcRenderer.invoke("folderrocket:diagnostics:clear-electron"),
+    onElectronDiagnostic: callback => {
+        const listener = (_event, diagnostic) => callback(diagnostic);
+        ipcRenderer.on("folderrocket:electron-diagnostic", listener);
+        return () => ipcRenderer.removeListener("folderrocket:electron-diagnostic", listener);
     }
 });

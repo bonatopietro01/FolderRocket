@@ -4,8 +4,27 @@ interface FolderRocketDisplaySource {
     thumbnail: string;
 }
 
+interface FolderRocketElectronDiagnostic {
+    id: string;
+    at: string;
+    type: "electron";
+    severity: "info" | "warning" | "error" | "critical";
+    category: string;
+    message: string;
+    route: string;
+    screen: string;
+    component: string;
+    stack: string;
+    method: string;
+    status: number | null;
+    worldId: string;
+    requestId: string;
+    durationMs: number | null;
+}
+
 interface Window {
     folderRocketDesktop?: {
+        getPathForFile: (file: File) => string;
         openExternal: (url: string) => Promise<boolean>;
         saveDownload: (payload: {suggestedName: string; bytes: Uint8Array}) => Promise<{saved: boolean; canceled?: boolean; path?: string; message?: string}>;
         listDisplaySources: () => Promise<FolderRocketDisplaySource[]>;
@@ -27,5 +46,8 @@ interface Window {
         onZoomChanged: (callback: (zoomFactor: number) => void) => () => void;
         onCargoShipStateChanged: (callback: (state: {open: boolean; expanded: boolean}) => void) => () => void;
         onOAuthComplete: (callback: (provider: string) => void) => () => void;
+        listElectronDiagnostics: () => Promise<FolderRocketElectronDiagnostic[]>;
+        clearElectronDiagnostics: () => Promise<boolean>;
+        onElectronDiagnostic: (callback: (diagnostic: FolderRocketElectronDiagnostic) => void) => () => void;
     };
 }

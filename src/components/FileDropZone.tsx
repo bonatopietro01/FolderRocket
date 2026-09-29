@@ -3,6 +3,7 @@ import {
     useRef,
     useState
 } from "react";
+import {createPortal} from "react-dom";
 
 import type {
     CSSProperties,
@@ -232,6 +233,8 @@ function FileDropZone({
         useState(false);
     const [archiveMenuOpen, setArchiveMenuOpen] = useState(false);
     const [folderSettingsOpen, setFolderSettingsOpen] = useState(false);
+    const folderSettingsButtonRef = useRef<HTMLButtonElement | null>(null);
+    const [folderSettingsPosition, setFolderSettingsPosition] = useState({top: 8, left: 8});
     const [renameMenuOpen, setRenameMenuOpen] = useState(false);
     const [showArchiveControl, setShowArchiveControl] = useState(() => localStorage.getItem(`folderrocket-show-archive-${storageScope}-${name}`) === "true");
     const [showDeadlineControl, setShowDeadlineControl] = useState(() => localStorage.getItem(`folderrocket-show-deadlines-${storageScope}-${name}`) === "true");
@@ -395,6 +398,23 @@ function FileDropZone({
         document.addEventListener("mousedown", closeArchiveMenu);
         return () => document.removeEventListener("mousedown", closeArchiveMenu);
     }, []);
+
+    useEffect(() => {
+        if (!folderSettingsOpen) return;
+        const positionMenu = () => {
+            const rect = folderSettingsButtonRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            const width = Math.min(264, window.innerWidth - 16);
+            const height = Math.min(220, window.innerHeight - 16);
+            const left = Math.max(8, Math.min(window.innerWidth - width - 8, rect.left >= width + 12 ? rect.left - width - 8 : rect.right + 8));
+            const top = Math.max(8, Math.min(window.innerHeight - height - 8, rect.top - 10));
+            setFolderSettingsPosition(current => current.top === top && current.left === left ? current : {top, left});
+        };
+        positionMenu();
+        window.addEventListener("resize", positionMenu);
+        window.addEventListener("scroll", positionMenu, true);
+        return () => { window.removeEventListener("resize", positionMenu); window.removeEventListener("scroll", positionMenu, true); };
+    }, [folderSettingsOpen]);
 
 
     /*
@@ -2645,16 +2665,16 @@ function FileDropZone({
             </button>}
 
             <>
-                <button type="button" className={`folderUtilityButton folderSettingsButton archiveControlArea${folderSettingsOpen ? " isActive" : ""}`} title="Impostazioni Archivio e Scadenze" onClick={event => { event.stopPropagation(); setFolderSettingsOpen(current => !current); setArchiveMenuOpen(false); setDeadlineMenuOpen(false); }}>
+                <button ref={folderSettingsButtonRef} type="button" className={`folderUtilityButton folderSettingsButton archiveControlArea${folderSettingsOpen ? " isActive" : ""}`} title="Impostazioni Archivio e Scadenze" aria-expanded={folderSettingsOpen} onClick={event => { event.stopPropagation(); setFolderSettingsOpen(current => !current); setArchiveMenuOpen(false); setDeadlineMenuOpen(false); }}>
                     <SlidersHorizontal size={14}/>
                 </button>
-                {folderSettingsOpen && <div className="folderSettingsMenu archiveControlArea" onClick={event => event.stopPropagation()}>
+                {folderSettingsOpen && createPortal(<div className="folderSettingsMenu archiveControlArea" style={{"--folder-settings-top": `${folderSettingsPosition.top}px`, "--folder-settings-left": `${folderSettingsPosition.left}px`} as CSSProperties} onClick={event => event.stopPropagation()}>
                     <strong>Controlli cartella</strong>
                     <label className="folderControlVisibility"><input type="checkbox" checked={showArchiveControl && archiveEnabled} disabled={syncingArchive} onChange={event => void setArchiveFeatureActive(event.target.checked)}/><Archive size={13}/><span>{syncingArchive ? "Creazione Archivio…" : "Attiva Archivio"}</span></label>
                     <label className="folderControlVisibility"><input type="checkbox" checked={showDeadlineControl && deadlineCheckEnabled} disabled={checkingDeadlines} onChange={event => void setDeadlineFeatureActive(event.target.checked)}/><span aria-hidden="true">⚠️</span><span>{checkingDeadlines ? "Creazione Scadenze…" : "Attiva Scadenze"}</span></label>
                     <button type="button" onClick={() => { setFolderSettingsOpen(false); setDeadlineMenuOpen(false); setArchiveMenuOpen(true); }}>Configura Archivio</button>
                     <button type="button" onClick={() => { setFolderSettingsOpen(false); setArchiveMenuOpen(false); setDeadlineMenuOpen(true); }}>Configura Scadenze</button>
-                </div>}
+                </div>, document.body)}
                 <button type="button" className={`folderUtilityButton renameControlButton renameControlArea${renameMenuOpen ? " isActive" : ""}`} title="Add rename" onClick={event => { event.stopPropagation(); setRenameMenuOpen(current => !current); }}>
                     <Pencil size={15}/>
                 </button>

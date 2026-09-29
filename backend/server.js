@@ -34,13 +34,15 @@ const {moveToTrash} = require("./services/trashService");
 const {executeCopyBatch, executeMoveBatch, moveFilePortable, pathExists} = require("./services/fileBatchService");
 const {searchFiles} = require("./services/searchService");
 const {readDashboardPreferences, writeDashboardPreferences} = require("./services/userPreferencesService");
+const {buildGmailAccountCatalog} = require("./services/gmailAccountCatalog");
 const {getRuntimeUploadsDirectory} = require("./services/runtimePaths");
 const {getEmailAlertSettings, normalizeProviderBlock, saveEmailAlertSettings} = require("./services/emailAlertSettingsService");
 const {startEmailAlertScheduler} = require("./services/emailAlertScheduler");
 const {migrateLegacyConnections} = require("./services/emailTokenStore");
 const {addAuditEvent, listAuditEvents} = require("./services/auditLogService");
 const {analyzeDomainPage, analyzeProjection, downloadDomainFile, listDomainDownloads, readDomainPreview} = require("./services/projectionAnalysisService");
-const {createStickyNote} = require("./services/stickyNoteAiService");
+const {createStickyNote, invokeWorldAssistant} = require("./services/stickyNoteAiService");
+const {recordDiagnostic, listDiagnostics, clearDiagnostics, flushDiagnostics, hasStorageWarning, safeText: safeDiagnosticText} = require("./services/diagnosticsService");
 const {integrationStatus, saveIntegrationConfiguration} = require("./services/desktopIntegrationConfigService");
 const {createBrowserBridgeToken, resolveBrowserDrop, stageBrowserDrop} = require("./services/browserBridgeService");
 const {
@@ -68,6 +70,7 @@ const {
     getMessageText: getGmailMessageText,
     getStatus: getGmailStatus,
     listAttachments: listGmailAttachments,
+    listConnectedAccounts: listGmailConnectedAccounts,
     listInboxMessages
 } = require("./services/gmailService");
 
@@ -95,6 +98,7 @@ const {
     getMessageText: getOutlookMessageText,
     getStatus: getOutlookStatus,
     listAttachments: listOutlookAttachments,
+    listConnectedAccounts: listOutlookConnectedAccounts,
     listInboxMessages: listOutlookInboxMessages
 } = require("./services/outlookService");
 
@@ -489,15 +493,11 @@ app.use(
             FRONTEND_ORIGIN,
             "http://localhost:5173"
         ],
-        credentials: true
+        credentials: true,
+        exposedHeaders: ["X-FolderRocket-Diagnostic-Id"]
     })
 );
 
-
-// Permette al server di leggere JSON
-app.use(
-    express.json({limit: "6mb"})
-);
 
 // ==================================================
 // ACCOUNT ACCESS AND PRIVATE WORKSPACES
@@ -505,7 +505,143 @@ app.use(
 
 app.use((req, res, next) => {
     req.user = authenticateRequest(req);
+    const suppliedRequestId = req.get("X-FolderRocket-Diagnostic-Id") || "";
+    const requestId = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(suppliedRequestId) ? suppliedRequestId : crypto.randomUUID();
+    const startedAt = Date.now();
+    req.folderRocketRequestId = requestId;
+    res.setHeader("X-FolderRocket-Diagnostic-Id", requestId);
+    const originalJson = res.json.bind(res);
+    res.json = body => {
+        if (res.statusCode >= 400 && body && typeof body.message === "string") {
+            req.folderRocketDiagnosticMessage = safeDiagnosticText(body.message, 260);
+        }
+        return originalJson(body);
+    };
+    res.on("finish", () => {
+        if (res.statusCode < 400 || !req.user || req.path === "/diagnostics" || req.folderRocketExpectedNotFound) return;
+        const route = req.route?.path ? `${req.baseUrl || ""}${req.route.path}` : req.path.replace(/\/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, "/:id");
+        const rawWorldId = typeof req.query?.worldId === "string" ? req.query.worldId : req.params?.worldId || req.get("X-FolderRocket-World-Id");
+        const routeCategory = route.split("/").filter(Boolean)[0] || "backend";
+        recordDiagnostic(req.user.id, {
+            id: requestId,
+            type: "http",
+            severity: res.statusCode >= 500 ? "error" : "warning",
+            category: routeCategory,
+            message: req.folderRocketDiagnosticMessage || (res.statusCode >= 500 ? `Errore backend${req.folderRocketBackendErrorName ? ` (${req.folderRocketBackendErrorName})` : ""}.` : "La richiesta è stata rifiutata o non completata."),
+            route,
+            screen: safeDiagnosticText(req.get("X-FolderRocket-Screen") || "backend", 100),
+            component: route,
+            stack: req.folderRocketBackendErrorStack || "",
+            method: req.method,
+            status: res.statusCode,
+            worldId: rawWorldId,
+            requestId,
+            durationMs: Date.now() - startedAt
+        });
+    });
     next();
+});
+
+// Authentication and request IDs run before parsing so malformed JSON errors
+// can still be attributed to the signed-in account without recording the body.
+app.use(express.json({limit: "6mb"}));
+
+app.get("/diagnostics", requireAuthenticated, async (req, res) => {
+        const [userEvents, systemEvents] = await Promise.all([listDiagnostics(req.user.id), listDiagnostics("system")]);
+        res.json({events: [...userEvents, ...systemEvents].sort((left, right) => right.at.localeCompare(left.at)).slice(0, 400), storageWarning:hasStorageWarning()});
+});
+
+app.delete("/diagnostics", requireAuthenticated, async (req, res) => {
+    const [userCleared, systemCleared] = await Promise.all([clearDiagnostics(req.user.id), clearDiagnostics("system")]);
+    if (!userCleared || !systemCleared) return res.status(500).json({message:"Non è stato possibile svuotare i registri locali."});
+    res.json({message: "Diagnostica del backend svuotata."});
+});
+
+app.put("/settings/worlds/:worldId", requireAuthenticated, (req, res) => {
+    const worldId = typeof req.params.worldId === "string" ? req.params.worldId.trim() : "";
+    if (!/^[a-zA-Z0-9_-]{1,80}$/.test(worldId) || ["__proto__", "prototype", "constructor"].includes(worldId)) {
+        return res.status(400).json({message: "Identificativo del pianeta non valido."});
+    }
+    if (typeof req.body?.aiEnabled !== "boolean") return res.status(400).json({message: "Stato AI del pianeta non valido."});
+    const normaliseProfiles = value => {
+        if (!Array.isArray(value) || value.length > 100) throw new Error("Configurazione agente o skill non valida.");
+        const seen = new Set();
+        return value.filter(profile => profile && typeof profile.id === "string" && /^[a-zA-Z0-9_-]{1,100}$/.test(profile.id) && typeof profile.name === "string")
+            .map(profile => {
+                if (seen.has(profile.id)) throw new Error("Gli identificativi dei profili devono essere univoci.");
+                seen.add(profile.id);
+                return {
+                    id: profile.id,
+                    name: profile.name.trim().slice(0, 60) || "Assistente",
+                    description: typeof profile.description === "string" ? profile.description.slice(0, 240) : "",
+                    instructions: typeof profile.instructions === "string" ? profile.instructions.slice(0, 2000) : "",
+                    enabled: Boolean(profile.enabled),
+                    model: profile.model === "gpt-4.1" ? "gpt-4.1" : "gpt-4.1-mini",
+                    capabilities: Array.isArray(profile.capabilities) ? [...new Set(profile.capabilities.filter(capability => ["search-files", "draft-post-it"].includes(capability)))] : []
+                };
+            });
+    };
+    const existing = readDashboardPreferences(req.user.id) || {};
+    const currentWorlds = existing.worlds && typeof existing.worlds === "object" && !Array.isArray(existing.worlds) ? existing.worlds : {};
+    try {
+        const currentWorld = currentWorlds[worldId] || {};
+        const nextWorld = {...currentWorld, aiEnabled: req.body.aiEnabled};
+        for (const key of ["agents", "skills"]) {
+            if (req.body[key] !== undefined) nextWorld[key] = normaliseProfiles(req.body[key]);
+        }
+        writeDashboardPreferences(req.user.id, {...existing, worlds: {...currentWorlds, [worldId]: nextWorld}});
+    } catch (error) {
+        return res.status(400).json({message:error instanceof Error ? error.message : "Configurazione del pianeta non valida."});
+    }
+    res.json({message: "Impostazione AI del pianeta salvata."});
+});
+
+app.put("/settings/active-world", requireAuthenticated, (req, res) => {
+    const worldId = typeof req.body?.worldId === "string" ? req.body.worldId.trim() : "";
+    if (!/^[a-zA-Z0-9_-]{1,80}$/.test(worldId) || ["__proto__", "prototype", "constructor"].includes(worldId)) {
+        return res.status(400).json({message: "Identificativo del pianeta attivo non valido."});
+    }
+    const existing = readDashboardPreferences(req.user.id) || {};
+    writeDashboardPreferences(req.user.id, {...existing, activeWorldId: worldId});
+    res.json({message: "Pianeta attivo aggiornato."});
+});
+
+app.post("/worlds/:worldId/ai/invoke", requireAuthenticated, async (req, res) => {
+    const worldId = typeof req.params.worldId === "string" ? req.params.worldId.trim() : "";
+    if (!/^[a-zA-Z0-9_-]{1,80}$/.test(worldId) || ["__proto__", "prototype", "constructor"].includes(worldId)) {
+        return res.status(400).json({message: "Identificativo del pianeta non valido."});
+    }
+    const settings = readDashboardPreferences(req.user.id) || {};
+    if (settings.activeWorldId !== worldId) return res.status(403).json({message: "Per richiamare agenti o skill, entra prima nel pianeta corrispondente."});
+    if (settings.worlds?.[worldId]?.aiEnabled !== true) return res.status(403).json({message: "Attiva prima l’AI nelle impostazioni di questo pianeta."});
+    const {kind, name, instructions, prompt, worldName, profileId, model, capabilities} = req.body || {};
+    if (!(["agent", "skill"].includes(kind)) || typeof name !== "string" || typeof prompt !== "string") {
+        return res.status(400).json({message: "Profilo o richiesta AI non validi."});
+    }
+    try {
+        const worldSettings = settings.worlds?.[worldId] || {};
+        const profileList = Array.isArray(worldSettings[kind === "agent" ? "agents" : "skills"]) ? worldSettings[kind === "agent" ? "agents" : "skills"] : [];
+        if (profileList.length && typeof profileId !== "string") return res.status(400).json({message:"Seleziona un profilo salvato per questo pianeta."});
+        const savedProfile = typeof profileId === "string" ? profileList.find(profile => profile?.id === profileId) : null;
+        if (profileId && profileList.length && !savedProfile) return res.status(404).json({message:"Il profilo non appartiene a questo pianeta o non è stato salvato."});
+        if (savedProfile && !savedProfile.enabled) return res.status(403).json({message:"Questo agente o skill è disattivato nel pianeta."});
+        const dashboard = worldSettings.dashboard || (worldId === "work" ? legacyWorkspaceDashboard(settings) : {});
+        const folders = (Array.isArray(dashboard?.folders) ? dashboard.folders : []).filter(folder => folder && folder.storage !== "imaginary" && typeof folder.path === "string" && folder.path.trim()).slice(0, 12).map(folder => folder.path);
+        const result = await invokeWorldAssistant({
+            worldName: typeof worldName === "string" ? worldName.slice(0, 80) : "",
+            kind,
+            name: savedProfile?.name || name,
+            instructions: savedProfile?.instructions ?? instructions,
+            prompt,
+            model: savedProfile?.model || model,
+            capabilities: savedProfile?.capabilities || capabilities,
+            folders
+        });
+        res.json(result);
+    } catch (error) {
+        console.warn("FolderRocket shared AI invocation failed:", error instanceof Error ? error.name : "unknown error");
+        res.status(502).json({message: "Richiamo AI non riuscito. Controlla la sezione Diagnostica e la connessione AI."});
+    }
 });
 
 app.get("/auth/bootstrap", (req, res) => {
@@ -611,9 +747,29 @@ app.post("/auth/password-reset", (req, res) => {
     }
 });
 
+function readWorkspaceWorldId(request) {
+    const value = typeof request.query?.worldId === "string" ? request.query.worldId.trim() : "";
+    return /^[a-zA-Z0-9_-]{1,80}$/.test(value) && !["__proto__", "prototype", "constructor"].includes(value) ? value : "";
+}
+
+function readWorkspaceWorldName(request) {
+    const value = typeof request.query?.worldName === "string" ? request.query.worldName : "";
+    return value.replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 40);
+}
+
+const WORLD_DASHBOARD_SETTING_KEYS = ["folders", "dashboardWidths", "dashboardHeight", "searchFolderIds", "sourceBlocks", "rightSourceBlocks"];
+
+function legacyWorkspaceDashboard(settings) {
+    return Object.fromEntries(WORLD_DASHBOARD_SETTING_KEYS.filter(key => Object.hasOwn(settings || {}, key)).map(key => [key, settings[key]]));
+}
+
 app.get("/settings/dashboard", (req, res) => {
     if (!req.user) return res.status(401).json({message: "Sign in required."});
-    res.json({settings: readDashboardPreferences(req.user.id)});
+    const settings = readDashboardPreferences(req.user.id) || {};
+    const worldId = readWorkspaceWorldId(req);
+    if (!worldId) return res.json({settings});
+    const worldDashboard = settings.worlds?.[worldId]?.dashboard;
+    res.json({settings: worldDashboard || (worldId === "work" ? legacyWorkspaceDashboard(settings) : null)});
 });
 
 app.put("/settings/dashboard", (req, res) => {
@@ -622,6 +778,16 @@ app.put("/settings/dashboard", (req, res) => {
         const settings = req.body?.settings;
         if (!settings || typeof settings !== "object" || Array.isArray(settings)) throw new Error("Invalid dashboard settings.");
         const existing = readDashboardPreferences(req.user.id) || {};
+        const worldId = readWorkspaceWorldId(req);
+        if (worldId) {
+            const worlds = existing.worlds && typeof existing.worlds === "object" && !Array.isArray(existing.worlds) ? existing.worlds : {};
+            const legacy = worldId === "work" && !worlds[worldId]?.dashboard ? legacyWorkspaceDashboard(existing) : {};
+            writeDashboardPreferences(req.user.id, {
+                ...existing,
+                worlds: {...worlds, [worldId]: {...worlds[worldId], dashboard: {...legacy, ...settings}}}
+            });
+            return res.json({message: "Dashboard settings saved."});
+        }
         // Dashboard saves frequently. Keep the server-owned scheduled-alert state
         // unless this request deliberately contains a replacement for it.
         writeDashboardPreferences(req.user.id, {
@@ -632,6 +798,25 @@ app.put("/settings/dashboard", (req, res) => {
         res.json({message: "Dashboard settings saved."});
     } catch (error) {
         res.status(400).json({message: error instanceof Error ? error.message : "Unable to save dashboard settings."});
+    }
+});
+
+app.delete("/settings/worlds/:worldId", requireAuthenticated, (req, res) => {
+    try {
+        const worldId = typeof req.params.worldId === "string" ? req.params.worldId.trim() : "";
+        if (!/^[a-zA-Z0-9_-]{1,80}$/.test(worldId) || ["__proto__", "prototype", "constructor"].includes(worldId)) throw new Error("Invalid world identifier.");
+        const existing = readDashboardPreferences(req.user.id) || {};
+        const worlds = existing.worlds && typeof existing.worlds === "object" && !Array.isArray(existing.worlds) ? {...existing.worlds} : {};
+        delete worlds[worldId];
+        const next = {...existing, worlds};
+        if (worldId === "work") {
+            for (const key of WORLD_DASHBOARD_SETTING_KEYS) delete next[key];
+            delete next.emailAlerts;
+        }
+        writeDashboardPreferences(req.user.id, next);
+        res.json({message: "World settings removed."});
+    } catch (error) {
+        res.status(400).json({message: error instanceof Error ? error.message : "Unable to remove world settings."});
     }
 });
 
@@ -697,8 +882,8 @@ function readAlertBlockId(request) {
     return /^[a-zA-Z0-9_-]{1,120}$/.test(value) ? value : "";
 }
 
-function getScopedProviderSettings(userId, provider, blockId) {
-    const settings = getEmailAlertSettings(userId);
+function getScopedProviderSettings(userId, provider, blockId, worldId = "") {
+    const settings = getEmailAlertSettings(userId, worldId);
     if (!blockId) return {settings, providerSettings: settings[provider]};
     const existing = settings[provider].blocks?.[blockId];
     if (existing) return {settings, providerSettings: existing};
@@ -710,7 +895,7 @@ function getScopedProviderSettings(userId, provider, blockId) {
         const saved = saveEmailAlertSettings(userId, {
             ...settings,
             [provider]: {...settings[provider], rules: [], runtime: {}, blocks: {...settings[provider].blocks, [blockId]: migrated}}
-        });
+        }, worldId);
         return {settings: saved, providerSettings: saved[provider].blocks[blockId]};
     }
     return {settings, providerSettings: normalizeProviderBlock({})};
@@ -719,7 +904,7 @@ function getScopedProviderSettings(userId, provider, blockId) {
 app.get("/email/alerts/settings/:provider", requireAuthenticated, (req, res) => {
     const provider = req.params.provider;
     if (provider !== "gmail" && provider !== "outlook") return res.status(400).json({message: "Unknown email provider."});
-    const scoped = getScopedProviderSettings(req.user.id, provider, readAlertBlockId(req));
+    const scoped = getScopedProviderSettings(req.user.id, provider, readAlertBlockId(req), readWorkspaceWorldId(req));
     res.json({providerSettings: scoped.providerSettings, favorites: scoped.settings.favorites});
 });
 
@@ -729,8 +914,15 @@ app.put("/email/alerts/settings/:provider", requireAuthenticated, (req, res) => 
         if (provider !== "gmail" && provider !== "outlook") throw new Error("Unknown email provider.");
         const providerSettings = req.body?.providerSettings;
         if (!providerSettings || typeof providerSettings !== "object" || Array.isArray(providerSettings)) throw new Error("Invalid provider alert settings.");
-        const current = getEmailAlertSettings(req.user.id);
+        const worldId = readWorkspaceWorldId(req);
+        const current = getEmailAlertSettings(req.user.id, worldId);
         const blockId = readAlertBlockId(req);
+        const previousProviderSettings = blockId ? current[provider].blocks?.[blockId] : current[provider];
+        const selectedAccountId = value => value === null
+            ? null
+            : /^[a-zA-Z0-9_-]{1,120}$/.test(value || "") ? value : blockId;
+        const gmailAccountChanged = provider === "gmail" && blockId
+            && selectedAccountId(previousProviderSettings?.accountBlockId) !== selectedAccountId(providerSettings.accountBlockId);
         const next = blockId ? {
             ...current,
             [provider]: {
@@ -738,7 +930,7 @@ app.put("/email/alerts/settings/:provider", requireAuthenticated, (req, res) => 
                 blocks: {
                     ...current[provider].blocks,
                     // Browser edits must never erase results written by the scheduler.
-                    [blockId]: {...providerSettings, runtime: current[provider].blocks?.[blockId]?.runtime ?? {}}
+                    [blockId]: {...providerSettings, runtime: gmailAccountChanged ? {} : (current[provider].blocks?.[blockId]?.runtime ?? {})}
                 }
             },
             favorites: Array.isArray(req.body?.favorites) ? req.body.favorites : current.favorites
@@ -748,7 +940,7 @@ app.put("/email/alerts/settings/:provider", requireAuthenticated, (req, res) => 
             [provider]: {...providerSettings, runtime: current[provider].runtime},
             favorites: Array.isArray(req.body?.favorites) ? req.body.favorites : current.favorites
         };
-        const saved = saveEmailAlertSettings(req.user.id, next);
+        const saved = saveEmailAlertSettings(req.user.id, next, worldId);
         res.json({providerSettings: blockId ? saved[provider].blocks[blockId] : saved[provider], favorites: saved.favorites});
     } catch (error) {
         res.status(400).json({message: error instanceof Error ? error.message : "Unable to save email-alert settings."});
@@ -785,6 +977,10 @@ app.post("/domain/preview", requireAuthenticated, async (req, res) => {
     try { res.json(await readDomainPreview(req.body?.url)); }
     catch (error) {
         const message=error instanceof Error?error.message:"Unable to read this public page.";
+        if (error?.status === 404) {
+            req.folderRocketExpectedNotFound = true;
+            return res.status(404).json({code:"REMOTE_PAGE_NOT_FOUND", message:"La pagina del sito non esiste (404). Controlla l’indirizzo o aprila direttamente nel browser."});
+        }
         res.status(/valid page address|public http|private network|readable text|too large/i.test(message)?400:502).json({message});
     }
 });
@@ -1583,9 +1779,13 @@ app.post("/sticky-notes/ai", async (req, res) => {
 
 app.post("/list-folder-files", async (req, res) => {
     try {
-        const folder = assertUserPath(req.user, req.body?.folder);
+        const folder = assertUserPath(req.user, req.body?.folder, {allowMissing:true});
         const folderStats = await fs.promises.stat(folder).catch(() => null);
-        if (!folderStats?.isDirectory()) {
+        if (!folderStats) {
+            req.folderRocketExpectedNotFound = true;
+            return res.status(404).json({code:"FOLDER_NOT_FOUND", message:"Questa cartella non è più disponibile. Ricollega la cartella o aggiorna il percorso salvato."});
+        }
+        if (!folderStats.isDirectory()) {
             throw new Error("Il percorso della cartella non è valido o non è accessibile");
         }
         const entries = await fs.promises.readdir(folder, {withFileTypes: true});
@@ -1700,14 +1900,16 @@ app.post("/files/rename", (req, res) => {
     } catch (error) { res.status(400).json({message: error instanceof Error ? error.message : "Unable to rename file"}); }
 });
 
-async function prepareFileBatch(user, body) {
+async function prepareFileBatch(user, body, {collectConflicts = false} = {}) {
     const destination = assertUserPath(user, body?.destination);
     const destinationStats = await fs.promises.stat(destination).catch(() => null);
     if (!destinationStats?.isDirectory()) throw new Error("Select a valid destination folder");
     const requested = Array.isArray(body?.items)
-        ? body.items.filter(item => item && typeof item.path === "string").map(item => ({path:item.path,name:item.name}))
+        ? body.items.filter(item => item && typeof item.path === "string").map(item => ({path:item.path,name:item.name,conflict:item.conflict}))
         : (Array.isArray(body?.paths) ? body.paths.filter(item => typeof item === "string").map(item => ({path:item})) : []);
     const operations = [];
+    const conflicts = [];
+    const skipped = [];
     const targetKeys = new Set();
     for (const item of requested) {
         const sourcePath = assertUserPath(user, item.path);
@@ -1715,21 +1917,42 @@ async function prepareFileBatch(user, body) {
         if (!sourceStats?.isFile()) throw new Error(`${path.basename(sourcePath)} is no longer available`);
         const requestedName = typeof item.name === "string" && item.name.trim() ? path.basename(item.name.trim()) : path.basename(sourcePath);
         if (!requestedName || requestedName === "." || requestedName === "..") throw new Error("One destination file name is invalid");
-        const targetPath = path.join(destination, requestedName);
-        const targetKey = process.platform === "win32" ? targetPath.toLowerCase() : targetPath;
-        if (targetKeys.has(targetKey)) throw new Error(`${requestedName} would be created more than once`);
-        targetKeys.add(targetKey);
+        let targetPath = path.join(destination, requestedName);
+        const targetKeyFor = value => process.platform === "win32" ? value.toLowerCase() : value;
+        let targetKey = targetKeyFor(targetPath);
         const samePath = path.resolve(sourcePath) === path.resolve(targetPath);
-        if (!samePath && await pathExists(targetPath)) throw new Error(`${requestedName} already exists in the destination folder`);
-        operations.push({sourcePath, targetPath, samePath});
+        if (targetKeys.has(targetKey)) throw new Error(`${requestedName} would be created more than once`);
+        const targetExists = !samePath && await pathExists(targetPath);
+        const conflict = ["rename", "replace", "skip"].includes(item.conflict) ? item.conflict : "";
+        if ((targetExists || targetKeys.has(targetKey)) && !conflict) {
+            if (!collectConflicts) throw new Error(`${requestedName} already exists in the destination folder`);
+            conflicts.push({sourcePath, name: requestedName, targetPath});
+            continue;
+        }
+        if (conflict === "skip") {
+            skipped.push({name: requestedName, path: targetPath, sourcePath});
+            continue;
+        }
+        if (conflict === "rename" && targetExists) {
+            targetPath = nextAvailableFilePath(destination, requestedName);
+            targetKey = targetKeyFor(targetPath);
+        }
+        if (conflict === "replace" && !targetExists) {
+            // If the file no longer conflicts, continue with a normal move.
+        }
+        if (targetKeys.has(targetKey)) throw new Error(`${path.basename(targetPath)} would be created more than once`);
+        targetKeys.add(targetKey);
+        operations.push({sourcePath, targetPath, samePath, replaceExisting: conflict === "replace" && targetExists});
     }
-    return operations;
+    return collectConflicts ? {operations, conflicts, skipped} : operations;
 }
 
 app.post("/files/move", async (req, res) => {
     try {
-        const moved = await executeMoveBatch(await prepareFileBatch(req.user, req.body));
-        res.json({moved});
+        const prepared = await prepareFileBatch(req.user, req.body, {collectConflicts: true});
+        if (prepared.conflicts.length) return res.status(409).json({message: "Some destination files already exist.", conflicts: prepared.conflicts});
+        const moved = await executeMoveBatch(prepared.operations);
+        res.json({moved, skipped: prepared.skipped});
     } catch (error) { res.status(400).json({message: error instanceof Error ? error.message : "Unable to move files"}); }
 });
 
@@ -1865,25 +2088,33 @@ function cargoEmailBlockId(request) {
 
 app.get("/cargo-ship/email-sources", requireAuthenticated, async (req, res) => {
     try {
-        const blocks = Array.isArray(readDashboardPreferences(req.user.id)?.sourceBlocks)
-            ? readDashboardPreferences(req.user.id).sourceBlocks
+        const allPreferences = readDashboardPreferences(req.user.id) || {};
+        const worldId = readWorkspaceWorldId(req);
+        const dashboard = worldId
+            ? allPreferences.worlds?.[worldId]?.dashboard || (worldId === "work" ? legacyWorkspaceDashboard(allPreferences) : {})
+            : allPreferences;
+        const blocks = Array.isArray(dashboard?.sourceBlocks)
+            ? dashboard.sourceBlocks
             : [];
         const sources = [];
+        const seenAccounts = new Set();
+        const gmailAccounts = await listGmailConnectedAccounts(req.user.id);
+        const outlookAccounts = await listOutlookConnectedAccounts(req.user.id);
         let gmailIndex = 0;
         let outlookIndex = 0;
         for (const block of blocks) {
             if (!block || typeof block.id !== "string" || !["gmail", "outlook"].includes(block.type)) continue;
             const provider = block.type;
+            const blockId = /^[a-zA-Z0-9_-]{1,120}$/.test(block.accountBlockId || "") ? block.accountBlockId : block.id;
+            const accountKey = `${provider}:${blockId}`;
+            if (seenAccounts.has(accountKey)) continue;
+            seenAccounts.add(accountKey);
             const index = provider === "gmail" ? ++gmailIndex : ++outlookIndex;
-            const status = provider === "gmail" ? getGmailStatus(req.user.id, block.id) : getOutlookStatus(req.user.id, block.id);
+            const status = provider === "gmail" ? getGmailStatus(req.user.id, blockId) : getOutlookStatus(req.user.id, blockId);
             if (!status.connected) continue;
-            let email = "";
-            try {
-                email = provider === "gmail"
-                    ? await getGmailEmailIdentity(req.user.id, block.id)
-                    : await getOutlookEmailIdentity(req.user.id, block.id);
-            } catch { /* A connected source remains selectable even if its profile is temporarily unavailable. */ }
-            sources.push({provider, blockId: block.id, email, label: email || `${provider === "gmail" ? "Gmail" : "Outlook"} source ${index}`});
+            const account = (provider === "gmail" ? gmailAccounts : outlookAccounts).find(item => item.blockId === blockId);
+            const email = account?.email || "";
+            sources.push({provider, blockId, email, label: email || account?.label || `${provider === "gmail" ? "Gmail" : "Outlook"} source ${index}`});
         }
         res.json({sources});
     } catch (error) {
@@ -2067,7 +2298,9 @@ app.get("/auth/gmail/start", (req, res) => {
         const origin = oauthOriginForRequest(req);
         const authorizationUrl = getAuthorizationUrl(req.user.id, readAlertBlockId(req), {
             origin,
-            frontendOrigin: origin
+            frontendOrigin: origin,
+            worldId: readWorkspaceWorldId(req),
+            worldName: readWorkspaceWorldName(req)
         });
         if (req.query?.format === "json") return res.json({authorizationUrl});
         res.redirect(authorizationUrl);
@@ -2116,6 +2349,15 @@ app.post("/auth/calendar/disconnect", (req, res) => { disconnectGoogleCalendar(r
 
 app.get("/email/gmail/status", (req, res) => {
     res.json(getGmailStatus(req.user.id, readAlertBlockId(req)));
+});
+
+app.get("/email/gmail/accounts", requireAuthenticated, async (req, res) => {
+    try {
+        const accounts = await listGmailConnectedAccounts(req.user.id);
+        const preferences = readDashboardPreferences(req.user.id) || {};
+        res.json({accounts: buildGmailAccountCatalog(accounts, preferences)});
+    }
+    catch { res.status(502).json({message:"Impossibile leggere gli account Gmail collegati."}); }
 });
 
 app.post("/auth/gmail/disconnect", (req, res) => {
@@ -2232,6 +2474,11 @@ app.get("/auth/outlook/callback", async (req, res) => {
 
 app.get("/email/outlook/status", (req, res) => res.json(getOutlookStatus(req.user.id, readAlertBlockId(req))));
 
+app.get("/email/outlook/accounts", requireAuthenticated, async (req, res) => {
+    try { res.json({accounts: await listOutlookConnectedAccounts(req.user.id)}); }
+    catch { res.status(502).json({message:"Impossibile leggere gli account Outlook collegati."}); }
+});
+
 app.post("/auth/outlook/disconnect", (req, res) => {
     disconnectOutlook(req.user.id, readAlertBlockId(req));
     res.json({message: "Outlook disconnected"});
@@ -2316,10 +2563,9 @@ app.use(
         }
 
 
-        console.log(
-            "ERRORE MIDDLEWARE:",
-            error
-        );
+        req.folderRocketBackendErrorName = error instanceof Error ? error.name : "UnknownError";
+        req.folderRocketBackendErrorStack = safeDiagnosticText(error instanceof Error ? error.stack : "", 2000);
+        console.warn("FolderRocket request parser failed:", req.folderRocketRequestId, req.folderRocketBackendErrorName);
 
 
         res.status(
@@ -2355,6 +2601,8 @@ const server = app.listen(
     HOST,
     () => {
 
+        recordDiagnostic("system", {type:"backend", severity:"info", category:"lifecycle", message:"Backend avviato", route:"backend/server.js", resolved:true});
+
         console.log(
             `Backend attivo su http://${HOST}:${PORT}`
         );
@@ -2370,17 +2618,30 @@ startEmailAlertScheduler();
 // Mantiene il processo agganciato al terminale anche in ambienti che
 // rilasciano prematuramente gli handle del server HTTP.
 server.ref();
-server.on("error", error => console.error("Backend error:", error));
+server.on("error", error => {
+    recordDiagnostic("system", {type:"backend", severity:"critical", category:"lifecycle", message:`Backend non avviato (${error.name || "errore"})`, route:"backend/server.js"});
+    console.error("Backend error:", error.name || "unknown error");
+});
+let fatalBackendExitStarted = false;
+process.on("uncaughtException", error => {
+    if (fatalBackendExitStarted) return;
+    fatalBackendExitStarted = true;
+    const forceExit = setTimeout(() => process.exit(1), 5000);
+    void recordDiagnostic("system", {type:"backend", severity:"critical", category:"lifecycle", message:`Eccezione backend non gestita (${error.name || "errore"})`, route:"backend/server.js", stack:error.stack})
+        .then(() => flushDiagnostics())
+        .finally(() => { clearTimeout(forceExit); process.exit(1); });
+});
 
 let shuttingDown = false;
 function shutDownBackend() {
     if (shuttingDown) return;
     shuttingDown = true;
+    recordDiagnostic("system", {type:"backend", severity:"info", category:"lifecycle", message:"Arresto del backend richiesto", route:"backend/server.js", resolved:true});
     process.stdin.pause();
     const forceExit = setTimeout(() => process.exit(0), 15000);
     forceExit.unref?.();
     server.close(() => {
-        void archiveWorkQueue.finally(() => process.exit(0));
+        void Promise.all([archiveWorkQueue.catch(() => {}), flushDiagnostics()]).finally(() => process.exit(0));
     });
 }
 

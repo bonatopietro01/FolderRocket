@@ -1,0 +1,18 @@
+# Keep the code graph focused on source. Graphify also honors .gitignore.
+graphify-out/
+node_modules/
+dist/
+release/
+backend/data/
+backend/uploads/
+input/
+output/
+*.log
+*.zip
+*.pdf
+*.docx
+*.xlsx
+.env
+.env.*
+backend/.folderrocket-email-tokens.json
+backend/.folderrocket-token-key

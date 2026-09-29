@@ -9,7 +9,7 @@ import ChangeFormatPanel from "./ChangeFormatPanel";
 import {recordDailyActivity} from "../dailyActivity";
 
 interface FileEntry { name: string; path: string; createdAt?: string; size?: number; sourceName?: string; }
-interface Props { folders: ManagedFolder[]; onUpdate: (id: string, change: Partial<ManagedFolder>) => void; }
+interface Props { folders: ManagedFolder[]; onUpdate: (id: string, change: Partial<ManagedFolder>) => void; storageScope?: string; }
 interface RenamePart { id: string; type: "original" | "converted" | "text" | "date"; value?: string; }
 
 const extensionOf = (name: string) => name.includes(".") ? name.split(".").pop()?.toLowerCase() ?? "other" : "other";
@@ -21,14 +21,22 @@ const sameFolderPath = (left: string, right: string) => left.trim().replace(/\//
 const RENAME_TEMPLATE_KEY = "folderrocket-conversion-rename-template";
 const RENAME_TEMPLATE_VERSION_KEY = "folderrocket-conversion-rename-template-version";
 const emptyRenameParts = (): RenamePart[] => [];
-function readRenameParts(): RenamePart[] {
+function readRenameParts(storageScope: string): RenamePart[] {
     try {
+        const templateKey = `${RENAME_TEMPLATE_KEY}-${storageScope}`;
+        const versionKey = `${RENAME_TEMPLATE_VERSION_KEY}-${storageScope}`;
+        if (localStorage.getItem(templateKey) === null && storageScope.endsWith("-world-work")) {
+            const legacyTemplate = localStorage.getItem(RENAME_TEMPLATE_KEY);
+            const legacyVersion = localStorage.getItem(RENAME_TEMPLATE_VERSION_KEY);
+            if (legacyTemplate !== null) localStorage.setItem(templateKey, legacyTemplate);
+            if (legacyVersion !== null) localStorage.setItem(versionKey, legacyVersion);
+        }
         // Version 2 starts with a blank builder. Existing automatic conversion names stay untouched until the user adds parts.
-        if (localStorage.getItem(RENAME_TEMPLATE_VERSION_KEY) !== "2") {
-            localStorage.setItem(RENAME_TEMPLATE_VERSION_KEY, "2");
+        if (localStorage.getItem(versionKey) !== "2") {
+            localStorage.setItem(versionKey, "2");
             return emptyRenameParts();
         }
-        const stored = JSON.parse(localStorage.getItem(RENAME_TEMPLATE_KEY) || "[]");
+        const stored = JSON.parse(localStorage.getItem(templateKey) || "[]");
         if (Array.isArray(stored) && stored.every(part => part && typeof part.id === "string" && ["original", "converted", "text", "date"].includes(part.type))) return stored;
     } catch { /* Use the safe default below. */ }
     return emptyRenameParts();
@@ -59,7 +67,7 @@ function buildRename(file: FileEntry, parts: RenamePart[]) {
     return `${pieces.join("") || baseName(originalName)}${fileExtension(file.name)}`;
 }
 
-export default function ProcessingWorkspace({folders, onUpdate}: Props) {
+export default function ProcessingWorkspace({folders, onUpdate, storageScope = "default"}: Props) {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [files, setFiles] = useState<FileEntry[]>([]);
     const [type, setType] = useState("all");
@@ -72,7 +80,7 @@ export default function ProcessingWorkspace({folders, onUpdate}: Props) {
     const [converting, setConverting] = useState(false);
     const [previewFile, setPreviewFile] = useState<FileEntry | null>(null);
     const previewContent = useFilePreview(previewFile?.path);
-    const [renameParts, setRenameParts] = useState<RenamePart[]>(readRenameParts);
+    const [renameParts, setRenameParts] = useState<RenamePart[]>(() => readRenameParts(storageScope));
     const [deliveryFile, setDeliveryFile] = useState<FileEntry | null>(null);
     const [deliveryFolderIds, setDeliveryFolderIds] = useState<string[]>([]);
     const [deliveryBusy, setDeliveryBusy] = useState(false);
@@ -95,7 +103,7 @@ export default function ProcessingWorkspace({folders, onUpdate}: Props) {
         return () => controller.abort();
     }, [selected?.id, selected?.path, selected?.storage, selected?.virtualFiles]);
 
-    useEffect(() => { localStorage.setItem(RENAME_TEMPLATE_KEY, JSON.stringify(renameParts)); }, [renameParts]);
+    useEffect(() => { localStorage.setItem(`${RENAME_TEMPLATE_KEY}-${storageScope}`, JSON.stringify(renameParts)); }, [renameParts, storageScope]);
 
     const fileTypeCounts = useMemo(() => Object.entries(files.reduce<Record<string,number>>((counts,file)=>{const extension=extensionOf(file.name);counts[extension]=(counts[extension]||0)+1;return counts;},{})).sort(([left],[right])=>left.localeCompare(right)),[files]);
     const activeType = type === "all" || fileTypeCounts.some(([extension])=>extension===type) ? type : "all";

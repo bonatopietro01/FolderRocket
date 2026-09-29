@@ -3,6 +3,7 @@ import {
     useCallback,
     useEffect,
     useMemo,
+    useRef,
     useState
 } from "react";
 
@@ -20,6 +21,7 @@ import {
 } from "lucide-react";
 
 import { API_BASE_URL } from "../api";
+import {emailAccountContainsBlock, emailAccountOptionLabel, invalidateEmailAccounts, loadEmailAccounts, type EmailAccount} from "../emailAccounts";
 import EmailAlertBuilder, {type EmailAlertRule, type EmailAttachmentReader} from "./EmailAlertBuilder";
 
 interface EmailAttachment {
@@ -65,6 +67,7 @@ const WARNING_SEEN_KEY = "folderrocket-gmail-warning-seen";
 const WARNING_ALERTED_KEY = "folderrocket-gmail-warning-alerted";
 const WARNING_RESULTS_KEY = "folderrocket-gmail-warning-results";
 const EMAIL_ATTACHMENT_TYPE = "application/x-folderrocket-gmail-attachments";
+const LEGACY_SHARED_GMAIL_ACCOUNT_ID = "folderrocket-legacy-shared-gmail";
 
 function storageKey(key: string, scope: string) { return `${key}-${scope}`; }
 
@@ -164,14 +167,18 @@ function FileKindIcon({name}: {name: string}) {
     return <span className="fileKindIcon generic"><File size={14} /></span>;
 }
 
-function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {storageScope: string; alertBlockId: string; aiEnabled?: boolean}) {
-    const alertSettingsUrl = `${API_BASE_URL}/email/alerts/settings/gmail?blockId=${encodeURIComponent(alertBlockId)}`;
-    const gmailUrl = useCallback((endpoint: string) => `${API_BASE_URL}/email/gmail${endpoint}${endpoint.includes("?") ? "&" : "?"}blockId=${encodeURIComponent(alertBlockId)}`, [alertBlockId]);
-    const gmailAuthUrl = (endpoint: string) => `${API_BASE_URL}/auth/gmail${endpoint}?blockId=${encodeURIComponent(alertBlockId)}`;
+function GmailSourcePanel({storageScope, alertBlockId, accountBlockId, onAccountBlockIdChange, accountCatalogKey = "", worldId = "work", worldNames = {}, worldName = "", aiEnabled = false}: {storageScope: string; alertBlockId: string; accountBlockId?: string | null; onAccountBlockIdChange?: (accountBlockId?: string | null) => void; accountCatalogKey?: string; worldId?: string; worldNames?: Record<string, string>; worldName?: string; aiEnabled?: boolean}) {
+    const accountBlockChangeRef = useRef(onAccountBlockIdChange);
+    useEffect(() => { accountBlockChangeRef.current = onAccountBlockIdChange; }, [onAccountBlockIdChange]);
+    const credentialBlockId = accountBlockId === null ? "" : accountBlockId || alertBlockId;
+    const accountDataScope = `${storageScope}-gmail-${credentialBlockId || "none"}`;
+    const alertSettingsUrl = `${API_BASE_URL}/email/alerts/settings/gmail?blockId=${encodeURIComponent(alertBlockId)}&worldId=${encodeURIComponent(worldId)}`;
+    const gmailUrl = useCallback((endpoint: string) => `${API_BASE_URL}/email/gmail${endpoint}${endpoint.includes("?") ? "&" : "?"}blockId=${encodeURIComponent(credentialBlockId)}`, [credentialBlockId]);
+    const gmailAuthUrl = (endpoint: string, targetBlockId = credentialBlockId) => `${API_BASE_URL}/auth/gmail${endpoint}?blockId=${encodeURIComponent(targetBlockId)}`;
     const [connected, setConnected] = useState(false);
     const [attachments, setAttachments] = useState<EmailAttachment[]>([]);
     const [selectedIds, setSelectedIds] = useState<string[]>([]);
-    const [dismissedIds, setDismissedIds] = useState<string[]>(() => readDismissed(storageScope));
+    const [dismissedIds, setDismissedIds] = useState<string[]>(() => readDismissed(accountDataScope));
     const [mode, setMode] = useState<FilterMode>("relative");
     const [days, setDays] = useState(7);
     const [startDate, setStartDate] = useState("");
@@ -183,15 +190,42 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
     const [favorites, setFavorites] = useState<GmailWarningRule[]>([]);
     const [attachmentReader, setAttachmentReader] = useState<EmailAttachmentReader>({enabled: true, filter: {mode: "relative", days: 7, startDate: "", endDate: ""}});
     const [alertSettingsReady, setAlertSettingsReady] = useState(false);
-    const [warningResults, setWarningResults] = useState<GmailWarningResult[]>(() => readWarningResults(storageScope));
+    const [warningResults, setWarningResults] = useState<GmailWarningResult[]>(() => readWarningResults(accountDataScope));
     const [visibleWarningKind, setVisibleWarningKind] = useState<WarningKind | null>(null);
     const [warningLoading, setWarningLoading] = useState(false);
     const [warningError, setWarningError] = useState("");
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
-    const [showDisconnect, setShowDisconnect] = useState(false);
     const [disconnectArmed, setDisconnectArmed] = useState(false);
+    const [emailAccounts, setEmailAccounts] = useState<EmailAccount[]>([]);
+    const selectedCatalogAccount = emailAccounts.find(account => emailAccountContainsBlock(account, credentialBlockId));
+    const hasAccountSelected = accountBlockId !== null && (Boolean(accountBlockId) || Boolean(selectedCatalogAccount));
+    const accountPickerValue = accountBlockId === null
+        ? ""
+        : selectedCatalogAccount
+            ? credentialBlockId
+            : accountBlockId
+                ? credentialBlockId
+                : "";
+    const canDisconnectGlobally = credentialBlockId === alertBlockId || credentialBlockId === LEGACY_SHARED_GMAIL_ACCOUNT_ID;
+    const selectedAccountDescription = !accountPickerValue
+        ? `Nessun account selezionato per ${worldName || "questo pianeta"}`
+        : selectedCatalogAccount
+            ? `Selezionato per ${worldName || "questo pianeta"} · ${selectedCatalogAccount.email || selectedCatalogAccount.label}`
+            : "Selezione salvata · origine non specificata";
     const visibleWarnings = useMemo(() => warnings.filter(rule => aiEnabled || rule.kind !== "ai"), [aiEnabled, warnings]);
+
+    useEffect(() => {
+        if (!accountCatalogKey) return;
+        let active = true;
+        const refreshAccounts = (force = false) => void loadEmailAccounts("gmail", accountCatalogKey, force)
+            .then(accounts => { if (active) setEmailAccounts(accounts); })
+            .catch(() => { if (active) setEmailAccounts([]); });
+        refreshAccounts();
+        const refreshOnFocus = () => refreshAccounts(true);
+        window.addEventListener("focus", refreshOnFocus);
+        return () => { active = false; window.removeEventListener("focus", refreshOnFocus); };
+    }, [accountCatalogKey]);
 
     const visibleAttachments = useMemo(
         () => attachments.filter(
@@ -252,11 +286,11 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
 
     const checkWarnings = useCallback(async (rulesToCheck = warnings) => {
         const activeRules = rulesToCheck.filter(rule => rule.enabled !== false && (aiEnabled || rule.kind !== "ai"));
-        if (!connected || !activeRules.length) return;
+        if (!connected || !hasAccountSelected || !activeRules.length) return;
         setWarningLoading(true);
         setWarningError("");
         try {
-            const seenByRule = readWarningSeen(storageScope);
+            const seenByRule = readWarningSeen(accountDataScope);
             const response = await fetch(gmailUrl("/warnings/check"), {
                 method: "POST",
                 headers: {"Content-Type": "application/json"},
@@ -267,19 +301,19 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
             if (!response.ok) throw new Error(data.message ?? "Unable to check Gmail warnings");
             const results = Array.isArray(data.results) ? data.results : [];
             setWarningResults(results);
-            localStorage.setItem(storageKey(WARNING_RESULTS_KEY, storageScope), JSON.stringify(results));
+            localStorage.setItem(storageKey(WARNING_RESULTS_KEY, accountDataScope), JSON.stringify(results));
             if (Array.isArray(data.attachments) && data.attachments.length) setAttachments(current => mergeAttachments(current, data.attachments ?? []));
             const aiError = aiEnabled ? results.find(result => warnings.find(rule => rule.id === result.ruleId)?.kind === "ai" && result.error)?.error : undefined;
             if (aiError) setWarningError(aiError);
             const nextSeen = {...seenByRule};
-            const nextAlerts = {...readWarningAlerts(storageScope)};
+            const nextAlerts = {...readWarningAlerts(accountDataScope)};
             for (const result of results) {
                 const newIds = result.messageIds.filter(messageId => !(nextSeen[result.ruleId] ?? []).includes(messageId));
                 nextSeen[result.ruleId] = [...new Set([...(nextSeen[result.ruleId] ?? []), ...result.messageIds])].slice(-200);
                 nextAlerts[result.ruleId] = [...new Set([...(nextAlerts[result.ruleId] ?? []), ...newIds])].slice(-200);
             }
-            localStorage.setItem(storageKey(WARNING_SEEN_KEY, storageScope), JSON.stringify(nextSeen));
-            localStorage.setItem(storageKey(WARNING_ALERTED_KEY, storageScope), JSON.stringify(nextAlerts));
+            localStorage.setItem(storageKey(WARNING_SEEN_KEY, accountDataScope), JSON.stringify(nextSeen));
+            localStorage.setItem(storageKey(WARNING_ALERTED_KEY, accountDataScope), JSON.stringify(nextAlerts));
         }
         catch (warningCheckError) {
             setWarningError(warningCheckError instanceof Error ? warningCheckError.message : "Unable to check Gmail warnings");
@@ -287,10 +321,10 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
         finally {
             setWarningLoading(false);
         }
-    }, [aiEnabled, connected, days, endDate, mode, startDate, storageScope, warnings, gmailUrl]);
+    }, [accountDataScope, aiEnabled, connected, days, endDate, hasAccountSelected, mode, startDate, warnings, gmailUrl]);
 
     const refresh = useCallback(async () => {
-        if (!connected) {
+        if (!connected || !hasAccountSelected) {
             return;
         }
         setLoading(true);
@@ -319,11 +353,18 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
         finally {
             setLoading(false);
         }
-    }, [attachmentReader, checkWarnings, connected, gmailUrl]);
+    }, [attachmentReader, checkWarnings, connected, hasAccountSelected, gmailUrl]);
 
     useEffect(() => {
         let active = true;
         const refreshConnection = () => {
+            if (!hasAccountSelected) {
+                setConnected(false);
+                setAttachments([]);
+                setWarningResults([]);
+                setSelectedIds([]);
+                return;
+            }
             void fetch(gmailUrl("/status"), {credentials: "include"})
                 .then(response => response.json())
                 .then((data: {connected?: boolean}) => { if (active) setConnected(Boolean(data.connected)); })
@@ -332,15 +373,19 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
         refreshConnection();
         window.addEventListener("focus", refreshConnection);
         return () => { active = false; window.removeEventListener("focus", refreshConnection); };
-    }, [gmailUrl]);
+    }, [gmailUrl, hasAccountSelected]);
 
     useEffect(() => {
         let active = true;
         fetch(alertSettingsUrl, {credentials: "include"})
             .then(response => response.ok ? response.json() : null)
-            .then((data: {providerSettings?: {attachmentReader?: EmailAttachmentReader; rules?: GmailWarningRule[]; runtime?: {rules?: Record<string, {result?: GmailWarningResult; attachments?: EmailAttachment[]}>}}; favorites?: GmailWarningRule[]} | null) => {
+            .then((data: {providerSettings?: {accountBlockId?: string | null; attachmentReader?: EmailAttachmentReader; rules?: GmailWarningRule[]; runtime?: {accountBlockId?: string; rules?: Record<string, {result?: GmailWarningResult; attachments?: EmailAttachment[]}>}}; favorites?: GmailWarningRule[]} | null) => {
                 if (!active || !data?.providerSettings) return;
                 const provider = data.providerSettings;
+                if (accountBlockId === undefined && provider.accountBlockId === null) accountBlockChangeRef.current?.(null);
+                else if (accountBlockId === undefined && typeof provider.accountBlockId === "string" && provider.accountBlockId) {
+                    accountBlockChangeRef.current?.(provider.accountBlockId === alertBlockId ? undefined : provider.accountBlockId);
+                }
                 if (provider.attachmentReader) {
                     const filter = provider.attachmentReader.filter;
                     setAttachmentReader(provider.attachmentReader);
@@ -351,14 +396,17 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
                 }
                 if (Array.isArray(provider.rules) && provider.rules.length) setWarnings(provider.rules);
                 if (Array.isArray(data.favorites)) setFavorites(data.favorites);
-                const scheduledResults = Object.values(provider.runtime?.rules ?? {}).map(item => item?.result).filter((item): item is GmailWarningResult => Boolean(item));
-                if (scheduledResults.length) { setWarningResults(scheduledResults); localStorage.setItem(storageKey(WARNING_RESULTS_KEY, storageScope), JSON.stringify(scheduledResults)); }
-                const scheduledAttachments = Object.values(provider.runtime?.rules ?? {}).flatMap(item => item?.attachments ?? []);
-                if (scheduledAttachments.length) setAttachments(current => mergeAttachments(current, scheduledAttachments));
+                const configuredAccountId = provider.accountBlockId === null ? "" : provider.accountBlockId || alertBlockId;
+                const runtimeAccountId = (provider.runtime as {accountBlockId?: string} | undefined)?.accountBlockId;
+                const runtimeMatches = configuredAccountId === credentialBlockId && (!runtimeAccountId || runtimeAccountId === credentialBlockId);
+                const scheduledResults = runtimeMatches ? Object.values(provider.runtime?.rules ?? {}).map(item => item?.result).filter((item): item is GmailWarningResult => Boolean(item)) : [];
+                if (scheduledResults.length) { setWarningResults(scheduledResults); localStorage.setItem(storageKey(WARNING_RESULTS_KEY, accountDataScope), JSON.stringify(scheduledResults)); }
+                const scheduledAttachments = runtimeMatches ? Object.values(provider.runtime?.rules ?? {}).flatMap(item => item?.attachments ?? []) : [];
+                if (runtimeMatches && scheduledAttachments.length) setAttachments(current => mergeAttachments(current, scheduledAttachments));
             })
             .finally(() => { if (active) setAlertSettingsReady(true); });
         return () => { active = false; };
-    }, [alertSettingsUrl, storageScope]);
+    }, [accountBlockId, accountDataScope, alertBlockId, alertSettingsUrl, credentialBlockId]);
 
     useEffect(() => {
         if (!alertSettingsReady) return;
@@ -367,28 +415,32 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
                 method: "PUT",
                 headers: {"Content-Type": "application/json"},
                 credentials: "include",
-                body: JSON.stringify({providerSettings: {attachmentReader, rules: warnings}, favorites})
+                body: JSON.stringify({providerSettings: {attachmentReader, rules: warnings, accountBlockId: accountBlockId === null ? null : credentialBlockId}, favorites})
             }).then(async response=>{if(!response.ok){const data=await response.json().catch(()=>({})) as {message?:string};throw new Error(data.message||"Unable to save Gmail settings.");}}).catch(reason=>setError(reason instanceof Error?reason.message:"Unable to save Gmail settings."));
         }, 350);
         return () => window.clearTimeout(timer);
-    }, [alertSettingsReady, alertSettingsUrl, attachmentReader, favorites, warnings]);
+    }, [accountBlockId, alertSettingsReady, alertSettingsUrl, attachmentReader, credentialBlockId, favorites, warnings]);
 
     useEffect(() => {
         if (!connected) return;
         const interval = window.setInterval(() => {
             void fetch(alertSettingsUrl, {credentials: "include"})
                 .then(response => response.ok ? response.json() : null)
-                .then((data: {providerSettings?: {runtime?: {rules?: Record<string, {result?: GmailWarningResult; attachments?: EmailAttachment[]}>}}; favorites?: GmailWarningRule[]} | null) => {
-                    const runtimeRules = Object.values(data?.providerSettings?.runtime?.rules ?? {});
+                .then((data: {providerSettings?: {accountBlockId?: string | null; runtime?: {accountBlockId?: string; rules?: Record<string, {result?: GmailWarningResult; attachments?: EmailAttachment[]}>}}; favorites?: GmailWarningRule[]} | null) => {
+                    const provider = data?.providerSettings as ({accountBlockId?: string | null; runtime?: {accountBlockId?: string; rules?: Record<string, {result?: GmailWarningResult; attachments?: EmailAttachment[]}>}} | undefined);
+                    const configuredAccountId = provider?.accountBlockId === null ? "" : provider?.accountBlockId || alertBlockId;
+                    const runtimeAccountId = provider?.runtime?.accountBlockId;
+                    if (configuredAccountId !== credentialBlockId || (runtimeAccountId && runtimeAccountId !== credentialBlockId)) return;
+                    const runtimeRules = Object.values(provider?.runtime?.rules ?? {});
                     const results = runtimeRules.map(item => item?.result).filter((item): item is GmailWarningResult => Boolean(item));
-                    if (results.length) { setWarningResults(results); localStorage.setItem(storageKey(WARNING_RESULTS_KEY, storageScope), JSON.stringify(results)); }
+                    if (results.length) { setWarningResults(results); localStorage.setItem(storageKey(WARNING_RESULTS_KEY, accountDataScope), JSON.stringify(results)); }
                     const scheduledAttachments = runtimeRules.flatMap(item => item?.attachments ?? []);
                     if (scheduledAttachments.length) setAttachments(current => mergeAttachments(current, scheduledAttachments));
                     if (Array.isArray(data?.favorites)) setFavorites(data.favorites);
                 });
         }, 60_000);
         return () => window.clearInterval(interval);
-    }, [alertSettingsUrl, connected, storageScope]);
+    }, [accountDataScope, alertBlockId, alertSettingsUrl, connected, credentialBlockId]);
 
     useEffect(() => {
         if (!liveReading || !connected) {
@@ -416,8 +468,7 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
             const target = event.target as Element;
             if (!target.closest(".emailSourceCard")) setSelectedIds([]);
             if (!target.closest(".gmailWarningsMenu") && !target.closest(".gmailWarningToggle")) setShowWarnings(false);
-            if (!target.closest(".emailReaderHeaderControl")) setShowSettings(false);
-            if (!target.closest(".emailConnectionControls")) { setShowDisconnect(false); setDisconnectArmed(false); }
+            if (!target.closest(".emailReaderHeaderControl")) { setShowSettings(false); setDisconnectArmed(false); }
         };
         document.addEventListener("pointerdown", dismissWhenOutside);
         return () => document.removeEventListener("pointerdown", dismissWhenOutside);
@@ -452,7 +503,7 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
         const toDismiss = selectedIds;
         setDismissedIds(current => {
             const updated = [...new Set([...current, ...toDismiss])];
-            localStorage.setItem(storageKey(DISMISSED_KEY, storageScope), JSON.stringify(updated));
+            localStorage.setItem(storageKey(DISMISSED_KEY, accountDataScope), JSON.stringify(updated));
             return updated;
         });
         setSelectedIds([]);
@@ -475,7 +526,7 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
             headers: {"Content-Type": "application/json"},
             credentials: "include",
             keepalive: true,
-            body: JSON.stringify({providerSettings: {attachmentReader, rules: nextWarnings}, favorites: nextFavorites})
+            body: JSON.stringify({providerSettings: {attachmentReader, rules: nextWarnings, accountBlockId: accountBlockId === null ? null : credentialBlockId}, favorites: nextFavorites})
         }).then(async response=>{if(!response.ok){const data=await response.json().catch(()=>({})) as {message?:string};throw new Error(data.message||"Unable to save Gmail settings.");}setError("");}).catch(reason=>setError(reason instanceof Error?reason.message:"Unable to save Gmail settings."));
     }
 
@@ -483,7 +534,7 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
         setVisibleWarningKind(null);
         setShowWarnings(current => {
             if (!current) {
-                localStorage.setItem(storageKey(WARNING_ALERTED_KEY, storageScope), "{}");
+                localStorage.setItem(storageKey(WARNING_ALERTED_KEY, accountDataScope), "{}");
             }
             return !current;
         });
@@ -496,16 +547,32 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
 
     async function disconnect() {
         try {
-            const response = await fetch(gmailAuthUrl("/disconnect"), {method: "POST", credentials: "include"});
+            const isGlobalLegacyAccount = credentialBlockId === LEGACY_SHARED_GMAIL_ACCOUNT_ID;
+            const canDisconnectGlobally = credentialBlockId === alertBlockId || isGlobalLegacyAccount;
+            if (!canDisconnectGlobally) {
+                onAccountBlockIdChange?.(null);
+                setConnected(false);
+                setLiveReading(false);
+                setAttachments([]);
+                setSelectedIds([]);
+                setWarningResults([]);
+                setDisconnectArmed(false);
+                return;
+            }
+            const response = await fetch(gmailAuthUrl("/disconnect", credentialBlockId), {method: "POST", credentials: "include"});
             if (!response.ok) throw new Error("Gmail could not be disconnected. Access may still be active.");
+            onAccountBlockIdChange?.(null);
             setConnected(false);
             setLiveReading(false);
             setAttachments([]);
             setSelectedIds([]);
             setWarningResults([]);
             setError("");
-            setShowDisconnect(false);
             setDisconnectArmed(false);
+            if (accountCatalogKey) {
+                invalidateEmailAccounts("gmail", accountCatalogKey);
+                void loadEmailAccounts("gmail", accountCatalogKey, true).then(setEmailAccounts).catch(() => setEmailAccounts([]));
+            }
         }
         catch (disconnectError) {
             setError(disconnectError instanceof Error ? disconnectError.message : "Gmail could not be disconnected. Access may still be active.");
@@ -515,7 +582,10 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
     async function connectGmail() {
         setError("");
         try {
-            const response = await fetch(`${gmailAuthUrl("/start")}&format=json`, {
+            const targetBlockId = hasAccountSelected ? credentialBlockId : alertBlockId;
+            if (!hasAccountSelected) onAccountBlockIdChange?.(undefined);
+            const authorizationQuery = new URLSearchParams({worldId, worldName});
+            const response = await fetch(`${gmailAuthUrl("/start", targetBlockId)}&${authorizationQuery}&format=json`, {
                 headers: {Accept: "application/json"},
                 credentials: "include"
             });
@@ -545,7 +615,7 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
         const dragged = selectedIds.includes(attachmentId)
             ? visibleAttachments.filter(item => selectedIds.includes(`${item.messageId}:${item.attachmentId}`))
             : [attachment];
-        const payload = dragged.map(item => ({...item, sourceBlockId: alertBlockId}));
+        const payload = dragged.map(item => ({...item, sourceBlockId: credentialBlockId}));
         event.dataTransfer.effectAllowed = "copy";
         event.dataTransfer.dropEffect = "copy";
         event.dataTransfer.setData(EMAIL_ATTACHMENT_TYPE, JSON.stringify(payload));
@@ -556,20 +626,40 @@ function GmailSourcePanel({storageScope, alertBlockId, aiEnabled = false}: {stor
         <section className={`${inboxItems.length ? "sourceCard emailSourceCard" : "sourceCard emailSourceCard isEmptySource"}${showWarnings || visibleWarningKind ? " warningsOpen" : ""}`}>
             <div className="sourceHeader">
                 <Mail className="gmailPanelIcon" size={29} />
-                {connected ? <span className="emailConnectionControls"><button type="button" className="sourceTitle emailConnectionTitle" onClick={() => { setShowDisconnect(current => !current); setDisconnectArmed(false); }} title="Gmail connection options">Gmail</button>{showDisconnect && <button type="button" className={disconnectArmed ? "emailDisconnectButton armed" : "emailDisconnectButton"} onClick={() => { if (disconnectArmed) void disconnect(); else setDisconnectArmed(true); }} title={disconnectArmed ? "Press again to disconnect Gmail" : "Disconnect Gmail"}>{disconnectArmed ? "Confirm" : "Disconnect"}</button>}</span> : <span className="sourceTitle">Gmail</span>}
-                {connected && <span className="emailReaderHeaderControl"><button type="button" className={`emailReaderHeaderButton${attachmentReader.enabled ? " active" : ""}`} onClick={() => setShowSettings(current => !current)} title="Read attachments and choose period"><span className="emailRefreshIcon"><RefreshCw className={loading ? "spin" : ""} size={13}/></span><span>Read attachments</span></button>{showSettings && <div className="emailReaderHeaderMenu"><header><strong>Read attachments</strong><button type="button" onClick={() => void refresh()} disabled={loading || !attachmentReader.enabled} title="Refresh attachments"><RefreshCw className={loading ? "spin" : ""} size={14}/></button></header><label className="emailReaderEnabled"><input type="checkbox" checked={attachmentReader.enabled} onChange={event => { const enabled = event.target.checked; setAttachmentReader(current => ({...current, enabled})); if (!enabled) setAttachments([]); }}/>Enable attachment reading</label><select value={mode} onChange={event => { const nextMode = event.target.value as FilterMode; setMode(nextMode); setAttachmentReader(current => ({...current, filter: {...current.filter, mode: nextMode}})); }}><option value="relative">Last days</option><option value="range">Date range</option></select>{mode === "relative" ? <label>Days back<input type="number" min="1" value={days} onChange={event => { const value = Math.max(1, Number(event.target.value) || 1); setDays(value); setAttachmentReader(current => ({...current, filter: {...current.filter, days: value}})); }}/></label> : <div className="emailDateRange"><label>From<input type="date" value={startDate} onChange={event => { setStartDate(event.target.value); setAttachmentReader(current => ({...current, filter: {...current.filter, startDate: event.target.value}})); }}/></label><label>To<input type="date" value={endDate} onChange={event => { setEndDate(event.target.value); setAttachmentReader(current => ({...current, filter: {...current.filter, endDate: event.target.value}})); }}/></label></div>}<button type="button" className="emailReaderApply" onClick={() => { setShowSettings(false); if (attachmentReader.enabled) void refresh(); }}>Apply & refresh</button></div>}</span>}
+                <span className="sourceTitle">Gmail</span>
+                <span className="emailReaderHeaderControl"><button type="button" className={`emailReaderHeaderButton${attachmentReader.enabled ? " active" : ""}`} onClick={() => { setShowSettings(current => !current); setDisconnectArmed(false); }} aria-expanded={showSettings} title="Account, Read attachments and options"><span className="emailRefreshIcon"><RefreshCw className={loading ? "spin" : ""} size={13}/></span><span>Read attachments</span></button>{showSettings && <div className="emailReaderHeaderMenu" onClick={event => event.stopPropagation()}>
+                    <header><strong>Gmail account · {worldName || "current planet"}</strong></header>
+                    <label className="emailAccountPickerRow"><span>Account Gmail</span><select aria-label={`Account Gmail per ${worldName || "questo pianeta"}`} title={selectedCatalogAccount ? emailAccountOptionLabel(selectedCatalogAccount, worldNames) : "Seleziona l’account Gmail usato da questo pianeta"} value={accountPickerValue} onChange={event => {
+                        const value = event.target.value;
+                        onAccountBlockIdChange?.(value === "" ? null : value === alertBlockId ? undefined : value);
+                        setConnected(false);
+                        setAttachments([]);
+                        setWarningResults([]);
+                        setSelectedIds([]);
+                    }}>
+                        <option value="">Nessun account selezionato</option>
+                        {accountBlockId && !selectedCatalogAccount && <option value={credentialBlockId}>Selezione salvata · origine non specificata</option>}
+                        {emailAccounts.map(account => {
+                            const optionValue = emailAccountContainsBlock(account, credentialBlockId) ? credentialBlockId : account.blockId;
+                            return <option key={account.blockId} value={optionValue}>{emailAccountOptionLabel(account, worldNames)}</option>;
+                        })}
+                    </select><small>{selectedAccountDescription}</small></label>
+                    <div className="emailAccountMenuActions">{connected ? <><span className="emailAccountMenuStatus">Connected · {selectedCatalogAccount?.email || selectedCatalogAccount?.label || "Gmail"}</span><button type="button" className={disconnectArmed ? "emailDisconnectButton armed" : "emailDisconnectButton"} onClick={() => { if (disconnectArmed) void disconnect(); else setDisconnectArmed(true); }} title={disconnectArmed ? (canDisconnectGlobally ? "Press again to disconnect this account from FolderRocket" : "Press again to remove this planet's account link") : (canDisconnectGlobally ? "Disconnect globally" : "Unlink from this planet")}>{disconnectArmed ? (canDisconnectGlobally ? "Confirm disconnect" : "Confirm unlink") : (canDisconnectGlobally ? "Disconnect" : "Unlink from planet")}</button></> : <><span className="emailAccountMenuStatus">{hasAccountSelected ? "Selected account is not connected" : "No account selected for this planet"}</span><button type="button" className="emailConnectButton" onClick={() => void connectGmail()}>{hasAccountSelected ? "Connect selected account" : "Connect Gmail to this planet"}</button></>}</div>
+                    <hr/>
+                    <header><strong>Read attachments</strong><button type="button" onClick={() => void refresh()} disabled={loading || !connected || !attachmentReader.enabled} title="Refresh attachments"><RefreshCw className={loading ? "spin" : ""} size={14}/></button></header>
+                    <label className="emailReaderEnabled"><input type="checkbox" checked={attachmentReader.enabled} disabled={!connected} onChange={event => { const enabled = event.target.checked; setAttachmentReader(current => ({...current, enabled})); if (!enabled) setAttachments([]); }}/>Enable attachment reading</label>
+                    <select value={mode} disabled={!connected} onChange={event => { const nextMode = event.target.value as FilterMode; setMode(nextMode); setAttachmentReader(current => ({...current, filter: {...current.filter, mode: nextMode}})); }}><option value="relative">Last days</option><option value="range">Date range</option></select>
+                    {mode === "relative" ? <label>Days back<input type="number" min="1" value={days} disabled={!connected} onChange={event => { const value = Math.max(1, Number(event.target.value) || 1); setDays(value); setAttachmentReader(current => ({...current, filter: {...current.filter, days: value}})); }}/></label> : <div className="emailDateRange"><label>From<input type="date" value={startDate} disabled={!connected} onChange={event => { setStartDate(event.target.value); setAttachmentReader(current => ({...current, filter: {...current.filter, startDate: event.target.value}})); }}/></label><label>To<input type="date" value={endDate} disabled={!connected} onChange={event => { setEndDate(event.target.value); setAttachmentReader(current => ({...current, filter: {...current.filter, endDate: event.target.value}})); }}/></label></div>}
+                    <button type="button" className="emailReaderApply" disabled={!connected} onClick={() => { setShowSettings(false); if (attachmentReader.enabled) void refresh(); }}>Apply & refresh</button>
+                </div>}</span>
                 {connected && <button type="button" className="gmailWarningToggle" onClick={toggleWarnings} title="Gmail alerts"><BellRing size={15} /></button>}
                 {connected && <span className={warningLoading ? "emailAlertSlots analyzing" : "emailAlertSlots"}>{warningLoading ? "Analyzing…" : visibleWarnings.filter(rule => rule.enabled).slice(0, 5).map(rule => { const result = warningResults.find(item => item.ruleId === rule.id); return result ? <button key={`ready-${rule.id}`} type="button" className={`gmailAlertCount alertColor-${rule.color}`} title={`Show ${rule.label} emails`} onClick={() => toggleWarningPreview(rule.kind)}>{result.total}</button> : <span key={`ready-${rule.id}`} className={`emailAlertReadyDot alertColor-${rule.color}`} title={`${rule.label} is active`} />; })}</span>}
-                {connected && <span className="emailHeaderStatus">Connected</span>}
                 {connected && <span className="emailHeaderReading">Virtual: <button type="button" className={liveReading ? "emailVirtualReadingToggle active" : "emailVirtualReadingToggle"} onClick={() => setLiveReading(current => !current)} aria-pressed={liveReading} title={liveReading ? "Turn Virtual Reading off" : "Turn Virtual Reading on"}>{liveReading ? "ON" : "OFF"}</button></span>}
             </div>
 
             {!connected ? (
                 <div className="emailConnectArea">
-                    <p>No Gmail access is active. Connecting authorizes read-only access.</p>
-                    <button type="button" className="emailConnectButton" onClick={() => void connectGmail()}>
-                        Connect Gmail
-                    </button>
+                    <p>{hasAccountSelected ? "This Gmail account is not connected in FolderRocket. Open Read attachments to connect it." : `Nessun account Gmail è selezionato per ${worldName || "questo pianeta"}. Apri Read attachments per selezionare o collegare un account.`}</p>
                 </div>
             ) : (
                 <>

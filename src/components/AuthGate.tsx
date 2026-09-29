@@ -1,6 +1,7 @@
-import {useEffect, useState, type FormEvent, type ReactNode} from "react";
-import {Copy, Eye, EyeOff, History, KeyRound, LogOut, Plus, RefreshCw, Settings2, ShieldCheck, UserRound} from "lucide-react";
+import {useEffect, useRef, useState, type FormEvent, type ReactNode} from "react";
+import {Activity, ChevronDown, ChevronUp, Copy, Eye, EyeOff, History, KeyRound, LogOut, Plus, RefreshCw, Settings2, ShieldCheck, Sparkles, UserRound, ZoomIn} from "lucide-react";
 import {API_BASE_URL} from "../api";
+import IntegrationSetup from "./IntegrationSetup";
 import folderRocketLoginLogo from "../assets/folderrocket-login-logo.png";
 
 export interface FolderRocketUser {
@@ -69,9 +70,14 @@ function PasswordField({
     </label>;
 }
 
-function AccountMenu({user, onLogout, appZoom, onAppZoomChange, floatingToolsScale, onFloatingToolsScaleChange, bookmarkScale, onBookmarkScaleChange, bookmarkWidth, onBookmarkWidthChange, bookmarkHeight, onBookmarkHeightChange}: {user: FolderRocketUser; onLogout: () => Promise<void>; appZoom: number; onAppZoomChange: (value: number) => void; floatingToolsScale: number; onFloatingToolsScaleChange: (value: number) => void; bookmarkScale: number; onBookmarkScaleChange: (value: number) => void; bookmarkWidth: number; onBookmarkWidthChange: (value: number) => void; bookmarkHeight: number; onBookmarkHeightChange: (value: number) => void}) {
+function AccountMenu({user, onLogout, onOpenDiagnostics, appZoom, onAppZoomChange, aiConfigured, aiMode, onAIModeChange, onAIStatusChange, floatingToolsScale, onFloatingToolsScaleChange, bookmarkScale, onBookmarkScaleChange, bookmarkWidth, onBookmarkWidthChange, bookmarkHeight, onBookmarkHeightChange}: {user: FolderRocketUser; onLogout: () => Promise<void>; onOpenDiagnostics: () => void; appZoom: number; onAppZoomChange: (value: number) => void; aiConfigured: boolean; aiMode: boolean; onAIModeChange: (enabled: boolean) => void; onAIStatusChange: (ready: boolean) => void; floatingToolsScale: number; onFloatingToolsScaleChange: (value: number) => void; bookmarkScale: number; onBookmarkScaleChange: (value: number) => void; bookmarkWidth: number; onBookmarkWidthChange: (value: number) => void; bookmarkHeight: number; onBookmarkHeightChange: (value: number) => void}) {
     const [open, setOpen] = useState(false);
-    const [settingsOpen, setSettingsOpen] = useState(false);
+    const [moreZoomsOpen, setMoreZoomsOpen] = useState(false);
+    const [servicesOpen, setServicesOpen] = useState(false);
+    const [servicesStacked, setServicesStacked] = useState(false);
+    const [servicesPosition, setServicesPosition] = useState({left: 12, top: 64, maxHeight: 620});
+    const accountMenuRef = useRef<HTMLDivElement>(null);
+    const servicesTriggerRef = useRef<HTMLButtonElement>(null);
     const [inviteEmail, setInviteEmail] = useState("");
     const [inviteResult, setInviteResult] = useState<{email: string; code: string} | null>(null);
     const [resetEmail, setResetEmail] = useState("");
@@ -88,7 +94,8 @@ function AccountMenu({user, onLogout, appZoom, onAppZoomChange, floatingToolsSca
             setRecoveryResult(null);
             setAuditEvents(null);
             setError("");
-            setSettingsOpen(false);
+            setMoreZoomsOpen(false);
+            setServicesOpen(false);
         }
         setOpen(current => !current);
     }
@@ -163,13 +170,46 @@ function AccountMenu({user, onLogout, appZoom, onAppZoomChange, floatingToolsSca
     function adjustBookmarkWidth(amount: number) { onBookmarkWidthChange(Math.max(64, Math.min(220, bookmarkWidth + amount))); }
     function adjustBookmarkHeight(amount: number) { onBookmarkHeightChange(Math.max(22, Math.min(72, bookmarkHeight + amount))); }
 
+    function toggleServices() {
+        if (servicesOpen) { setServicesOpen(false); return; }
+        const menuRect = accountMenuRef.current?.getBoundingClientRect();
+        if (!menuRect) return;
+        const panelWidth = Math.min(500, window.innerWidth - 24);
+        const maxHeight = Math.min(620, window.innerHeight - 24);
+        if (menuRect.left >= panelWidth + 20) {
+            setServicesStacked(false);
+            setServicesPosition({
+                left: Math.max(12, menuRect.left - panelWidth - 8),
+                top: Math.max(12, Math.min(menuRect.top, window.innerHeight - maxHeight - 12)),
+                maxHeight
+            });
+            setServicesOpen(true);
+            return;
+        }
+
+        setServicesStacked(true);
+        setServicesOpen(true);
+        window.requestAnimationFrame(() => {
+            const compactMenuRect = accountMenuRef.current?.getBoundingClientRect();
+            if (!compactMenuRect) return;
+            const top = Math.min(compactMenuRect.bottom + 8, window.innerHeight - 180);
+            setServicesPosition({left: 12, top: Math.max(12, top), maxHeight: Math.max(160, window.innerHeight - top - 12)});
+        });
+    }
+
     return <div className="accountMenuWrap">
         <button type="button" className="accountMenuButton" onClick={toggleMenu} aria-expanded={open}>
             <UserRound size={15} />{user.email}
         </button>
-        {open && <div className="accountMenu">
-            <div className="accountMenuHeading"><div><strong><ShieldCheck size={14} />{user.role === "admin" ? "Administrator" : "Personal account"}</strong><small>Private workspace active</small></div><button type="button" className={settingsOpen ? "accountSettingsButton active" : "accountSettingsButton"} onClick={() => setSettingsOpen(current => !current)} title="Display settings" aria-label="Display settings"><Settings2 size={15} /></button></div>
-            {settingsOpen && <section className="accountDisplaySettings"><strong><Settings2 size={14} />Display settings</strong><div className="accountScaleControl"><span>Electron zoom {Math.round(appZoom * 100)}%</span><button type="button" onClick={() => adjustAppZoom(-.05)} disabled={appZoom <= .75} aria-label="Zoom out">−</button><button type="button" onClick={() => adjustAppZoom(.05)} disabled={appZoom >= 1.5} aria-label="Zoom in">+</button></div><div className="accountScaleControl"><span>Post-its {Math.round(floatingToolsScale * 100)}%</span><button type="button" onClick={() => adjustFloatingToolsScale(-.05)} disabled={floatingToolsScale <= .8} aria-label="Make notes smaller">−</button><button type="button" onClick={() => adjustFloatingToolsScale(.05)} disabled={floatingToolsScale >= 1.3} aria-label="Make notes larger">+</button></div><div className="accountBookmarkSettings"><div className="accountScaleControl"><span>Side post-its {Math.round(bookmarkScale * 100)}%</span><button type="button" onClick={() => adjustBookmarkScale(-.05)} disabled={bookmarkScale <= .8} aria-label="Reduce side post-it scale">−</button><button type="button" onClick={() => adjustBookmarkScale(.05)} disabled={bookmarkScale >= 1.3} aria-label="Increase side post-it scale">+</button></div><div className="accountScaleControl"><span>Width {bookmarkWidth}px</span><button type="button" onClick={() => adjustBookmarkWidth(-8)} disabled={bookmarkWidth <= 64} aria-label="Make side post-its narrower">−</button><button type="button" onClick={() => adjustBookmarkWidth(8)} disabled={bookmarkWidth >= 220} aria-label="Make side post-its wider">+</button></div><div className="accountScaleControl"><span>Height {bookmarkHeight}px</span><button type="button" onClick={() => adjustBookmarkHeight(-4)} disabled={bookmarkHeight <= 22} aria-label="Make side post-its shorter">−</button><button type="button" onClick={() => adjustBookmarkHeight(4)} disabled={bookmarkHeight >= 72} aria-label="Make side post-its taller">+</button></div><small>Final size: {Math.round(bookmarkWidth * bookmarkScale)} × {Math.round(bookmarkHeight * bookmarkScale)} px</small></div></section>}
+        {open && <div ref={accountMenuRef} className={`accountMenu${servicesStacked && servicesOpen ? " servicesStacked" : ""}`}>
+            <div className="accountMenuHeading"><div><strong><ShieldCheck size={14} />{user.role === "admin" ? "Administrator" : "Personal account"}</strong><small>Private workspace active</small></div></div>
+            <section className="accountWorkspaceControls" aria-label="Workspace controls">
+                <strong><Settings2 size={14} />Workspace controls</strong>
+                <div className="accountPageZoomRow"><div className="accountScaleControl"><span><ZoomIn size={13}/>Page zoom</span><output aria-live="polite">{Math.round(appZoom * 100)}%</output><button type="button" onClick={() => adjustAppZoom(-.05)} disabled={appZoom <= .75} aria-label="Zoom out">−</button><button type="button" onClick={() => adjustAppZoom(.05)} disabled={appZoom >= 1.5} aria-label="Zoom in">+</button></div><button type="button" className="accountMoreZoomButton" onClick={() => setMoreZoomsOpen(current => !current)} aria-expanded={moreZoomsOpen}>{moreZoomsOpen ? "Meno zoom" : "Altri zoom"}{moreZoomsOpen ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}</button></div>
+                {moreZoomsOpen && <section className="accountDisplaySettings" aria-label="Other zoom controls"><strong>Altri zoom</strong><div className="accountScaleControl"><span>Post-its {Math.round(floatingToolsScale * 100)}%</span><button type="button" onClick={() => adjustFloatingToolsScale(-.05)} disabled={floatingToolsScale <= .8} aria-label="Make notes smaller">−</button><button type="button" onClick={() => adjustFloatingToolsScale(.05)} disabled={floatingToolsScale >= 1.3} aria-label="Make notes larger">+</button></div><div className="accountBookmarkSettings"><div className="accountScaleControl"><span>Side post-its {Math.round(bookmarkScale * 100)}%</span><button type="button" onClick={() => adjustBookmarkScale(-.05)} disabled={bookmarkScale <= .8} aria-label="Reduce side post-it scale">−</button><button type="button" onClick={() => adjustBookmarkScale(.05)} disabled={bookmarkScale >= 1.3} aria-label="Increase side post-it scale">+</button></div><div className="accountScaleControl"><span>Width {bookmarkWidth}px</span><button type="button" onClick={() => adjustBookmarkWidth(-8)} disabled={bookmarkWidth <= 64} aria-label="Make side post-its narrower">−</button><button type="button" onClick={() => adjustBookmarkWidth(8)} disabled={bookmarkWidth >= 220} aria-label="Make side post-its wider">+</button></div><div className="accountScaleControl"><span>Height {bookmarkHeight}px</span><button type="button" onClick={() => adjustBookmarkHeight(-4)} disabled={bookmarkHeight <= 22} aria-label="Make side post-its shorter">−</button><button type="button" onClick={() => adjustBookmarkHeight(4)} disabled={bookmarkHeight >= 72} aria-label="Make side post-its taller">+</button></div><small>Final size: {Math.round(bookmarkWidth * bookmarkScale)} × {Math.round(bookmarkHeight * bookmarkScale)} px</small></div></section>}
+                <div className="accountAiModeControls"><button type="button" className={aiMode ? "accountAiMode enabled" : "accountAiMode"} disabled={!aiConfigured} onClick={() => onAIModeChange(!aiMode)} aria-pressed={aiMode} title={aiConfigured ? `Turn AI ${aiMode ? "off" : "on"} for this planet` : "Configure the shared AI connection in Services first"}><Sparkles size={15}/><span><strong>AI mode: {aiMode ? "ON" : "OFF"}</strong><small>{aiMode ? "AI features are active for this planet." : aiConfigured ? "Turn on AI features for this planet when needed." : "Configure the shared AI connection in Services first."}</small></span></button><button ref={servicesTriggerRef} type="button" className="accountServicesButton" onClick={toggleServices} aria-expanded={servicesOpen} aria-controls="accountServicesPanel"><Settings2 size={14}/>Services</button></div>
+            </section>
+            <button type="button" className="accountDiagnosticsButton" onClick={() => {setOpen(false); onOpenDiagnostics();}}><Activity size={15}/><span>Diagnostica</span><small>Errori recenti e stato dell’app</small></button>
             <div className="recoveryBox">
                 <label>Personal password recovery</label>
                 <p>Generate one code and save it somewhere safe. It is shown once and can be used once within one year.</p>
@@ -196,6 +236,7 @@ function AccountMenu({user, onLogout, appZoom, onAppZoomChange, floatingToolsSca
             {error && <p className="authError">{error}</p>}
             <button type="button" className="logoutButton" onClick={() => void onLogout()}><LogOut size={14} />Sign out</button>
         </div>}
+        <IntegrationSetup isAdmin={user.role === "admin"} onAIStatusChange={onAIStatusChange} open={open && servicesOpen} onOpenChange={setServicesOpen} position={servicesPosition} triggerRef={servicesTriggerRef}/>
     </div>;
 }
 

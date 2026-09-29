@@ -105,6 +105,15 @@ body {
     filter: drop-shadow(0 5px 9px rgba(9, 35, 76, .22));
 }
 
+.appAiStatus { position:absolute; z-index:2; top:63px; left:50%; display:inline-flex; align-items:center; gap:5px; transform:translateX(-50%); padding:3px 7px; border:1px solid rgba(130,155,180,.5); border-radius:999px; background:rgba(248,252,255,.92); box-shadow:0 2px 7px rgba(17,41,65,.12); color:#65758a; font-size:9px; font-weight:900; letter-spacing:.04em; line-height:1; white-space:nowrap; pointer-events:none; }
+.appAiStatus.active { border-color:#9bcbb0; background:rgba(239,251,243,.95); color:#287a4a; }
+.appAiStatusDot { width:6px; height:6px; flex:0 0 auto; border-radius:50%; background:#8494a5; }
+.appAiStatus.active .appAiStatusDot { background:#30a45f; box-shadow:0 0 6px rgba(48,164,95,.6); }
+.appAiStatus small { padding-left:3px; border-left:1px solid currentColor; font-size:8px; font-weight:750; opacity:.78; }
+
+.appWorldIdentity { position:absolute; z-index:3; top:27px; left:calc(50% + 207px); display:inline-flex; max-width:145px; align-items:center; gap:6px; color:#183e5d; pointer-events:none; }
+.appWorldIdentity > span:last-child { max-width:102px; overflow:hidden; color:#254660; font-size:10px; font-weight:800; text-overflow:ellipsis; white-space:nowrap; text-shadow:0 1px 0 rgba(255,255,255,.75); }
+
 .appNavigation { z-index: 2; }
 
 .appHeaderTools { position:absolute; right:var(--header-column-edge); bottom:3px; z-index:20; display:flex; align-items:stretch; gap:6px; height:34px; white-space:nowrap; }
@@ -430,11 +439,22 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .authError { margin: 0; color: #b13e31; font-size: 11px; line-height: 1.35; }
 .authLoading { color: #526174; font-size: 14px; font-weight: 700; }
 
-.accountMenuWrap { position: relative; margin-left: auto; }
+.accountMenuWrap { position: relative; display:flex; align-items:center; gap:5px; margin-left: auto; }
 .accountMenuButton { display: inline-flex; align-items: center; gap: 6px; max-width: 230px; overflow: hidden; border: 1px solid #c4d1df; border-radius: 7px; background: #fff; color: #34445a; cursor: pointer; font-size: 11px; font-weight: 800; padding: 6px 8px; text-overflow: ellipsis; white-space: nowrap; }
+.accountDiagnosticsButton { display:grid; grid-template-columns:18px 1fr auto; min-height:39px; align-items:center; gap:5px 8px; padding:6px 9px; border:1px solid #c7d8e7; border-radius:8px; background:linear-gradient(110deg,#f5fbff,#edf6ff); color:#315d7b; cursor:pointer; text-align:left; }.accountDiagnosticsButton:hover { border-color:#82afd0; background:#e7f4ff; }.accountDiagnosticsButton > svg { grid-row:1 / span 2; color:#3182aa; }.accountDiagnosticsButton > span { font-size:11px; font-weight:850; }.accountDiagnosticsButton > small { grid-column:2 / -1; color:#718598; font-size:9px; }
 .accountMenu { position: absolute; z-index: 200; top: calc(100% + 7px); right: 0; display: grid; width: min(500px, calc(100vw - 24px)); max-height: calc(100vh - 112px); gap: 10px; box-sizing: border-box; padding: 14px; overflow-x: hidden; overflow-y: auto; border: 1px solid #bdcada; border-radius: 12px; background: #fff; box-shadow: 0 15px 34px rgba(25, 45, 69, .22); white-space: normal; overflow-wrap: anywhere; }
-.accountMenuHeading { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }.accountMenuHeading > div { display:grid; gap:2px; }.accountMenuHeading small { color:#637085; font-size:10px; }.accountSettingsButton { display:inline-grid; width:28px; height:28px; place-items:center; flex:0 0 auto; padding:0; border:1px solid #c4d1df; border-radius:7px; background:#f7fbff; color:#46647e; cursor:pointer; }.accountSettingsButton.active { border-color:#5894cb; background:#deefff; color:#1763a5; }.accountDisplaySettings { display:grid; gap:6px; padding:8px; border:1px solid #c7d8e7; border-radius:8px; background:#f5faff; }.accountDisplaySettings > strong { display:flex; align-items:center; gap:5px; color:#305a7f; font-size:11px; }.accountScaleControl { display:grid; grid-template-columns:minmax(0,1fr) 26px 26px; align-items:center; gap:5px; color:#52677c; font-size:10px; font-weight:800; }.accountScaleControl button { display:grid; width:26px; height:25px; place-items:center; padding:0; border:1px solid #aac5dd; border-radius:6px; background:#fff; color:#246da8; cursor:pointer; font-size:16px; line-height:1; }.accountScaleControl button:disabled { cursor:default; opacity:.42; }
+.accountMenuHeading { display:flex; align-items:flex-start; justify-content:space-between; gap:8px; }.accountMenuHeading > div { display:grid; gap:2px; }.accountMenuHeading small { color:#637085; font-size:10px; }.accountDisplaySettings,.accountWorkspaceControls { display:grid; gap:6px; padding:9px; border:1px solid #c7d8e7; border-radius:8px; background:#f5faff; }.accountDisplaySettings > strong,.accountMenu .accountWorkspaceControls > strong { display:flex; align-items:center; gap:5px; color:#305a7f; font-size:11px; }.accountScaleControl { display:grid; grid-template-columns:minmax(0,1fr) 26px 26px; align-items:center; gap:5px; color:#52677c; font-size:10px; font-weight:800; }.accountScaleControl span { min-width:0; }.accountScaleControl button { display:grid; width:26px; height:25px; place-items:center; padding:0; border:1px solid #aac5dd; border-radius:6px; background:#fff; color:#246da8; cursor:pointer; font-size:16px; line-height:1; }.accountScaleControl button:disabled { cursor:default; opacity:.42; }.accountWorkspaceControls .accountScaleControl { grid-template-columns:minmax(0,1fr) auto 26px 26px; }.accountWorkspaceControls .accountScaleControl span { display:inline-flex; align-items:center; gap:5px; }.accountWorkspaceControls .accountScaleControl span svg { flex:0 0 auto; color:#4384ad; }.accountWorkspaceControls .accountScaleControl output { min-width:36px; color:#305a7f; font-size:11px; font-weight:900; text-align:right; }.accountAiMode { display:flex; width:100%; align-items:center; gap:8px; padding:8px; border:1px solid #d5dfe8; border-radius:8px; background:#fff; color:#63768a; cursor:pointer; text-align:left; }.accountAiMode > svg { flex:0 0 auto; color:#8898aa; }.accountAiMode > span { display:grid; min-width:0; gap:2px; }.accountMenu .accountAiMode strong { color:inherit; font-size:11px; }.accountAiMode small { color:inherit; font-size:10px; line-height:1.3; }.accountAiMode.enabled { border-color:#8b68b5; background:linear-gradient(135deg,#f2e8ff,#e9f7ff); color:#583580; }.accountAiMode.enabled > svg { color:#7950a7; }.accountAiMode:disabled { cursor:not-allowed; opacity:.68; }
 .accountMenu strong { display: inline-flex; align-items: center; gap: 5px; color: #1f5132; font-size: 12px; }.accountMenu > small { color: #637085; font-size: 10px; }
+.accountMenu.servicesStacked { max-height:calc((100vh - 112px) / 2); }
+.accountPageZoomRow { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:6px; }
+.accountPageZoomRow .accountScaleControl { min-width:0; }
+.accountMoreZoomButton { display:inline-flex; min-height:28px; align-items:center; justify-content:center; gap:3px; padding:0 7px; border:1px solid #b6cadd; border-radius:6px; background:#fff; color:#315d7b; cursor:pointer; font-size:9px; font-weight:850; white-space:nowrap; }
+.accountMoreZoomButton:hover,.accountMoreZoomButton[aria-expanded="true"] { border-color:#70a4ce; background:#eaf5ff; }
+.accountAiModeControls { display:grid; gap:5px; }
+.accountServicesButton { display:inline-flex; min-height:27px; align-items:center; justify-self:end; gap:5px; padding:0 8px; border:1px solid #c5d4e2; border-radius:6px; background:#f6f9fc; color:#46627d; cursor:pointer; font-size:10px; font-weight:850; }
+.accountServicesButton:hover,.accountServicesButton[aria-expanded="true"] { border-color:#83a9cb; background:#eaf4fd; color:#245d89; }
+.accountServicesButton svg { color:#597b9a; }
+@media(max-width:640px) { .accountPageZoomRow { grid-template-columns:minmax(0,1fr); }.accountMoreZoomButton { justify-self:end; }.appAiStatus { top:62px; } }
 .inviteBox { display: grid; gap: 5px; padding-top: 8px; border-top: 1px solid #e0e7ef; }.inviteBox label { color: #44556c; font-size: 11px; font-weight: 800; }.inviteBox > div { display: flex; gap: 5px; }.inviteBox input { min-width: 0; flex: 1; border: 1px solid #bfccda; border-radius: 5px; font: inherit; font-size: 11px; padding: 6px; }.inviteBox button { display: grid; width: 29px; place-items: center; border: 0; border-radius: 5px; background: #217fce; color: #fff; cursor: pointer; }.inviteResult { display: grid; gap: 4px; margin: 0; overflow-wrap: anywhere; color: #2b5e39; font-size: 10px; line-height: 1.35; }.inviteResult > div { display: flex; align-items: center; gap: 5px; }.inviteResult code { flex: 1; min-width: 0; padding: 4px 5px; border: 1px solid #b9d4c3; border-radius: 5px; background: #f5fbf7; user-select: all; font-size: 10px; }.inviteResult .copyInviteCode { flex: 0 0 auto; background: #278555; }
 .recoveryBox { display: grid; gap: 5px; padding-top: 8px; border-top: 1px solid #e0e7ef; }.recoveryBox label { color: #44556c; font-size: 11px; font-weight: 800; }.recoveryBox p { margin: 0; color: #657489; font-size: 10px; line-height: 1.35; }.accountActionButton { display: inline-flex; align-items: center; justify-content: center; gap: 5px; border: 1px solid #9fb9d5; border-radius: 6px; background: #edf6ff; color: #175e9e; cursor: pointer; font-size: 11px; font-weight: 800; padding: 6px 8px; }
 .auditBox { display: grid; gap: 6px; padding-top: 8px; border-top: 1px solid #e0e7ef; }.auditHeader { display: flex; align-items: center; justify-content: space-between; gap: 8px; }.auditHeader label { color: #44556c; font-size: 11px; font-weight: 800; }.auditBox > p { margin: 0; color: #657489; font-size: 10px; line-height: 1.35; }.auditRefreshButton { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 54px; border: 1px solid #9fb9d5; border-radius: 5px; background: #edf6ff; color: #175e9e; cursor: pointer; font-size: 10px; font-weight: 800; padding: 4px 6px; }.auditRefreshButton:disabled { cursor: wait; opacity: .65; }.spinningIcon { animation: folderRocketSpin .85s linear infinite; }.auditList { display: grid; max-height: 178px; margin: 0; padding: 0; overflow-y: auto; list-style: none; border: 1px solid #dce5ee; border-radius: 6px; background: #fbfdff; }.auditList li { display: grid; gap: 2px; padding: 6px 7px; border-bottom: 1px solid #e7edf3; }.auditList li:last-child { border-bottom: 0; }.auditList strong { overflow: hidden; color: #2d435c; font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }.auditList span, .auditList small { color: #66768a; font-size: 9px; line-height: 1.25; }.auditEmpty { display: inline-flex; align-items: center; gap: 5px; color: #788697 !important; }
@@ -2279,6 +2299,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
     }
 
     .appLogo { width: 340px; height: 94px; top: 5px; }
+    .appWorldIdentity { left:calc(50% + 179px); }
 
     .foldersContainer > div:not(.folderOrderItem) > input,
     .foldersContainer > .folderOrderItem > div > input {
@@ -2333,7 +2354,17 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
     }
 
     .appLogo { width: 285px; height: 84px; top: 8px; max-width: 68%; }
+    .appWorldIdentity { left:calc(50% + 151px); }
 
+}
+
+@media (max-width: 780px) {
+    .appWorldIdentity { top:15px; left:calc(50% + 151px); }
+    .appWorldIdentity > span:last-child { display:none; }
+}
+
+@media (max-width: 480px) {
+    .appWorldIdentity { top:12px; left:calc(50% + 145px); }
 }
 
 .pageFrame {
@@ -2624,11 +2655,11 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .folderAiSearchStatus { margin:4px 1px 2px; color:#7250a0; font-size:10px; font-weight:700; }
 
 /* Desktop AI and connection setup. Credentials remain in the Windows user-data folder only. */
-.integrationSetup { position:relative; z-index:130; }
-.appHeaderTools .integrationLauncher, .appHeaderTools .accountMenuButton { height:34px; min-height:34px; box-sizing:border-box; }
-.integrationLauncher { display:inline-flex; align-items:center; gap:4px; min-height:27px; padding:5px 7px; border:1px solid #aebdcd; border-radius:7px; background:#fff; color:#53677e; cursor:pointer; font-size:10px; font-weight:800; }
-.integrationLauncher.ready { border-color:#72bf98; background:#ecfaf2; color:#197343; }
+.integrationSetup { position:static; z-index:auto; }
+.accountMenuWrap > .integrationSetup { position:absolute; top:0; right:0; width:0; height:0; }
+.appHeaderTools .accountMenuButton { height:34px; min-height:34px; box-sizing:border-box; }
 .integrationSetupPanel { position:absolute; z-index:1000; top:calc(100% + 7px); right:0; width:min(500px, calc(100vw - 24px)); max-height:calc(100vh - 112px); box-sizing:border-box; overflow-x:hidden; overflow-y:auto; padding:14px; border:1px solid #c5d2df; border-radius:12px; background:#fff; box-shadow:0 18px 42px rgba(18,38,60,.28); color:#31465c; white-space:normal; overflow-wrap:anywhere; }
+.integrationSetupPanel.accountServicesPanel { position:fixed; z-index:2000; right:auto; width:min(500px,calc(100vw - 24px)); max-height:min(620px,calc(100vh - 24px)); }
 .integrationSetupPanel header { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:-1px -1px 9px; padding:0 0 8px; border-bottom:1px solid #dbe4ed; color:#294866; font-size:14px; font-weight:800; }
 .integrationSetupPanel header span { display:flex; min-width:0; align-items:center; gap:6px; }
 .integrationSetupPanel header span svg { color:#ce941a; }
@@ -2642,7 +2673,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .integrationCard input { width:100%; min-width:0; box-sizing:border-box; padding:6px 7px; border:1px solid #c5d2df; border-radius:6px; background:#fff; color:#23394e; font:inherit; font-size:11px; }
 .integrationCard input:focus { outline:2px solid rgba(31,121,205,.16); border-color:#3988d2; }
 .browserBridgeCard > button { justify-self:start; border:1px solid #b5cce0; border-radius:6px; background:#edf6ff; color:#21639b; cursor:pointer; font:inherit; font-size:10px; font-weight:800; padding:6px 8px; }.browserBridgeCode { display:flex; min-width:0; align-items:center; gap:5px; padding:6px; border:1px dashed #9db8d1; border-radius:6px; background:#f6fbff; }.browserBridgeCode code { min-width:0; flex:1; overflow:hidden; color:#24516f; font:9px/1.2 Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }.browserBridgeCode button { flex:0 0 auto; border:0; border-radius:5px; background:#176fc8; color:#fff; cursor:pointer; font-size:10px; font-weight:800; padding:5px 7px; }
-.integrationAiMode { display:flex; width:100%; align-items:center; gap:7px; padding:8px; border:1px solid #d5dfe8; border-radius:8px; background:#f7fafc; color:#63768a; cursor:pointer; text-align:left; }.integrationAiMode svg { flex:0 0 auto; color:#8898aa; }.integrationAiMode span { display:grid; min-width:0; gap:2px; }.integrationAiMode strong { font-size:12px; }.integrationAiMode small { color:inherit; font-size:10px; line-height:1.25; }.integrationAiMode.enabled { border-color:#8b68b5; background:linear-gradient(135deg,#f2e8ff,#e9f7ff); color:#583580; }.integrationAiMode.enabled svg { color:#7950a7; }.integrationAiMode:disabled { cursor:not-allowed; opacity:.6; }
 .integrationActions { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:9px; }
 .integrationActions button { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:29px; border:0; border-radius:6px; cursor:pointer; font-size:11px; font-weight:800; }
 .integrationReveal { padding:5px 8px; background:#edf2f7; color:#526980; }.integrationSave { padding:6px 10px; background:linear-gradient(180deg,#3f9ee7,#176fc8); color:#fff; }.integrationSave:disabled { cursor:wait; opacity:.65; }
@@ -2845,6 +2875,9 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
    always retain five reserved positions between the bell and connection state,
    so the header never jumps when a new alert fires. */
 .emailConnectionControls { display:inline-flex; flex:0 0 auto; min-width:0; align-items:center; gap:3px; }
+.emailAccountPickerRow { display:grid; grid-template-columns:auto minmax(0,1fr); min-width:0; align-items:center; column-gap:7px; row-gap:2px; padding:4px 8px; border-bottom:1px solid #e6edf4; background:#f8fbfe; color:#63758a; font-size:10px; font-weight:700; box-sizing:border-box; }
+.emailAccountPickerRow > span { min-width:0; }
+.emailAccountPickerRow select { min-width:0; max-width:100%; width:100%; padding:3px 6px; border:1px solid #d2deea; border-radius:5px; background:#fff; color:#314960; font:inherit; font-weight:600; }
 .emailConnectionTitle { margin:0; padding:0; border:0; background:transparent; color:#1f2937; cursor:pointer; font:inherit; font-size:12px; font-weight:800; line-height:1.1; white-space:nowrap; }
 .emailConnectionTitle:hover { color:#176fc8; }
 .emailDisconnectButton.armed { border-color:#b9342d; background:#c9443a; color:#fff; }
@@ -4655,6 +4688,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .dashboard .folderDropZone.aiEnabled .renameMenu.renameControlArea { top:auto!important; right:36px!important; bottom:calc(12% + 28px)!important; }
 .dashboard .folderDropZone:not(.aiEnabled) .renameMenu.renameControlArea { top:50%!important; right:36px!important; bottom:auto!important; transform:translateY(-50%); }
 .appSaveError{position:fixed;z-index:10020;top:64px;left:50%;transform:translateX(-50%);max-width:min(620px,calc(100vw - 32px));padding:8px 13px;border:1px solid #d69b91;border-radius:8px;background:#fff1ee;color:#8f3027;box-shadow:0 5px 18px #44120e26;font-size:12px;font-weight:700;}
+.folderPathNotice { display:flex; align-items:center; gap:10px; border-color:#d7b477; background:#fff8e8; color:#79551d; }.folderPathNotice span { flex:1; }.folderPathNotice button { display:grid; width:22px; height:22px; place-items:center; border:0; border-radius:5px; background:transparent; color:inherit; cursor:pointer; font-size:18px; }
 
 /* Compact Gmail and Recent Files rows without crowding their contents. */
 .sourceBlock-gmail .emailAttachment {
@@ -5280,3 +5314,69 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
   color:#4e276f;
 }
 .folderTableRow.orderingFolder .folderAppearanceButton svg { flex:0 0 auto; }
+.emailAccountPickerRow > small { grid-column:2; min-width:0; color:#74879a; font-size:9px; font-weight:500; }
+
+/* Gmail account selection and connection actions live with the reader controls. */
+.emailReaderHeaderMenu { left:auto!important; right:0!important; width:min(292px,calc(100vw - 20px)); max-height:min(78vh,560px); overflow:auto; box-sizing:border-box; }
+.emailReaderHeaderMenu .emailAccountPickerRow { display:grid; grid-template-columns:minmax(0,1fr); gap:4px; padding:0; border:0; background:transparent; color:#4b6378; font-size:10px; }
+.emailReaderHeaderMenu .emailAccountPickerRow select { width:100%; max-width:none; min-height:30px; font-size:11px; }
+.emailReaderHeaderMenu .emailAccountPickerRow > small { grid-column:1; font-size:9px; line-height:1.35; }
+.emailAccountMenuActions { display:grid; gap:5px; }
+.emailAccountMenuStatus { color:#64798b; font-size:10px; line-height:1.35; overflow-wrap:anywhere; }
+.emailAccountMenuActions .emailConnectButton,.emailAccountMenuActions .emailDisconnectButton { width:100%; box-sizing:border-box; }
+.emailReaderHeaderMenu hr { width:100%; margin:1px 0; border:0; border-top:1px solid #e0e8ef; }
+.emailReaderHeaderMenu > select:disabled,.emailReaderHeaderMenu input:disabled { opacity:.55; }
+.emailReaderApply:disabled { opacity:.5; cursor:default; }
+
+/* Application cards stay legible when compact; the expanded file window keeps actions. */
+.applicationsGrid .applicationFileRow { display:grid; grid-template-columns:minmax(0,1fr); min-height:29px; gap:5px; padding:4px 6px; }
+.applicationsGrid .applicationFileRow > .applicationFireAction,
+.applicationsGrid .applicationFileRow > .applicationFileRisk,
+.applicationsGrid .applicationFileRow > .applicationFileMetadata,
+.applicationsGrid .applicationFileRow > .applicationFileActions { display:none!important; }
+.applicationsGrid .applicationFileRow .inspectorFileName { gap:6px; }
+.applicationsGrid .applicationFileRow .inspectorFileName strong { overflow:hidden; font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+.applicationsGrid .applicationFileRow .fileKindIcon { flex:0 0 16px; }
+.applicationInlineFilters { grid-template-columns:repeat(2,minmax(0,1fr)); }
+.applicationInlineFilters .applicationInlineLocation { grid-column:auto; }
+.applicationFileWindow .applicationInlineFilters { grid-template-columns:repeat(3,minmax(0,1fr)); }
+.applicationFileWindow .applicationInlineFilters > button { grid-column:1/-1; }
+
+/* Activity summaries remain one compact line while retaining the full detail in title. */
+.dailyJobPage .dailyActivityRow { grid-template-columns:126px minmax(130px,.75fr) minmax(0,1.25fr) auto!important; gap:9px!important; min-height:42px; }
+.dailyJobPage .dailyActivityRow > time { white-space:nowrap; font-variant-numeric:tabular-nums; }
+.dailyJobPage .dailyActivityRow .dailyActivityDetails { min-width:0; overflow:hidden; color:#63788a; font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+@media(max-width:1050px) {
+  .dailyJobPage .dailyActivityRow { grid-template-columns:126px minmax(0,1fr) auto!important; }
+  .dailyJobPage .dailyActivityRow .dailyActivityDetails { grid-column:1/-1; grid-row:2; }
+  .dailyJobPage .dailyActivityActions { grid-column:3!important; grid-row:1!important; }
+}
+@media(max-width:640px) {
+  .dailyJobPage .dailyActivityRow { grid-template-columns:minmax(0,1fr) auto!important; }
+  .dailyJobPage .dailyActivityRow > time { grid-column:1; grid-row:1; }
+  .dailyJobPage .dailyActivityRow > strong { grid-column:1/-1; grid-row:2; }
+  .dailyJobPage .dailyActivityRow .dailyActivityDetails { grid-column:1/-1; grid-row:3; }
+  .dailyJobPage .dailyActivityActions { grid-column:2!important; grid-row:1!important; }
+}
+
+/* Portal the folder controls out of clipped dashboard cards and clamp them to the viewport. */
+.folderSettingsMenu { position:fixed!important; top:var(--folder-settings-top,8px)!important; left:var(--folder-settings-left,8px)!important; right:auto!important; bottom:auto!important; z-index:10050!important; width:min(264px,calc(100vw - 16px))!important; max-height:calc(100dvh - 16px)!important; overflow:auto; box-sizing:border-box; }
+
+/* CargoRocket can browse the active planet's three post-it kinds without copying them. */
+.cargoPostItWorkspace { display:flex; min-height:0; flex:1 1 auto; flex-direction:column; gap:6px; overflow:auto; }
+.cargoPostItTypeBar { display:flex; flex:0 0 auto; gap:3px; padding:3px; border:1px solid #e1e8ee; border-radius:7px; background:#f6f9fb; }
+.cargoPostItTypeBar button { min-height:24px; flex:1 1 0; padding:3px 5px; border:0; border-radius:5px; background:transparent; color:#5e7181; cursor:pointer; font-size:9px; font-weight:800; }
+.cargoPostItTypeBar button.active { background:#e6eef5; color:#244d6c; box-shadow:0 1px 3px #19365020; }
+.cargoPostItList { display:grid; max-height:102px; flex:0 0 auto; gap:3px; overflow:auto; }
+.cargoPostItSummary { display:grid; min-width:0; gap:2px; padding:5px 7px; border:1px solid #e2e8ee; border-left:3px solid #d1a53b; border-radius:5px; background:#fffaf0; color:#495f70; cursor:pointer; text-align:left; }
+.cargoPostItSummary.ai { border-left-color:#945bb7; background:#faf5ff; }
+.cargoPostItSummary.reminder { border-left-color:#ec9e43; background:#fff4e3; }
+.cargoPostItSummary > span { display:flex; align-items:center; justify-content:space-between; color:#6d7f8e; font-size:8px; }
+.cargoPostItSummary > strong { overflow:hidden; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }
+.cargoPostItList > small { color:#728393; font-size:9px; }
+.cargoPostItExtraActions { display:flex; flex:0 0 auto; gap:6px; }
+.cargoPostItExtraActions button { display:flex; min-height:26px; flex:1; align-items:center; justify-content:center; gap:5px; border:1px solid #e7c18f; border-radius:6px; background:#fff0d9; color:#8b5921; cursor:pointer; font-size:9px; font-weight:800; }
+.cargoPostItExtraActions button:first-child { border-color:#d8c6e8; background:#f6edff; color:#6b4789; }
+.cargoPostItExtraActions button:disabled { opacity:.5; cursor:default; }
+.cargoPostItExtraActions button > span { display:grid; width:17px; height:17px; place-items:center; border:1px solid currentColor; border-radius:50%; font-size:8px; }
+.cargoPostItWorkspace > .cargoPostIt { flex:1 0 100px; }

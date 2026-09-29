@@ -66,6 +66,9 @@ function normalizeProviderBlock(value) {
         ? source.attachmentReader
         : {};
     return {
+        accountBlockId: source.accountBlockId === null
+            ? null
+            : /^[a-zA-Z0-9_-]{1,120}$/.test(source.accountBlockId || "") ? source.accountBlockId : "",
         attachmentReader: {
             enabled: attachmentSource.enabled !== false,
             filter: normalizeAttachmentFilter(attachmentSource.filter)
@@ -104,14 +107,29 @@ function normalizeEmailAlertSettings(value) {
     };
 }
 
-function getEmailAlertSettings(userId) {
-    return normalizeEmailAlertSettings(readDashboardPreferences(userId)?.emailAlerts);
+function getEmailAlertSettings(userId, worldId = "") {
+    const dashboard = readDashboardPreferences(userId) || {};
+    if (!worldId) return normalizeEmailAlertSettings(dashboard.emailAlerts);
+    const worldSettings = dashboard.worlds?.[worldId]?.emailAlerts;
+    if (worldSettings) return normalizeEmailAlertSettings(worldSettings);
+    // Existing users' alert settings become the initial Lavoro settings once.
+    return normalizeEmailAlertSettings(worldId === "work" ? dashboard.emailAlerts : null);
 }
 
-function saveEmailAlertSettings(userId, value) {
+function saveEmailAlertSettings(userId, value, worldId = "") {
     const current = readDashboardPreferences(userId) || {};
     const normalized = normalizeEmailAlertSettings(value);
-    writeDashboardPreferences(userId, {...current, emailAlerts: normalized});
+    if (worldId) {
+        const worlds = current.worlds && typeof current.worlds === "object" && !Array.isArray(current.worlds) ? current.worlds : {};
+        const nextWorlds = {...worlds};
+        if (worldId !== "work" && !nextWorlds.work?.emailAlerts && current.emailAlerts) {
+            nextWorlds.work = {...nextWorlds.work, emailAlerts: normalizeEmailAlertSettings(current.emailAlerts)};
+        }
+        nextWorlds[worldId] = {...nextWorlds[worldId], emailAlerts: normalized};
+        writeDashboardPreferences(userId, {...current, worlds: nextWorlds});
+    } else {
+        writeDashboardPreferences(userId, {...current, emailAlerts: normalized});
+    }
     return normalized;
 }
 

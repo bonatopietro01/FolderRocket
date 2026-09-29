@@ -9,13 +9,15 @@ import {CALENDAR_ATTACHMENT_TYPE} from "../dragTypes";
 import type {ManagedFolder, VirtualFile} from "./FolderManagement";
 import {folderProjectGroups} from "../folderProjects";
 
-type CargoFile = {id: string; kind: "file"; file: File; name: string; size: number};
+type CargoFile = {id: string; kind: "file"; file: File; name: string; size: number; sourcePath?: string};
 type CargoPath = {id: string; kind: "path"; name: string; path: string; size?: number};
 type CargoAttachment = {id: string; kind: "attachment"; provider: "gmail" | "outlook"; name: string; size?: number; attachmentId: string; messageId: string; mimeType: string; sourceBlockId?: string};
 type CargoItem = CargoFile | CargoPath | CargoAttachment;
 type CargoMode = "transport" | "calendar" | "note" | "text" | "email" | "convert" | "lens";
 type CargoCalendarEvent = {title: string; start: string; end: string; location: string; attachments: string[]};
 type CargoReminder = {id: string; text: string; reminderAt: string};
+type CargoPostIt = {id: string; title?: string; text: string; color?: string; ai?: boolean; reminder?: boolean; reminderAt?: string; hidden?: boolean};
+type CargoPostItFilter = "all" | "standard" | "ai" | "reminder";
 
 const CARGO_TOOL_KEYS = ["transport", "calendar", "note", "text", "email", "convert", "lens"] as const;
 function normaliseCargoTools(value: unknown): string[] {
@@ -25,6 +27,12 @@ function normaliseCargoTools(value: unknown): string[] {
 }
 function sameCargoTools(left: string[], right: string[]) {
     return left.length === right.length && left.every((tool, index) => tool === right[index]);
+}
+function readCargoPostIts(scope: string): CargoPostIt[] {
+    try {
+        const value = JSON.parse(localStorage.getItem(`folderrocket-sticky-notes-${scope}`) || "[]");
+        return Array.isArray(value) ? value.filter((note): note is CargoPostIt => Boolean(note) && typeof note.id === "string" && typeof note.text === "string") : [];
+    } catch { return []; }
 }
 
 interface RemoteAttachment { attachmentId: string; messageId: string; mimeType: string; name: string; size?: number; sourceBlockId?: string; }
@@ -109,12 +117,13 @@ interface CargoShipProps {
     onOpenFileStudio: () => void;
     aiEnabled: boolean;
     storageScope: string;
+    worldId?: string;
     standalone?: boolean;
     folders: ManagedFolder[];
     onVirtualFilesAdd: (folderId: string, files: VirtualFile[]) => void;
 }
 
-export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, standalone = false, folders, onVirtualFilesAdd}: CargoShipProps) {
+export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, worldId = "work", standalone = false, folders, onVirtualFilesAdd}: CargoShipProps) {
     const initialLayoutRef = useRef<CargoLayout>(readCargoLayout(storageScope));
     const [mode, setMode] = useState<CargoMode>("transport");
     const [items, setItems] = useState<CargoItem[]>([]);
@@ -124,6 +133,8 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, st
     const [noteTitle, setNoteTitle] = useState(() => { try { return String(JSON.parse(localStorage.getItem(noteDraftKey(storageScope)) || "{}").title || ""); } catch { return ""; } });
     const [noteText, setNoteText] = useState(() => { try { return String(JSON.parse(localStorage.getItem(noteDraftKey(storageScope)) || "{}").text || ""); } catch { return ""; } });
     const [noteColor, setNoteColor] = useState<"yellow" | "purple" | "blue" | "green">(() => { try { const color = JSON.parse(localStorage.getItem(noteDraftKey(storageScope)) || "{}").color; return ["yellow", "purple", "blue", "green"].includes(color) ? color : "yellow"; } catch { return "yellow"; } });
+    const [postItFilter, setPostItFilter] = useState<CargoPostItFilter>("all");
+    const [postIts, setPostIts] = useState<CargoPostIt[]>(() => readCargoPostIts(storageScope));
     const [textFormat, setTextFormat] = useState<"note" | "txt" | "pdf" | "docx">("txt");
     const [recipient, setRecipient] = useState("");
     const [emailSubject, setEmailSubject] = useState("FolderRocket note");
@@ -289,11 +300,22 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, st
         return()=>{active=false;};
     }, [enabledTools, mode]);
     useEffect(() => { localStorage.setItem(noteDraftKey(storageScope), JSON.stringify({title:noteTitle, text:noteText, color:noteColor})); }, [noteColor, noteText, noteTitle, storageScope]);
+    useEffect(() => {
+        const reload = () => setPostIts(readCargoPostIts(storageScope));
+        const onUpdated = (event: Event) => {
+            const detail = (event as CustomEvent<{storageScope?: string}>).detail;
+            if (!detail?.storageScope || detail.storageScope === storageScope) reload();
+        };
+        const onStorage = (event: StorageEvent) => { if (event.key === `folderrocket-sticky-notes-${storageScope}`) reload(); };
+        window.addEventListener("folderrocket:sticky-notes-updated", onUpdated);
+        window.addEventListener("storage", onStorage);
+        return () => { window.removeEventListener("folderrocket:sticky-notes-updated", onUpdated); window.removeEventListener("storage", onStorage); };
+    }, [storageScope]);
 
     useEffect(() => {
         if (!open) return;
         let active = true;
-        fetch(`${API_BASE_URL}/cargo-ship/email-sources`, {credentials: "include"})
+        fetch(`${API_BASE_URL}/cargo-ship/email-sources?worldId=${encodeURIComponent(worldId)}`, {credentials: "include"})
             .then(response => response.ok ? response.json() : {sources: []})
             .then((data: {sources?: EmailSource[]}) => {
                 if (!active) return;
@@ -303,7 +325,7 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, st
             })
             .catch(() => { if (active) setEmailSources([]); });
         return () => { active = false; };
-    }, [open]);
+    }, [open, worldId]);
 
     function addItems(incoming: CargoItem[]) {
         if (!incoming.length) return;
@@ -372,7 +394,20 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, st
         }
         const files = Array.from(event.dataTransfer.files);
         if (files.length) {
-            const incoming=files.map(file => ({id: cargoId(), kind: "file" as const, file, name: file.name, size: file.size})); if(mode === "email") addItems(incoming); else addOrAutoSend(incoming);
+            const incoming = await Promise.all(files.map(async file => {
+                // Electron 44 no longer exposes File.path. Resolve the original
+                // path through the narrow preload bridge so folder delivery can
+                // move the actual file; web-only drops remain export/copy based.
+                let sourcePath = typeof (file as File & {path?: unknown}).path === "string"
+                    ? (file as File & {path: string}).path
+                    : undefined;
+                if (!sourcePath && window.folderRocketDesktop?.getPathForFile) {
+                    try { sourcePath = window.folderRocketDesktop.getPathForFile(file) || undefined; }
+                    catch { /* A browser or virtual file has no native source path. */ }
+                }
+                return {id: cargoId(), kind: "file" as const, file, name: file.name, size: file.size, sourcePath};
+            }));
+            if (mode === "email") addItems(incoming); else addOrAutoSend(incoming);
             return;
         }
         if (droppedText) {
@@ -437,6 +472,23 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, st
         setNoteText("");
         setMessage("Post-it added to the workspace.");
     }
+
+    function createAiPostIt() {
+        const detail = {type: "ai", storageScope};
+        window.dispatchEvent(new CustomEvent("folderrocket:create-ai-sticky-note", {detail}));
+        if ("BroadcastChannel" in window) { const channel = new BroadcastChannel("folderrocket-sticky-notes"); channel.postMessage(detail); channel.close(); }
+        setMessage(aiEnabled ? "AI post-it added to this planet." : "Enable AI for this planet to create an AI post-it.");
+    }
+
+    function createReminderPostIt() {
+        const detail = {type: "reminder", storageScope};
+        window.dispatchEvent(new CustomEvent("folderrocket:create-reminder-note", {detail}));
+        if ("BroadcastChannel" in window) { const channel = new BroadcastChannel("folderrocket-sticky-notes"); channel.postMessage(detail); channel.close(); }
+        setMessage("Reminder post-it added to this planet.");
+    }
+
+    const visiblePostIts = postIts.filter(note => postItFilter === "all"
+        || (postItFilter === "reminder" ? Boolean(note.reminder) : postItFilter === "ai" ? Boolean(note.ai) : !note.reminder && !note.ai));
 
     async function createEmailDraft() {
         const source = emailSources.find(item => `${item.provider}:${item.blockId}` === emailSourceKey);
@@ -510,21 +562,76 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, st
         if (!pathItems.length && !localItems.length && !attachments.length) { setMessage("Add a file, attachment, or search result."); return; }
         setWorking(true); setMessage("Sending cargo…");
         try {
-            const staged = await stageLocalFiles(localItems);
+            const originalPathFiles = localItems.filter(item => item.sourcePath);
+            const uploadOnlyFiles = localItems.filter(item => !item.sourcePath);
+            const staged = await stageLocalFiles(uploadOnlyFiles);
             const stagedAttachments = await stageAttachments(attachments);
-            const sendable = [...pathItems.map(item => ({name: item.name, path: item.path, size: item.size})), ...staged, ...stagedAttachments];
+            const directFiles = [
+                ...pathItems.map(item => ({name: item.name, path: item.path, size: item.size})),
+                ...originalPathFiles.map(item => ({name: item.name, path: item.sourcePath!, size: item.size}))
+            ];
+            const sendable = [...directFiles, ...staged, ...stagedAttachments];
             if (target.storage === "imaginary") {
                 onVirtualFilesAdd(target.folderId, sendable.map(item => ({...item, createdAt: new Date().toISOString()})));
+                setItems(current => current.filter(item => !candidateItems.some(candidate => candidate.id === item.id)));
+                setMessage(`${sendable.length} file${sendable.length === 1 ? "" : "s"} added to ${target.name} as references. Original files remain in their folders.`);
             } else {
                 if (!target.path) throw new Error("This folder needs a valid path.");
-                const response = await fetch(`${API_BASE_URL}/files/move`, {method: "POST", credentials: "include", headers: {"Content-Type": "application/json"}, body: JSON.stringify({destination: target.path, paths: sendable.map(item => item.path)})});
-                const data = await response.json().catch(() => ({})) as {message?: string;moved?:Array<{name:string;path:string;sourcePath?:string}>};
-                if (!response.ok) throw new Error(data.message ?? "Unable to send the cargo.");
-                window.dispatchEvent(new CustomEvent("folderrocket-files-moved",{detail:{source:"folders",destination:target.path,moved:data.moved??[],undo:{type:"move",entries:(data.moved??[]).map(file=>({from:file.sourcePath??"",to:file.path})).filter(entry=>entry.from&&entry.to)}}}));
+                const stagedPaths = new Map<string, string>();
+                staged.forEach((file, index) => { const item = uploadOnlyFiles[index]; if (item) stagedPaths.set(file.path, item.id); });
+                stagedAttachments.forEach((file, index) => { const item = attachments[index]; if (item) stagedPaths.set(file.path, item.id); });
+                const directItemIds = new Map<string, string>();
+                pathItems.forEach(item => directItemIds.set(item.path, item.id));
+                originalPathFiles.forEach(item => directItemIds.set(item.sourcePath!, item.id));
+                const conflictChoices: Record<string, "rename" | "replace" | "skip"> = {};
+                let data: {message?: string; moved?:Array<{name:string;path:string;sourcePath?:string}>; skipped?:Array<{name:string;path:string;sourcePath?:string}>; conflicts?:Array<{sourcePath:string;name:string}>} = {};
+
+                for (;;) {
+                    const response = await fetch(`${API_BASE_URL}/files/move`, {
+                        method: "POST",
+                        credentials: "include",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({destination: target.path, items: sendable.map(item => ({path: item.path, name: item.name, conflict: conflictChoices[item.path]}))})
+                    });
+                    data = await response.json().catch(() => ({})) as typeof data;
+                    if (response.status !== 409 || !Array.isArray(data.conflicts)) {
+                        if (!response.ok) throw new Error(data.message ?? "Unable to send the cargo.");
+                        break;
+                    }
+                    for (const conflict of data.conflicts) {
+                        const choice = window.prompt(`“${conflict.name}” esiste già nella cartella di destinazione. Digita rinomina, sostituisci o salta per questo file. Annulla interrompe l’invio.`);
+                        if (choice === null) throw new Error("Invio annullato. I file sono ancora in CargoRocket.");
+                        const normalized = choice.trim().toLowerCase();
+                        const action = ["rinomina", "rename"].includes(normalized) ? "rename" : ["sostituisci", "replace"].includes(normalized) ? "replace" : ["salta", "skip"].includes(normalized) ? "skip" : "";
+                        if (!action) throw new Error("Scelta non riconosciuta. Riprova: rinomina, sostituisci o salta.");
+                        conflictChoices[conflict.sourcePath] = action;
+                    }
+                }
+
+                const moved = data.moved ?? [];
+                const skipped = data.skipped ?? [];
+                const movedOriginals = moved.filter(file => file.sourcePath && directItemIds.has(file.sourcePath));
+                const movedItemIds = new Set<string>();
+                for (const file of moved) {
+                    const itemId = directItemIds.get(file.sourcePath ?? "") ?? stagedPaths.get(file.sourcePath ?? "");
+                    if (itemId) movedItemIds.add(itemId);
+                }
+                const skippedIds = new Set<string>();
+                for (const file of skipped) {
+                    const itemId = directItemIds.get(file.sourcePath ?? "") ?? stagedPaths.get(file.sourcePath ?? "");
+                    if (itemId) skippedIds.add(itemId);
+                }
+                const undoEntries = movedOriginals.map(file => ({from:file.sourcePath ?? "",to:file.path})).filter(entry => entry.from && entry.to);
+                if (movedOriginals.length) window.dispatchEvent(new CustomEvent("folderrocket-files-moved",{detail:{source:"folders",destination:target.path,moved:movedOriginals,undo:{type:"move",entries:undoEntries}}}));
+                const completedIds = new Set([...movedItemIds].filter(id => !skippedIds.has(id)));
+                setItems(current => current.filter(item => !completedIds.has(item.id)));
+                const exportedCount = Math.max(0, moved.length - movedOriginals.length);
+                const statusParts: string[] = [];
+                if (movedOriginals.length) statusParts.push(`${movedOriginals.length} moved`);
+                if (exportedCount) statusParts.push(`${exportedCount} exported; original sources retained`);
+                if (skipped.length) statusParts.push(`${skipped.length} skipped and kept aboard`);
+                setMessage(statusParts.length ? `${statusParts.join(" · ")}.` : "No files were moved.");
             }
-            const sentIds = new Set(candidateItems.map(item => item.id));
-            setItems(current => current.filter(item => !sentIds.has(item.id)));
-            setMessage(`${sendable.length} file${sendable.length === 1 ? "" : "s"} sent to ${target.name}.`);
         } catch (error) { setMessage(error instanceof Error ? error.message : "Unable to send the cargo."); }
         finally { setWorking(false); }
     }
@@ -729,7 +836,20 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, st
             {destinationSelector}
             <button type="button" className="cargoClear" onClick={() => setItems([])}>Clear cargo</button>
         </div>}
-        {mode === "note" && <div className={`cargoPostIt ${noteColor}`}><input value={noteTitle} onChange={event => setNoteTitle(event.target.value)} placeholder="Post-it title" maxLength={80}/><textarea value={noteText} onChange={event => setNoteText(event.target.value)} placeholder="Write a quick note…" /><div className="cargoPostItActions"><span>{(["yellow", "purple", "blue", "green"] as const).map(color => <button type="button" key={color} className={color === noteColor ? `color-${color} active` : `color-${color}`} onClick={() => setNoteColor(color)} title={`${color} post-it`} aria-label={`${color} post-it`}/>)}</span><button type="button" onClick={createPostIt} disabled={!noteText.trim()}><StickyNote size={14}/>Add post-it</button></div><small>The draft stays in CargoRocket until you add it.</small></div>}
+        {mode === "note" && <div className="cargoPostItWorkspace">
+            <div className="cargoPostItTypeBar" role="tablist" aria-label="Post-it type filter">{([ ["all","All"],["standard","Notes"],["ai","AI"],["reminder","Reminders"] ] as [CargoPostItFilter,string][]).map(([key,label])=><button type="button" role="tab" aria-selected={postItFilter===key} className={postItFilter===key?"active":""} key={key} onClick={()=>setPostItFilter(key)}>{label}</button>)}</div>
+            <div className="cargoPostItList" aria-label="Post-it salvati in questo pianeta">{visiblePostIts.slice(0,8).map(note=>{
+                const kind = note.reminder ? "Reminder" : note.ai ? "AI" : "Note";
+                const label = note.title?.trim() || note.text.trim().replace(/\s+/g," ") || "Empty post-it";
+                return <button type="button" className={`cargoPostItSummary ${note.reminder?"reminder":note.ai?"ai":"standard"}`} key={note.id} title={`${kind}: ${label}`} onClick={()=>{
+                    const detail={type:"reveal",storageScope,id:note.id};
+                    window.dispatchEvent(new CustomEvent("folderrocket:reveal-sticky-note",{detail}));
+                    if("BroadcastChannel" in window){const channel=new BroadcastChannel("folderrocket-sticky-notes");channel.postMessage(detail);channel.close();}
+                }}><span><b>{kind}</b>{note.reminderAt&&<time>{new Date(note.reminderAt).toLocaleString([], {day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"})}</time>}</span><strong>{label}</strong></button>;
+            })}{visiblePostIts.length>8&&<small>+{visiblePostIts.length-8} more post-it</small>}{!visiblePostIts.length&&<small>No {postItFilter==="all"?"":`${postItFilter} `}post-it in this planet yet.</small>}</div>
+            <div className={`cargoPostIt ${noteColor}`}><input value={noteTitle} onChange={event => setNoteTitle(event.target.value)} placeholder="Post-it title" maxLength={80}/><textarea value={noteText} onChange={event => setNoteText(event.target.value)} placeholder="Write a quick note…" /><div className="cargoPostItActions"><span>{(["yellow", "purple", "blue", "green"] as const).map(color => <button type="button" key={color} className={color === noteColor ? `color-${color} active` : `color-${color}`} onClick={() => setNoteColor(color)} title={`${color} post-it`} aria-label={`${color} post-it`}/>)}</span><button type="button" onClick={createPostIt} disabled={!noteText.trim()}><StickyNote size={14}/>Add post-it</button></div><small>The draft stays in CargoRocket until you add it.</small></div>
+            <div className="cargoPostItExtraActions"><button type="button" onClick={createAiPostIt} disabled={!aiEnabled} title={!aiEnabled?"Turn on AI for this planet first":"Create an AI post-it"}><span>AI</span>AI post-it</button><button type="button" onClick={createReminderPostIt}><span>!</span>Reminder</button></div>
+        </div>}
         {mode === "text" && <div className="cargoForm"><input value={fileName} onChange={event => setFileName(event.target.value)} placeholder="File name or note title" /><textarea value={text} onChange={event => setText(event.target.value)} placeholder="Paste or write text here…" /><div><select value={textFormat} onChange={event => setTextFormat(event.target.value as "note" | "txt" | "pdf" | "docx")}><option value="note">Post-it note</option><option value="txt">TXT file</option><option value="pdf">PDF file</option><option value="docx">Word document</option></select><button type="button" onClick={() => void createTextFile()} disabled={!text.trim() || working}><FilePlus2 size={14} />{textFormat === "note" ? "Create note" : "Create"}</button></div></div>}
         {mode === "email" && <div className="cargoForm cargoEmailForm"><select value={emailSourceKey} onChange={event => setEmailSourceKey(event.target.value)} disabled={!emailSources.length}><option value="">{emailSources.length ? "Choose connected mailbox" : "No connected mailbox"}</option>{emailSources.map(source => <option key={`${source.provider}:${source.blockId}`} value={`${source.provider}:${source.blockId}`}>{source.label}</option>)}</select><input value={recipient} onChange={event => setRecipient(event.target.value)} placeholder="To: name@example.com" /><input value={emailSubject} onChange={event => setEmailSubject(event.target.value)} placeholder="Email subject" /><textarea value={text} onChange={event => setText(event.target.value)} placeholder="Write the email text here…" /><div className="cargoEmailAttachments">{items.length ? items.map(item=><span key={item.id}><FileText size={12}/>{item.name}<button type="button" onClick={()=>setItems(current=>current.filter(value=>value.id!==item.id))}>×</button></span>):<em>Drop files here to attach them to the draft.</em>}</div><button type="button" onClick={() => void createEmailDraft()} disabled={!emailSources.length || !text.trim() || working}><Send size={14} />{working ? "Saving draft…" : "Save draft with attachments"}</button></div>}
         {mode === "convert" && <div className="cargoConvert"><p>Convert files on this PC.</p><select value={convertFormat} onChange={event => setConvertFormat(event.target.value)}><option value="pdf">PDF</option><option value="txt">TXT</option><option value="xlsx">XLSX</option><option value="csv">CSV</option></select><button type="button" onClick={() => void convertItems()} disabled={working}><RotateCw className={working ? "cargoSpin" : ""} size={15} />{working ? "Converting…" : "Convert cargo"}</button><button type="button" className="cargoStudioLink" onClick={onOpenFileStudio}><SlidersHorizontal size={14} />Open File Studio</button></div>}

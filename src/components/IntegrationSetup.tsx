@@ -1,5 +1,5 @@
 import {CalendarDays, Check, CircleAlert, Eye, EyeOff, KeyRound, Mail, Save, Sparkles, X} from "lucide-react";
-import {useCallback, useEffect, useRef, useState} from "react";
+import {useCallback, useEffect, useRef, useState, type CSSProperties, type RefObject} from "react";
 import {API_BASE_URL} from "../api";
 
 interface IntegrationStatus {
@@ -32,9 +32,10 @@ function savedValue(configured: boolean, description: string) {
     return configured ? `${description} is saved locally.` : `${description} still needs setup.`;
 }
 
-export default function IntegrationSetup({isAdmin, onAIStatusChange, aiMode, onAIModeChange}: {isAdmin: boolean; onAIStatusChange?: (ready: boolean) => void; aiMode: boolean; onAIModeChange: (enabled: boolean) => void}) {
+type IntegrationPanelPosition = {left: number; top: number; maxHeight: number};
+
+export default function IntegrationSetup({isAdmin, onAIStatusChange, open, onOpenChange, position, triggerRef}: {isAdmin: boolean; onAIStatusChange?: (ready: boolean) => void; open: boolean; onOpenChange: (open: boolean) => void; position: IntegrationPanelPosition; triggerRef: RefObject<HTMLButtonElement | null>}) {
     const wrapperRef = useRef<HTMLDivElement>(null);
-    const [open, setOpen] = useState(false);
     const [status, setStatus] = useState<IntegrationStatus | null>(null);
     const [fields, setFields] = useState<IntegrationFields>(EMPTY_FIELDS);
     const [showSecrets, setShowSecrets] = useState(false);
@@ -64,25 +65,20 @@ export default function IntegrationSetup({isAdmin, onAIStatusChange, aiMode, onA
     }, [isAdmin, onAIStatusChange]);
 
     useEffect(() => { if (!isAdmin) return; const timer=window.setTimeout(()=>void loadStatus(),0); return()=>window.clearTimeout(timer); }, [isAdmin, loadStatus]);
+    useEffect(() => { if (!open) return; const timer=window.setTimeout(()=>void loadStatus(),0); return()=>window.clearTimeout(timer); }, [loadStatus, open]);
 
     useEffect(() => {
         if (!open) return;
         const closeOutside = (event: PointerEvent) => {
-            if (!wrapperRef.current?.contains(event.target as Node)) setOpen(false);
+            if (!wrapperRef.current?.contains(event.target as Node) && !triggerRef.current?.contains(event.target as Node)) onOpenChange(false);
         };
         document.addEventListener("pointerdown", closeOutside);
         return () => document.removeEventListener("pointerdown", closeOutside);
-    }, [open]);
+    }, [onOpenChange, open, triggerRef]);
 
     function updateField(key: keyof IntegrationFields, value: string) {
         setFields(current => ({...current, [key]: value}));
         setMessage("");
-    }
-
-    function togglePanel() {
-        const next = !open;
-        setOpen(next);
-        if (next) void loadStatus();
     }
 
     async function saveSettings() {
@@ -138,10 +134,10 @@ export default function IntegrationSetup({isAdmin, onAIStatusChange, aiMode, onA
     }
 
     const aiReady = Boolean(status?.aiConfigured);
+    const panelStyle = {left: position.left, top: position.top, maxHeight: position.maxHeight} as CSSProperties;
     return <div className="integrationSetup" ref={wrapperRef}>
-        <button type="button" className={aiReady && aiMode ? "integrationLauncher ready" : "integrationLauncher"} onClick={togglePanel} aria-expanded={open} title="AI and connected services"><Sparkles size={14} />AI {aiMode ? "ON" : "OFF"}</button>
-        {open && <section className="integrationSetupPanel" role="dialog" aria-label="AI and connected services">
-            <header><span><Sparkles size={17} />AI integrated FolderRocket</span><button type="button" onClick={() => setOpen(false)} aria-label="Close integration settings"><X size={16} /></button></header>
+        {open && <section id="accountServicesPanel" className="integrationSetupPanel accountServicesPanel" style={panelStyle} role="dialog" aria-label="AI and connected services">
+            <header><span><Sparkles size={17} />AI integrated FolderRocket</span><button type="button" onClick={() => onOpenChange(false)} aria-label="Close integration settings"><X size={16} /></button></header>
             {!isAdmin ? <p className="integrationNotice">Only the local administrator can configure paid AI and mailbox connections.</p> : <>
                 <p className="integrationIntro">Keys are saved only in this Windows user’s private FolderRocket data folder. They are never included in the installer or GitHub.</p>
                 {loading ? <p className="integrationNotice">Checking local setup…</p> : <>
@@ -149,7 +145,6 @@ export default function IntegrationSetup({isAdmin, onAIStatusChange, aiMode, onA
                         <div><Sparkles size={16} /><strong>AI</strong><small>{savedValue(aiReady, "OpenAI connection")}</small></div>
                         <input type={showSecrets ? "text" : "password"} value={fields.openAiKey} onChange={event => updateField("openAiKey", event.target.value)} placeholder={aiReady ? "New OpenAI API key (optional)" : "OpenAI API key"} autoComplete="off" />
                     </article>
-                    <button type="button" className={aiMode ? "integrationAiMode enabled" : "integrationAiMode"} disabled={!aiReady} onClick={() => onAIModeChange(!aiMode)} aria-pressed={aiMode}><Sparkles size={15}/><span><strong>AI mode: {aiMode ? "ON" : "OFF"}</strong><small>{aiMode ? "AI alerts, Archive, Deadlines, and AI notes are available." : aiReady ? "Turn this on only when you want AI features to use credit." : "Save an OpenAI key first."}</small></span></button>
                     <article className={status?.gmailConfigured ? "integrationCard ready" : "integrationCard"}>
                         <div><Mail size={16} /><strong>Gmail</strong><small>{savedValue(Boolean(status?.gmailConfigured), "Gmail app credentials")}</small></div>
                         <input type="text" value={fields.gmailClientId} onChange={event => updateField("gmailClientId", event.target.value)} placeholder={status?.gmailConfigured ? "New Gmail client ID (optional)" : "Gmail client ID"} autoComplete="off" />

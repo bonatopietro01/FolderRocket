@@ -1,7 +1,7 @@
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
-const {getConnection, migrateLegacyConnectionToBlock, removeConnection, saveConnection} = require("./emailTokenStore");
+const {getConnection, listConnections, removeConnection, saveConnection, saveConnectionEmail} = require("./emailTokenStore");
 
 const GMAIL_API_BASE =
     "https://gmail.googleapis.com/gmail/v1/users/me";
@@ -62,8 +62,9 @@ function connectionKey(userId, blockId = "") {
 function getUserConnection(userId, blockId = "") {
     const key = connectionKey(userId, blockId);
     if (!connections.has(key)) {
-        const connection = getConnection("gmail", userId, blockId)
-            || (blockId ? migrateLegacyConnectionToBlock("gmail", userId, blockId) : null);
+        // Gmail credentials are never cloned into a block on read. A legacy
+        // shared token is addressable only through its explicit catalog ID.
+        const connection = getConnection("gmail", userId, blockId);
         connections.set(key, connection);
     }
     return connections.get(key);
@@ -131,7 +132,9 @@ function getAuthorizationUrl(userId, blockId = "", options = {}) {
         userId,
         blockId,
         redirectUri,
-        frontendOrigin: options.frontendOrigin || ""
+        frontendOrigin: options.frontendOrigin || "",
+        worldId: typeof options.worldId === "string" ? options.worldId : "",
+        worldName: typeof options.worldName === "string" ? options.worldName : ""
     });
 
     const parameters =
@@ -223,6 +226,8 @@ async function exchangeAuthorizationCode(
             data.access_token,
         refreshToken:
             data.refresh_token || previousConnection?.refreshToken || "",
+        originWorldId: previousConnection?.originWorldId || authorization.worldId || "",
+        originWorldName: previousConnection?.originWorldName || authorization.worldName || "",
         expiresAt:
             Date.now()
             +
@@ -230,6 +235,10 @@ async function exchangeAuthorizationCode(
     };
 
     saveUserConnection(authorization.userId, authorization.blockId, connection);
+    try {
+        const email = await getEmailIdentity(authorization.userId, authorization.blockId);
+        saveConnectionEmail("gmail", authorization.userId, authorization.blockId, email);
+    } catch { /* Keep a valid token if the identity lookup is temporarily unavailable. */ }
     return {
         blockId: authorization.blockId,
         frontendOrigin: authorization.frontendOrigin
@@ -802,6 +811,17 @@ async function getEmailIdentity(userId, blockId = "") {
     return typeof profile.emailAddress === "string" ? profile.emailAddress : "";
 }
 
+async function listConnectedAccounts(userId) {
+    return listConnections("gmail", userId).map(connection => ({
+        blockId: connection.blockId,
+        email: connection.email,
+        label: connection.email || `Account collegato · ${connection.blockId.slice(-6)}`,
+        originWorldId: connection.originWorldId,
+        originWorldName: connection.originWorldName,
+        legacyShared: connection.legacyShared === true
+    }));
+}
+
 async function createDraft({to, subject, text, attachments = []}, userId, blockId = "") {
     const recipient = cleanHeader(to);
     if (!recipient) throw new Error("Add at least one recipient.");
@@ -841,5 +861,6 @@ module.exports = {
     getAuthorizationUrl,
     getStatus,
     listAttachments,
+    listConnectedAccounts,
     listInboxMessages
 };

@@ -9,6 +9,7 @@ export interface DashboardSourceBlockData {
     id: string;
     type: DashboardSourceType;
     height: number;
+    accountBlockId?: string | null;
     url?: string;
     recentHours?: number;
     recentPaths?: string;

@@ -12,6 +12,7 @@
     "lint": "eslint .",
     "test": "npm --prefix backend test",
     "preview": "vite preview",
+    "graph:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/graphify-code.ps1",
     "desktop": "npm run build && electron .",
     "auth:reset-admin": "node scripts/reset-local-admin.cjs",
     "desktop:package": "npm run build && node scripts/package-desktop.cjs"

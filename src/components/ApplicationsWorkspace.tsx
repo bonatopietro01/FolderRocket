@@ -4,7 +4,7 @@ import {useEffect, useRef, useState} from "react";
 import type {ReactNode} from "react";
 import {createPortal} from "react-dom";
 import {API_BASE_URL} from "../api";
-import {applicationFileSensitivity, applicationSensitivityLabel, extensionOf, filterApplicationFiles, groupApplicationFiles} from "../applicationFiles";
+import {applicationFileSensitivity, applicationSensitivityLabel, extensionOf, filterApplicationFiles, filterApplicationFilesBySize, groupApplicationFiles} from "../applicationFiles";
 import type {ApplicationFileEntry as FileEntry} from "../applicationFiles";
 import {SEARCH_RESULT_TYPE} from "./SearchWorkspace";
 import {enqueueFireMountainFiles} from "./FireMountain";
@@ -103,6 +103,8 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
     const [appDateFrom, setAppDateFrom] = useState<Record<string, string>>({});
     const [appDateTo, setAppDateTo] = useState<Record<string, string>>({});
     const [appLocationFilters, setAppLocationFilters] = useState<Record<string, "all" | "local" | "shared">>({});
+    const [appMinSizeMb, setAppMinSizeMb] = useState<Record<string, string>>({});
+    const [appMaxSizeMb, setAppMaxSizeMb] = useState<Record<string, string>>({});
     const [selectedFilePaths, setSelectedFilePaths] = useState<string[]>([]);
     const [message, setMessage] = useState("");
     const [folderMenuPath,setFolderMenuPath]=useState<string|null>(null);
@@ -290,7 +292,9 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
         const fromTime = from ? new Date(`${from}T00:00:00`).getTime() : null;
         const toTime = to ? new Date(`${to}T23:59:59.999`).getTime() : null;
         const location = appLocationFilters[app.id] || "all";
-        const visibleFiles = filterApplicationFiles(appFiles, "", filter).filter(file => {
+        const minSize = appMinSizeMb[app.id] === undefined || appMinSizeMb[app.id] === "" ? null : Number(appMinSizeMb[app.id]);
+        const maxSize = appMaxSizeMb[app.id] === undefined || appMaxSizeMb[app.id] === "" ? null : Number(appMaxSizeMb[app.id]);
+        const visibleFiles = filterApplicationFilesBySize(filterApplicationFiles(appFiles, "", filter).filter(file => {
             if (titleTerms.length && !titleTerms.every(term => file.name.toLowerCase().includes(term))) return false;
             if (fromTime !== null || toTime !== null) {
                 const fileTime = file.createdAt ? new Date(file.createdAt).getTime() : Number.NaN;
@@ -299,7 +303,7 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
             const sensitivity = applicationFileSensitivity(file);
             const sharedLocation = sensitivity === "shared" || sensitivity === "synced";
             return location === "all" || (location === "shared" ? sharedLocation : !sharedLocation);
-        });
+        }), minSize, maxSize);
         const selectedVisibleFiles = visibleFiles.filter(file => selectedFilePaths.includes(file.path));
         return <div className="applicationFiles" aria-busy={Boolean(scanning[app.id])}>
             <label className="applicationTypeFilter"><span>File format</span><select aria-label={`${app.name} file format${windowView ? " in window" : ""}`} value={filter} onChange={event => setAppFilters(current => ({...current, [app.id]: event.target.value}))}><option value="all">All ({appFiles.length})</option>{Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)).map(([type, count]) => <option value={type} key={type}>{type.toUpperCase()} ({count})</option>)}</select></label>
@@ -307,7 +311,9 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
                 <label><span>From</span><input type="date" value={from} max={to || undefined} onChange={event => setAppDateFrom(current => ({...current, [app.id]: event.target.value}))}/></label>
                 <label><span>To</span><input type="date" value={to} min={from || undefined} onChange={event => setAppDateTo(current => ({...current, [app.id]: event.target.value}))}/></label>
                 <label className="applicationInlineLocation"><span>Location</span><select value={location} onChange={event => setAppLocationFilters(current => ({...current, [app.id]: event.target.value as "all" | "local" | "shared"}))}><option value="all">All locations</option><option value="local">Local only</option><option value="shared">Shared / synced</option></select></label>
-                <button type="button" onClick={() => { setAppQueries(current => ({...current, [app.id]: ""})); setAppDateFrom(current => ({...current, [app.id]: ""})); setAppDateTo(current => ({...current, [app.id]: ""})); setAppLocationFilters(current => ({...current, [app.id]: "all"})); setAppFilters(current => ({...current, [app.id]: "all"})); }}>Clear filters</button>
+                <label><span>Min size (MB)</span><input type="number" min="0" step="0.1" value={appMinSizeMb[app.id] || ""} onChange={event => setAppMinSizeMb(current => ({...current, [app.id]: event.target.value}))}/></label>
+                <label><span>Max size (MB)</span><input type="number" min={appMinSizeMb[app.id] || "0"} step="0.1" value={appMaxSizeMb[app.id] || ""} onChange={event => setAppMaxSizeMb(current => ({...current, [app.id]: event.target.value}))}/></label>
+                <button type="button" onClick={() => { setAppQueries(current => ({...current, [app.id]: ""})); setAppDateFrom(current => ({...current, [app.id]: ""})); setAppDateTo(current => ({...current, [app.id]: ""})); setAppMinSizeMb(current => ({...current, [app.id]: ""})); setAppMaxSizeMb(current => ({...current, [app.id]: ""})); setAppLocationFilters(current => ({...current, [app.id]: "all"})); setAppFilters(current => ({...current, [app.id]: "all"})); }}>Clear filters</button>
             </div>
             {scanning[app.id] && <div className="applicationScanProgress" role="status"><span><strong>Finding files… {scanProgress[app.id]?.found || 0} found</strong><small>{scanProgress[app.id]?.directoriesScanned || 0} folders checked · {scanProgress[app.id]?.inspected || 0} files inspected</small>{scanProgress[app.id]?.latest?.map(name=><em key={name}>{name}</em>)}</span><button type="button" onClick={()=>stopDiscovery(app.id)}>Stop</button></div>}
             {scanErrors[app.id] && <p role="alert">{scanErrors[app.id]}</p>}

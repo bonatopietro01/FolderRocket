@@ -46,22 +46,30 @@ async function runProviderRules(provider, providerSettings, userId, blockId = ""
         : {};
     const dueRules = providerSettings.rules.filter(rule => scheduledRuleIsDue(rule, runtime));
     if (!dueRules.length) return false;
+    // Gmail's null selection must not fall back to a block-local or legacy
+    // shared connection. Leave Outlook's existing block selection untouched.
+    if (provider === "gmail" && providerSettings.accountBlockId === null) return false;
+    const credentialBlockId = provider === "gmail"
+        ? (/^[a-zA-Z0-9_-]{1,120}$/.test(providerSettings.accountBlockId || "") ? providerSettings.accountBlockId : blockId)
+        : blockId;
+    if (provider === "gmail" && !credentialBlockId) return false;
 
     runtime.rules = runtime.rules && typeof runtime.rules === "object" ? runtime.rules : {};
+    if (provider === "gmail") runtime.accountBlockId = credentialBlockId;
     const now = new Date();
     for (const rule of dueRules) {
         const previous = runtime.rules[rule.id] && typeof runtime.rules[rule.id] === "object"
             ? runtime.rules[rule.id]
             : {};
         try {
-            const messages = await readProviderMessages(provider, rule.filter, userId, rule.kind === "ai", blockId);
+            const messages = await readProviderMessages(provider, rule.filter, userId, rule.kind === "ai", credentialBlockId);
             const evaluated = await evaluateGmailWarnings({
                 rules: [rule],
                 messages,
                 seenByRule: {[rule.id]: previous.seenMessageIds || []}
             });
             const result = evaluated[0] || {ruleId: rule.id, total: 0, newCount: 0, messageIds: [], messages: []};
-            const attachments = await readProviderAttachments(provider, rule.filter, userId, blockId);
+            const attachments = await readProviderAttachments(provider, rule.filter, userId, credentialBlockId);
             const messageIds = new Set(result.messageIds || []);
             runtime.rules[rule.id] = {
                 lastScheduledDay: localDayKey(now),
@@ -96,19 +104,34 @@ async function runScheduledEmailAlerts() {
     for (const record of listDashboardPreferences()) {
         if (runningUsers.has(record.userId)) continue;
         const settings = record.settings;
-        const alerts = normalizeEmailAlertSettings(settings?.emailAlerts);
-        const hasDueRule = ["gmail", "outlook"].some(provider =>
+        const worldSettings = settings?.worlds && typeof settings.worlds === "object" ? settings.worlds : {};
+        const worldContexts = Object.entries(worldSettings)
+            .filter(([, value]) => value && typeof value === "object" && value.emailAlerts)
+            .map(([worldId, value]) => ({worldId, alerts: normalizeEmailAlertSettings(value.emailAlerts)}));
+        const contexts = worldContexts.length
+            ? worldContexts
+            : [{worldId: "", alerts: normalizeEmailAlertSettings(settings?.emailAlerts)}];
+        const hasDueRule = contexts.some(({alerts}) => ["gmail", "outlook"].some(provider =>
             [alerts[provider], ...Object.values(alerts[provider].blocks ?? {})]
-                .some(settings => settings.rules.some(rule => scheduledRuleIsDue(rule, settings.runtime)))
-        );
+                .some(providerSettings => providerSettings.rules.some(rule => scheduledRuleIsDue(rule, providerSettings.runtime)))
+        ));
         if (!hasDueRule) continue;
         runningUsers.add(record.userId);
         try {
-            const gmailChanged = await runProviderRulesForBlocks("gmail", alerts.gmail, record.userId);
-            const outlookChanged = await runProviderRulesForBlocks("outlook", alerts.outlook, record.userId);
-            if (gmailChanged || outlookChanged) {
-                writeDashboardPreferences(record.userId, {...settings, emailAlerts: alerts});
+            let changed = false;
+            let next = {...settings};
+            for (const context of contexts) {
+                const gmailChanged = await runProviderRulesForBlocks("gmail", context.alerts.gmail, record.userId);
+                const outlookChanged = await runProviderRulesForBlocks("outlook", context.alerts.outlook, record.userId);
+                if (!gmailChanged && !outlookChanged) continue;
+                changed = true;
+                if (context.worldId) {
+                    next = {...next, worlds: {...next.worlds, [context.worldId]: {...next.worlds[context.worldId], emailAlerts: context.alerts}}};
+                } else {
+                    next = {...next, emailAlerts: context.alerts};
+                }
             }
+            if (changed) writeDashboardPreferences(record.userId, next);
         } catch (error) {
             console.error("Scheduled email-alert error:", error instanceof Error ? error.message : error);
         } finally {

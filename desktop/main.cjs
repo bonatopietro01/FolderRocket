@@ -4,6 +4,7 @@ const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
 const {spawn} = require("node:child_process");
+const crypto = require("node:crypto");
 
 const FOLDERROCKET_PROTOCOL = "folderrocket";
 
@@ -28,6 +29,114 @@ let cargoShipExpanded = false;
 let cargoShipPanelSize = {...CARGO_SHIP_DEFAULT_PANEL_SIZE};
 let cargoShipLastBounds = null;
 let selectedDisplaySourceId = "";
+let electronDiagnosticsQueue = Promise.resolve();
+let electronDiagnosticsStorageWarning = false;
+
+function electronDiagnosticsPath() {
+    return path.join(app.getPath("userData"), "diagnostics-electron.json");
+}
+
+function safeDiagnosticText(value, max = 2000) {
+    return String(value || "").replace(/\bBearer\s+\S+/gi, "Bearer [redacted]").replace(/\b(access[_-]?token|refresh[_-]?token|api[_-]?key|password)\s*[:=]\s*\S+/gi, "$1=[redacted]").replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]").replace(/(?:[A-Z]:\\|\\\\|\/Users\/|\/home\/)[^\s"']+/gi, "[local path]").replace(/[\r\n\t]+/g, " ").slice(0, max);
+}
+
+async function persistElectronDiagnostics(entries) {
+    const file = electronDiagnosticsPath();
+    await fs.promises.mkdir(path.dirname(file), {recursive: true});
+    const temporaryPath = `${file}.${crypto.randomUUID()}.tmp`;
+    try {
+        await fs.promises.writeFile(temporaryPath, JSON.stringify(entries), {encoding:"utf8", mode:0o600});
+        await fs.promises.rename(temporaryPath, file);
+    } catch (error) {
+        await fs.promises.rm(temporaryPath, {force:true}).catch(() => {});
+        throw error;
+    }
+}
+
+async function readElectronDiagnosticsFile() {
+    try {
+        const entries = JSON.parse(await fs.promises.readFile(electronDiagnosticsPath(), "utf8"));
+        if (!Array.isArray(entries)) return [];
+        const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        const valid = entries.filter(item => item && Number.isFinite(Date.parse(item.at)) && Date.parse(item.at) >= cutoff).slice(0, 200);
+        if (valid.length !== entries.length) await persistElectronDiagnostics(valid);
+        return valid;
+    } catch (error) {
+        if (error?.code === "ENOENT") return [];
+        throw error;
+    }
+}
+
+function reportElectronDiagnosticsStorageWarning() {
+    if (electronDiagnosticsStorageWarning) return;
+    electronDiagnosticsStorageWarning = true;
+    const warning = {id:crypto.randomUUID(),at:new Date().toISOString(),type:"electron",severity:"warning",category:"diagnostic-storage",message:"Il registro locale di Electron non è disponibile; FolderRocket continua a funzionare.",route:"desktop/diagnostics",screen:"Electron",component:"Archivio diagnostico",stack:"",method:"",status:null,worldId:"",requestId:"",durationMs:null,resolved:false};
+    for (const window of [mainWindow, cargoWindow]) {
+        try { if (window && !window.isDestroyed() && window.webContents.getURL().startsWith(APP_ORIGIN)) window.webContents.send("folderrocket:electron-diagnostic", warning); }
+        catch { /* A closed window must not turn a diagnostics warning into another error. */ }
+    }
+}
+
+function enqueueElectronDiagnostics(operation, reportStorageFailure = false) {
+    const queued = electronDiagnosticsQueue.catch(() => {}).then(operation);
+    electronDiagnosticsQueue = queued.catch(() => {
+        if (reportStorageFailure) reportElectronDiagnosticsStorageWarning();
+        return null;
+    });
+    return electronDiagnosticsQueue;
+}
+
+function recordElectronDiagnostic({message, route = "desktop/main.cjs", severity = "error", stack = ""}) {
+    const event = {id: crypto.randomUUID(), at: new Date().toISOString(), type: "electron", severity, category: "electron", message: safeDiagnosticText(message, 260), route: safeDiagnosticText(route, 180), screen: "Electron", component: "Processo desktop", stack: safeDiagnosticText(stack, 2000), method: "", status: null, worldId: "", requestId: "", durationMs: null, resolved:severity === "info"};
+    return enqueueElectronDiagnostics(async () => {
+        const next = [event, ...await readElectronDiagnosticsFile()].slice(0, 200);
+        await persistElectronDiagnostics(next);
+        electronDiagnosticsStorageWarning = false;
+        for (const window of [mainWindow, cargoWindow]) {
+            if (window && !window.isDestroyed() && window.webContents.getURL().startsWith(APP_ORIGIN)) window.webContents.send("folderrocket:electron-diagnostic", event);
+        }
+        return event;
+    }, true);
+}
+
+function readElectronDiagnostics() {
+    return enqueueElectronDiagnostics(() => readElectronDiagnosticsFile(), true);
+}
+
+function clearElectronDiagnostics() {
+    return enqueueElectronDiagnostics(async () => {
+        try { await fs.promises.rm(electronDiagnosticsPath(), {force: true}); electronDiagnosticsStorageWarning = false; return true; }
+        catch { reportElectronDiagnosticsStorageWarning(); return false; }
+    });
+}
+
+function monitorElectronWindow(window, name) {
+    window.webContents.on("render-process-gone", (_event, details) => {
+        recordElectronDiagnostic({message: `Renderer ${name} terminato (${details?.reason || "sconosciuto"}, codice ${details?.exitCode ?? "n/d"})`, route: `desktop/${name}`});
+    });
+    window.webContents.on("did-fail-load", (_event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+        if (!isMainFrame || errorCode === -3) return;
+        let route = `desktop/${name}`;
+        try { route = new URL(validatedURL).pathname; } catch { /* Keep the safe desktop route. */ }
+        recordElectronDiagnostic({message: `Caricamento ${name} non riuscito (${errorCode}: ${errorDescription})`, route});
+    });
+}
+
+let fatalDesktopExitStarted = false;
+process.on("uncaughtException", error => {
+    if (fatalDesktopExitStarted) return;
+    fatalDesktopExitStarted = true;
+    const forceExit = setTimeout(() => app.exit(1), 5000);
+    void recordElectronDiagnostic({message: `Eccezione Electron non gestita (${error.name || "errore"})`, stack: error.stack})
+        .finally(() => { clearTimeout(forceExit); app.exit(1); });
+});
+
+app.on("child-process-gone", (_event, details) => {
+    recordElectronDiagnostic({message: `Processo Chromium terminato (${details?.reason || "sconosciuto"}, codice ${details?.exitCode ?? "n/d"})`, route: "desktop/child-process"});
+});
+
+ipcMain.handle("folderrocket:diagnostics:list-electron", event => event.sender.getURL().startsWith(APP_ORIGIN) ? readElectronDiagnostics() : []);
+ipcMain.handle("folderrocket:diagnostics:clear-electron", event => event.sender.getURL().startsWith(APP_ORIGIN) ? clearElectronDiagnostics() : false);
 
 function focusFolderRocket() {
     if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -230,14 +339,20 @@ function startBackend() {
     backendProcess.stdout?.on("data", data => console.info(`[FolderRocket backend] ${data}`));
     backendProcess.stderr?.on("data", data => console.error(`[FolderRocket backend] ${data}`));
     backendProcess.stdin?.on("error", error => {
-        if (!app.isQuitting) console.error("FolderRocket backend input error:", error);
+        if (!app.isQuitting) {
+            recordElectronDiagnostic({message: `Comunicazione con il backend interrotta (${error.name || "errore"})`, route: "desktop/backend-stdin", stack:error.stack});
+            console.error("FolderRocket backend input error:", error.name || "unknown error");
+        }
     });
     backendProcess.once("exit", code => {
         if (backendShutdownTimer) {
             clearTimeout(backendShutdownTimer);
             backendShutdownTimer = null;
         }
-        if (!app.isQuitting && code && code !== 0) console.error(`FolderRocket backend stopped with code ${code}.`);
+        if (!app.isQuitting && code && code !== 0) {
+            recordElectronDiagnostic({message: `Backend terminato inaspettatamente (codice ${code})`, route: "desktop/backend"});
+            console.error(`FolderRocket backend stopped with code ${code}.`);
+        }
         backendProcess = null;
     });
 }
@@ -282,6 +397,7 @@ function createWindow(loadApplication = true) {
             sandbox: true
         }
     });
+    monitorElectronWindow(mainWindow, "FolderRocket");
     if (savedState?.maximized) mainWindow.maximize();
     const saveWindowState = () => {
         if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -359,6 +475,7 @@ function createCargoShipWindow(showWhenReady = true) {
             sandbox: true
         }
     });
+    monitorElectronWindow(cargoWindow, "CargoRocket");
     cargoWindow.webContents.setWindowOpenHandler(({url}) => {
         if (/^(https?:|mailto:)/i.test(url)) void shell.openExternal(url);
         return {action: "deny"};
@@ -391,6 +508,7 @@ function createCargoShipWindow(showWhenReady = true) {
     void openingWindow.loadURL(`${APP_ORIGIN}/?folderrocketCargoShip=1`).then(() => {
         if (showWhenReady && !openingWindow.isDestroyed() && !openingWindow.isVisible()) openingWindow.show();
     }).catch(error => {
+        recordElectronDiagnostic({message: `CargoRocket non è riuscita ad aprirsi (${error.name || "errore"})`, route: "desktop/CargoRocket", stack:error.stack});
         console.error("[FolderRocket CargoRocket] Unable to load window:", error);
         if (!openingWindow.isDestroyed()) openingWindow.destroy();
     });
@@ -479,6 +597,7 @@ function setCargoShipWindowExpanded(expanded) {
 }
 
 app.whenReady().then(async () => {
+    recordElectronDiagnostic({message:"Applicazione Electron avviata", route:"desktop/main.cjs", severity:"info"});
     if (process.defaultApp) app.setAsDefaultProtocolClient(FOLDERROCKET_PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
     else app.setAsDefaultProtocolClient(FOLDERROCKET_PROTOCOL);
     session.defaultSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin) => {
@@ -676,11 +795,13 @@ app.whenReady().then(async () => {
             message: "FolderRocket could not reserve a local connection.",
             detail: error instanceof Error ? error.message : "No local backend port is available."
         });
+        recordElectronDiagnostic({message:`Avvio backend non riuscito (${error.name || "errore"})`, route:"desktop/backend-startup", stack:error.stack});
         app.quit();
         return;
     }
     if (!existingBackend.ready) startBackend();
     if (!await waitForBackend()) {
+        recordElectronDiagnostic({message:"Backend locale non ha risposto entro il tempo previsto", route:"desktop/backend-health-check"});
         await dialog.showMessageBox({
             type: "error",
             title: "FolderRocket could not start",
@@ -696,6 +817,11 @@ app.whenReady().then(async () => {
     createCargoShipWindow(false);
     const initialProtocolUrl = process.argv.find(value => value.startsWith(`${FOLDERROCKET_PROTOCOL}://`));
     if (initialProtocolUrl) handleFolderRocketProtocol(initialProtocolUrl);
+}).catch(error => {
+    recordElectronDiagnostic({message:`Inizializzazione Electron non riuscita (${error.name || "errore"})`, route:"desktop/startup", stack:error.stack});
+    void dialog.showMessageBox({type:"error", title:"FolderRocket non è riuscita ad avviarsi", message:"Si è verificato un errore durante l’avvio.", detail:"Apri Diagnostica dopo il riavvio per consultare i dettagli salvati in locale."});
+    stopBackend();
+    app.quit();
 });
 
 app.on("activate", () => {

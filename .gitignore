@@ -33,6 +33,7 @@ output/
 .tauri/
 release/
 FolderRocket-*-Windows.zip
+graphify-out/
 
 # Editor directories and files
 .vscode/*

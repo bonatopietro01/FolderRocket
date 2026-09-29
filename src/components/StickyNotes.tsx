@@ -85,6 +85,9 @@ export default function StickyNotes({storageScope, folders, aiEnabled, floatingS
 
     useEffect(() => { localStorage.setItem(storageKey(storageScope), JSON.stringify(notes)); }, [notes, storageScope]);
     useEffect(() => {
+        window.dispatchEvent(new CustomEvent("folderrocket:sticky-notes-updated", {detail: {storageScope}}));
+    }, [notes, storageScope]);
+    useEffect(() => {
         const reset = (event: PointerEvent) => { if (!(event.target as Element).closest(".floatingStickyNote")) setDeleteId(null); };
         window.addEventListener("pointerdown", reset);
         return () => window.removeEventListener("pointerdown", reset);
@@ -111,12 +114,12 @@ export default function StickyNotes({storageScope, folders, aiEnabled, floatingS
     const addAiNote = useCallback((prompt = "") => {
         setNotes(current => [{...createNote(current.length, "red"), ai: true, aiPrompt: prompt, aiResponse: "", aiWorking: false, autoHeight: false, width: 188, height: 132}, ...current]);
     }, []);
-    const addReminderNote = useCallback(() => {
-        setNotes(current => [{...createNote(current.length, "orange", "Reminder"), reminder: true, reminderAt: "", reminderFired: false, autoHeight: false, width: 230, height: 150}, ...current]);
+    const addReminderNote = useCallback((detail?: {title?: string; text?: string; reminderAt?: string}) => {
+        setNotes(current => [{...createNote(current.length, "orange", detail?.text || "Reminder"), title:String(detail?.title || "").slice(0, 80), reminder: true, reminderAt: detail?.reminderAt || "", reminderFired: false, autoHeight: false, width: 230, height: 150}, ...current]);
     }, []);
-    function update(id: string, change: Partial<StickyNote>) { setNotes(current => current.map(note => note.id === id ? {...note, ...change} : note)); }
+    const update = useCallback((id: string, change: Partial<StickyNote>) => { setNotes(current => current.map(note => note.id === id ? {...note, ...change} : note)); }, []);
     function remove(id: string) { if (deleteId === id) { setNotes(current => current.filter(note => note.id !== id)); setDeleteId(null); } else setDeleteId(id); }
-    function reveal(id: string, bookmarkIndex: number) { update(id, {hidden: false, x: 16, y: Math.max(88, 124 + bookmarkIndex * 35)}); }
+    const reveal = useCallback((id: string, bookmarkIndex: number) => { update(id, {hidden: false, x: 16, y: Math.max(88, 124 + bookmarkIndex * 35)}); }, [update]);
 
     async function askAi(note: StickyNote) {
         const prompt = (note.aiPrompt ?? "").trim();
@@ -146,9 +149,14 @@ export default function StickyNotes({storageScope, folders, aiEnabled, floatingS
     }, [addAiNote, aiAddRequest, aiEnabled]);
 
     useEffect(() => {
-        window.addEventListener("folderrocket:create-reminder-note", addReminderNote);
-        return () => window.removeEventListener("folderrocket:create-reminder-note", addReminderNote);
-    }, [addReminderNote]);
+        const createReminder = (event: Event) => {
+            const detail = (event as CustomEvent<{storageScope?: string; title?: string; text?: string; reminderAt?: string}>).detail;
+            if (detail?.storageScope && detail.storageScope !== storageScope) return;
+            addReminderNote(detail);
+        };
+        window.addEventListener("folderrocket:create-reminder-note", createReminder);
+        return () => window.removeEventListener("folderrocket:create-reminder-note", createReminder);
+    }, [addReminderNote, storageScope]);
 
     useEffect(() => {
         const checkReminders = () => {
@@ -178,18 +186,37 @@ export default function StickyNotes({storageScope, folders, aiEnabled, floatingS
         };
         window.addEventListener("folderrocket:create-sticky-note", createCargoNote);
         const channel = "BroadcastChannel" in window ? new BroadcastChannel("folderrocket-sticky-notes") : null;
-        if (channel) channel.onmessage = event => createCargoNote(new CustomEvent("folderrocket:create-sticky-note", {detail: event.data}));
+        if (channel) channel.onmessage = event => {
+            const data = event.data as {type?: string; storageScope?: string; id?: string; title?: string; text?: string; color?: NoteColor; reminderAt?: string};
+            if (data?.type === "ai") window.dispatchEvent(new CustomEvent("folderrocket:create-ai-sticky-note", {detail: data}));
+            else if (data?.type === "reminder") window.dispatchEvent(new CustomEvent("folderrocket:create-reminder-note", {detail: data}));
+            else if (data?.type === "reveal") window.dispatchEvent(new CustomEvent("folderrocket:reveal-sticky-note", {detail: data}));
+            else createCargoNote(new CustomEvent("folderrocket:create-sticky-note", {detail: data}));
+        };
         return () => { window.removeEventListener("folderrocket:create-sticky-note", createCargoNote); channel?.close(); };
     }, [storageScope]);
 
     useEffect(() => {
         const createAiNote = (event: Event) => {
+            const detail = (event as CustomEvent<{storageScope?: string; prompt?: string}>).detail;
+            if (detail?.storageScope && detail.storageScope !== storageScope) return;
             if (!aiEnabled) return;
-            addAiNote(String((event as CustomEvent<{prompt?: string}>).detail?.prompt || "").trim());
+            addAiNote(String(detail?.prompt || "").trim());
         };
         window.addEventListener("folderrocket:create-ai-sticky-note", createAiNote);
         return () => window.removeEventListener("folderrocket:create-ai-sticky-note", createAiNote);
-    }, [addAiNote, aiEnabled]);
+    }, [addAiNote, aiEnabled, storageScope]);
+
+    useEffect(() => {
+        const revealFromCargo = (event: Event) => {
+            const detail = (event as CustomEvent<{storageScope?: string; id?: string}>).detail;
+            if (detail?.storageScope !== storageScope || !detail.id) return;
+            const index = notes.findIndex(note => note.id === detail.id);
+            if (index >= 0) reveal(detail.id, index);
+        };
+        window.addEventListener("folderrocket:reveal-sticky-note", revealFromCargo);
+        return () => window.removeEventListener("folderrocket:reveal-sticky-note", revealFromCargo);
+    }, [notes, reveal, storageScope]);
 
     const visibleNotes = notes.filter(note => !note.hidden);
     const hiddenNotes = notes.filter(note => note.hidden);

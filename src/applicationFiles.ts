@@ -36,6 +36,16 @@ export function filterApplicationFiles(files: ApplicationFileEntry[], query: str
         && terms.every(term => `${file.name} ${file.path}`.toLowerCase().includes(term)));
 }
 
+export function filterApplicationFilesBySize(files: ApplicationFileEntry[], minMegabytes: number | null, maxMegabytes: number | null) {
+    const minimum = typeof minMegabytes === "number" && Number.isFinite(minMegabytes) && minMegabytes >= 0 ? minMegabytes * 1024 * 1024 : null;
+    const maximum = typeof maxMegabytes === "number" && Number.isFinite(maxMegabytes) && maxMegabytes >= 0 ? maxMegabytes * 1024 * 1024 : null;
+    if (minimum !== null && maximum !== null && maximum < minimum) return [];
+    if (minimum === null && maximum === null) return files;
+    return files.filter(file => typeof file.size === "number" && Number.isFinite(file.size)
+        && (minimum === null || file.size >= minimum)
+        && (maximum === null || file.size <= maximum));
+}
+
 export function groupApplicationFiles(files: ApplicationFileEntry[]) {
     const groups = new Map<string, ApplicationFileEntry[]>();
     for (const file of files) {
