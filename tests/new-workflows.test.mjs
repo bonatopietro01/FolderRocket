@@ -5,7 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {recentFiles} from '../backend/services/recentFilesService.js';
 import {validateFormatJob} from '../backend/services/changeFormatService.js';
-import {folderProjectGroups} from '../src/folderProjects.ts';
+import {folderDescriptionGroups, folderProjectGroups} from '../src/folderProjects.ts';
 
 test('recent scan includes nested new files once and excludes temporary downloads', async()=>{
     const root=await fs.mkdtemp(path.join(os.tmpdir(),'folderrocket-recent-test-'));
@@ -45,4 +45,21 @@ test('description projects share colour and explicit work groups override descri
     ]);
     assert.deepEqual(groups[0].members.map(folder=>folder.id),['a','b','d']);
     assert.equal(groups[0].colour,'#ddeeff');assert.equal(groups[1].members.length,1);
+});
+test('Folders on Top groups non-empty descriptions and keeps empty descriptions independent',()=>{
+    const groups=folderDescriptionGroups([
+        {id:'a',name:'Alpha',path:'',description:' Work '},
+        {id:'b',name:'Beta',path:'',description:'work',appearance:{workGroup:'Different custom group'}},
+        {id:'c',name:'Charlie',path:'',description:'Personal'},
+        {id:'d',name:'Delta',path:'',description:''},
+        {id:'e',name:'Echo',path:'',description:'  '}
+    ]);
+    assert.deepEqual(groups.map(group=>group.members.map(folder=>folder.id)),[['a','b'],['c'],['d'],['e']]);
+    assert.equal(groups[0].key,'description:work');
+    assert.ok(groups[0].colour);
+    assert.notEqual(groups[2].key,groups[3].key);
+    assert.deepEqual(folderProjectGroups([
+        {id:'a',name:'Alpha',path:'',description:'Work',appearance:{workGroup:'Custom'}},
+        {id:'b',name:'Beta',path:'',description:'Work'}
+    ]).map(group=>group.members.map(folder=>folder.id)),[['a'],['b']]);
 });

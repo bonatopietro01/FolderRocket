@@ -31,6 +31,8 @@ For the dashboard folder rows and Tree Rocket layout, open
 `/tests/ui/tree-rocket-smoke.html` on the same local Vite server. This fixture
 uses only fictitious folders and files. Switch between Folders on Top and Three
 Columns, then choose 0, 1, 2, or 12 folders. Open Tree Rocket to inspect the
-matching graph; click a folder, try Mostra file, search, back/root navigation,
-and Add to Folder Management. The latter reports the path only in this fixture
-and does not save a real folder. Repeat at a narrow browser width.
+matching graph; click a folder, try Show Files, search, Back/Roots navigation,
+and Add to Folder Management. Folders on Top groups non-empty descriptions and
+allows vertical scrolling within groups plus horizontal scrolling between them.
+The add action reports the path only in this fixture and does not save a real
+folder. Repeat at a narrow browser width.

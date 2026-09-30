@@ -27,12 +27,17 @@ test("Tree Rocket is mounted from Folder Management and navigates without readin
     const server = source("backend", "server.js");
     assert.match(tree, /createPortal\(<section className="treeRocketOverlay"/);
     assert.match(tree, /appRoot\.inert = true/);
-    assert.match(tree, /TreeRocketMark size=\{62\}/);
+    assert.match(tree, /TreeRocketMark size=\{44\}/);
     assert.match(manager, /aria-label="Open Tree Rocket"/);
     assert.doesNotMatch(manager, /<small>Folder map<\/small>/);
     assert.match(manager, /<TreeRocket folders=\{folders\}/);
     assert.match(tree, /className="treeRocketNodeEnter" onClick=\{onOpen\}/);
+    assert.match(tree, /aria-label=\{`Open folder \$\{folder\.name\}`\}/);
     assert.match(tree, /className="treeRocketNodeActions"/);
+    assert.match(tree, /<span>Show Files<\/span>/);
+    assert.match(tree, /<span>Add to Folder Management<\/span>/);
+    assert.match(tree, /<span><strong id="treeRocketTitle">Tree Rocket<\/strong><\/span>/);
+    assert.doesNotMatch(tree, /<small>FOLDERROCKET<\/small>|Indietro|Radici|Mostra file|Cerca cartelle|Nessuna sottocartella/);
     assert.match(tree, /event\.stopPropagation\(\); onShowFiles\(\)/);
     assert.match(tree, /event\.stopPropagation\(\); onAdd\(\)/);
     assert.match(tree, /onContextMenu=\{event => \{const target = event\.target as HTMLElement; if \(target\.closest\("\[data-graph-node\],button,input"\)\) return; event\.preventDefault\(\); back\(\);\}\}/);
@@ -56,6 +61,9 @@ test("Tree Rocket is mounted from Folder Management and navigates without readin
     const css = source("src", "App.css");
     assert.match(css, /grid-template-columns:repeat\(auto-fit,minmax\(min\(230px,100%\),270px\)\)/);
     assert.match(css, /\.treeRocketNode:hover,\.treeRocketNode:focus-within/);
+    assert.match(css, /\.treeRocketNodeEnter \{ position:absolute; z-index:0; inset:0;/);
+    assert.match(css, /\.treeRocketNodeActions \{ position:relative; z-index:2;/);
+    assert.match(tree, /className="treeRocketLogoProposal" title="Tree Rocket logo proposal"/);
     assert.match(css, /\.treeRocketGraph \{ overflow-x:hidden; overflow-y:auto/);
     assert.match(css, /\.treeRocketOverlay::before \{ background-image:radial-gradient/);
     assert.match(css.slice(css.lastIndexOf("/* Tree Rocket is a separate, space-themed workspace.")), /\.treeRocketGraph \{[^}]*background-image:none/);
@@ -71,15 +79,34 @@ test("Tree Rocket is mounted from Folder Management and navigates without readin
 test("dashboard folder layouts use compact rows and conditional scroll-edge fades", () => {
     const app = source("src", "App.tsx");
     const frame = source("src", "components", "FolderScrollFrame.tsx");
+    const groups = source("src", "folderProjects.ts");
     const css = source("src", "App.css");
     assert.match(app, /<FolderScrollFrame layout=\{dashboardLayout\} itemCount=\{dashboardBrowser \? 0 : folders\.length\}>/);
-    assert.match(frame, /return itemCount > visibleColumns \? 2 : 1/);
+    assert.match(app, /dashboardLayout === "folders-top" \? folderDescriptionGroups\(folders\) : folderProjectGroups\(folders\)/);
+    assert.match(groups, /description\.trim\(\)\.toLocaleLowerCase\(\)/);
+    assert.match(frame, /closest<HTMLElement>\("\.dashboardProjectGroup"\)/);
     assert.match(frame, /maxScroll - scrollPosition > 2/);
     assert.match(frame, /folderFadeBefore/);
     assert.match(frame, /folderFadeAfter/);
-    assert.match(css, /grid-template-rows:repeat\(var\(--folder-rows,1\),max-content\)/);
+    assert.match(css, /\.dashboardFoldersTop \.foldersContainer \{ display:flex; width:max-content; min-width:100%; height:100%;/);
+    assert.match(css, /\.dashboardFoldersTop \.foldersContainer \{[^}]*flex-direction:row;/);
+    assert.match(css, /\.dashboardFoldersTop \.foldersContainer > \.dashboardProjectGroup \{ position:relative; display:flex;/);
     assert.match(css, /\.dashboardFoldersTop \.dashboardProjectGroup \.folderOrderItem/);
+    assert.match(css, /\.dashboardFoldersTop \.dashboardTopProjectTag \{ position:absolute; top:50%;/);
     assert.match(css, /\.foldersColumn\.folderFadeAfter::after/);
+});
+
+test("File Studio queue labels and cards adapt without changing their queues", () => {
+    const workspace = source("src", "components", "ProcessingWorkspace.tsx");
+    const changeFormat = source("src", "components", "ChangeFormatPanel.tsx");
+    const css = source("src", "App.css");
+    assert.match(workspace, /queue\.length > 0 && <div className="studioQueueHeading"><span>Files to convert<\/span>/);
+    assert.doesNotMatch(changeFormat, /Files receiving the format/);
+    assert.match(changeFormat, /files\.map\(file =>/);
+    assert.match(css, /@media \(max-width:1050px\) \{[\s\S]*\.processingPage \{ height:auto;/);
+    assert.match(css, /@media \(max-width:720px\) \{[\s\S]*\.processingPage \{ display:flex;/);
+    assert.match(css, /\.processingPage \.conversionToolCard > h2 \{ margin-left:0; margin-right:0; border-radius:8px; \}/);
+    assert.match(css, /\.processingPage \.changeFormatPanel \.formatQueueRow \{ grid-template-columns:minmax\(34px,auto\) minmax\(0,1fr\) auto 21px;/);
 });
 
 test("Application filters can be composed and reset, and account integration descriptions remain under their titles", () => {

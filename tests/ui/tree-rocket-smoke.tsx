@@ -2,6 +2,7 @@
 import {useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import FolderScrollFrame from '../../src/components/FolderScrollFrame';
+import {folderDescriptionGroups, folderProjectGroups} from '../../src/folderProjects';
 import TreeRocket from '../../src/components/TreeRocket';
 import '../../src/App.css';
 
@@ -29,20 +30,31 @@ export default function Fixture() {
     const [layout, setLayout] = useState<'folders-top' | 'three-column'>('folders-top');
     const [count, setCount] = useState(12);
     const [revision, setRevision] = useState(0);
-    const [result, setResult] = useState('Nessuna cartella aggiunta');
-    const entries = children(count);
+    const [result, setResult] = useState('No folder added');
+    const entries = children(count).map((entry, index) => ({
+        ...entry,
+        id: `folder-${index + 1}`,
+        description: index < 5 ? 'Work' : index < 9 ? 'Personal' : index % 2 === 0 ? 'Shared' : ''
+    }));
+    const groups = layout === 'folders-top' ? folderDescriptionGroups(entries) : folderProjectGroups(entries);
     return <>
         <div style={{padding: 12, display: 'flex', gap: 8, flexWrap: 'wrap', background: '#edf6fd'}}>
-            <strong>Fixture locale — cartelle e file fittizi</strong>
+            <strong>Local fixture — fictitious folders and files</strong>
             <button onClick={() => setLayout(layout === 'folders-top' ? 'three-column' : 'folders-top')}>Layout: {layout}</button>
-            {[0, 1, 2, 12].map(value => <button key={value} onClick={() => {scenario = value; setCount(value); setRevision(current => current + 1);}}>{value} cartelle</button>)}
-            <button onClick={() => setOpen(true)}>Apri Tree Rocket</button>
+            {[0, 1, 2, 12].map(value => <button key={value} onClick={() => {scenario = value; setCount(value); setRevision(current => current + 1);}}>{value} folders</button>)}
+            <button onClick={() => setOpen(true)}>Open Tree Rocket</button>
             <span role="status">{result}</span>
         </div>
         <div className={`dashboard ${layout === 'folders-top' ? 'dashboardFoldersTop' : ''}`} style={{height: 'calc(100vh - 75px)', gridTemplateColumns: layout === 'three-column' ? '160px 1fr 160px' : undefined}}>
             <section className="dashboardColumn sourcesColumn" style={{minHeight: 100}}>Sources</section>
             <FolderScrollFrame layout={layout} itemCount={entries.length}>
-                <div className="foldersContainer">{entries.map((entry, index) => <div key={entry.path} className="dashboardProjectGroup"><div className="folderOrderItem" style={{height: 94, border: '1px solid #bccfdc', borderRadius: 9, background: '#f6fbff', padding: 8, boxSizing: 'border-box'}}><span className="dashboardTopProjectTag">{index % 2 ? 'Personal' : 'Work'}</span><strong>{entry.name}</strong><small>Drop files here</small></div></div>)}</div>
+                <div className="foldersContainer">{groups.map(group => <div key={group.key} className={`dashboardProjectGroup${group.members.length > 1 ? ' linkedProject' : ''}`}>
+                    {group.members.length > 1 && <div className="dashboardProjectLabel"><span>{group.symbol}</span><small>{group.members[0].description}</small></div>}
+                    {group.members.map(entry => <div key={entry.path} className="folderOrderItem" style={{height: 94, border: '1px solid #bccfdc', borderRadius: 9, background: '#f6fbff', padding: 8, boxSizing: 'border-box'}}>
+                        {group.members.length > 1 && <span className="dashboardTopProjectTag" aria-hidden="true"><span>{group.symbol}</span><small>{group.members[0].description}</small></span>}
+                        <strong>{entry.name}</strong><small>{entry.description || 'No project description'}</small>
+                    </div>)}
+                </div>)}</div>
             </FolderScrollFrame>
             <section className="dashboardColumn rightSourcesColumn" style={{minHeight: 100}}>Sources</section>
         </div>

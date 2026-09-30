@@ -75,7 +75,6 @@ export default function ChangeFormatPanel({files, onRemove, onComplete}: Props) 
             <span className="formatSelectShell"><FileText size={15}/><select aria-label="Format source file" value={mother?.path || ""} disabled={busy || !files.length} onChange={event => setMother(event.target.value)}><option value="" disabled>Choose a source file</option>{files.map(file => <option key={file.path} value={file.path}>{formatLabel(file.name)} · {file.name}</option>)}</select></span>
         </label>
 
-        <div className="studioQueueHeading"><span>Files receiving the format</span><strong>{children.length}</strong></div>
         <div className="conversionQueue formatFileQueue">
             {files.length ? files.map(file => {
                 const isSource = mother?.path === file.path;
