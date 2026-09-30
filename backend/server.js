@@ -36,6 +36,7 @@ const {searchFiles} = require("./services/searchService");
 const {readDashboardPreferences, writeDashboardPreferences} = require("./services/userPreferencesService");
 const {buildGmailAccountCatalog} = require("./services/gmailAccountCatalog");
 const {getRuntimeUploadsDirectory} = require("./services/runtimePaths");
+const {listTreeDirectory, listTreeRoots, searchTreeRoots} = require("./services/treeRocketService");
 const {getEmailAlertSettings, normalizeProviderBlock, saveEmailAlertSettings} = require("./services/emailAlertSettingsService");
 const {startEmailAlertScheduler} = require("./services/emailAlertScheduler");
 const {migrateLegacyConnections} = require("./services/emailTokenStore");
@@ -99,7 +100,14 @@ const {
     getStatus: getOutlookStatus,
     listAttachments: listOutlookAttachments,
     listConnectedAccounts: listOutlookConnectedAccounts,
-    listInboxMessages: listOutlookInboxMessages
+    listInboxMessages: listOutlookInboxMessages,
+    listTeamsChats,
+    listJoinedTeams,
+    listTeamChannels,
+    listTeamsDirectoryNextPage,
+    listTeamsChatMessages,
+    listTeamsChannelMessages,
+    listTeamsNextPage
 } = require("./services/outlookService");
 
 const app = express();
@@ -1813,6 +1821,51 @@ app.post("/list-folder-files", async (req, res) => {
     }
 });
 
+app.get("/filesystem/tree-roots", requireAuthenticated, async (req, res) => {
+    try {
+        const roots = await listTreeRoots({workspacePath: userWorkspace(req.user), administrator: isAdmin(req.user)});
+        res.json({roots});
+    } catch (error) {
+        res.status(500).json({message: error instanceof Error ? error.message : "Unable to load folder roots."});
+    }
+});
+
+app.post("/filesystem/tree-children", requireAuthenticated, async (req, res) => {
+    try {
+        let directory = assertUserPath(req.user, req.body?.path);
+        if (!isAdmin(req.user)) {
+            const [workspaceRealPath, directoryRealPath] = await Promise.all([
+                fs.promises.realpath(userWorkspace(req.user)),
+                fs.promises.realpath(directory)
+            ]);
+            if (!isPathWithin(workspaceRealPath, directoryRealPath)) {
+                return res.status(403).json({message: "This account can only use folders inside its private FolderRocket workspace."});
+            }
+            directory = directoryRealPath;
+        }
+        const contents = await listTreeDirectory(directory, {includeFiles: req.body?.includeFiles === true});
+        res.json(contents);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to read this folder.";
+        const filesystemCode = String(error?.code || "");
+        const status = message.includes("only use files inside") || message.includes("only use folders inside") || filesystemCode === "EACCES" || filesystemCode === "EPERM" ? 403 : filesystemCode === "ENOENT" || filesystemCode === "ENOTDIR" ? 404 : 400;
+        res.status(status).json({message});
+    }
+});
+
+app.post("/filesystem/tree-search", requireAuthenticated, async (req, res) => {
+    try {
+        const query = typeof req.body?.query === "string" ? req.body.query.trim().slice(0, 100) : "";
+        const roots = await listTreeRoots({workspacePath: userWorkspace(req.user), administrator: isAdmin(req.user)});
+        const results = await searchTreeRoots(roots, query);
+        res.json(results);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : "Unable to search folders and files.";
+        const status = message.includes("at least two characters") ? 400 : 500;
+        res.status(status).json({message});
+    }
+});
+
 app.post("/file-types/inventory", requireAuthenticated, requireAdministrator, async (req, res) => {
     try {
         const roots = (Array.isArray(req.body?.folders) ? req.body.folders : []).map(folder => assertUserPath(req.user, folder)).filter(folder => fs.existsSync(folder) && fs.statSync(folder).isDirectory());
@@ -2093,9 +2146,10 @@ app.get("/cargo-ship/email-sources", requireAuthenticated, async (req, res) => {
         const dashboard = worldId
             ? allPreferences.worlds?.[worldId]?.dashboard || (worldId === "work" ? legacyWorkspaceDashboard(allPreferences) : {})
             : allPreferences;
-        const blocks = Array.isArray(dashboard?.sourceBlocks)
-            ? dashboard.sourceBlocks
-            : [];
+        const blocks = [
+            ...(Array.isArray(dashboard?.sourceBlocks) ? dashboard.sourceBlocks : []),
+            ...(Array.isArray(dashboard?.rightSourceBlocks) ? dashboard.rightSourceBlocks : [])
+        ];
         const sources = [];
         const seenAccounts = new Set();
         const gmailAccounts = await listGmailConnectedAccounts(req.user.id);
@@ -2103,8 +2157,9 @@ app.get("/cargo-ship/email-sources", requireAuthenticated, async (req, res) => {
         let gmailIndex = 0;
         let outlookIndex = 0;
         for (const block of blocks) {
-            if (!block || typeof block.id !== "string" || !["gmail", "outlook"].includes(block.type)) continue;
-            const provider = block.type;
+            if (!block || typeof block.id !== "string" || !["gmail", "outlook", "teams"].includes(block.type)) continue;
+            if (block.accountBlockId === null) continue;
+            const provider = block.type === "teams" ? "outlook" : block.type;
             const blockId = /^[a-zA-Z0-9_-]{1,120}$/.test(block.accountBlockId || "") ? block.accountBlockId : block.id;
             const accountKey = `${provider}:${blockId}`;
             if (seenAccounts.has(accountKey)) continue;
@@ -2454,7 +2509,8 @@ app.get("/auth/outlook/start", (req, res) => {
         const origin = oauthOriginForRequest(req);
         const authorizationUrl = getOutlookAuthorizationUrl(req.user.id, readAlertBlockId(req), {
             origin,
-            frontendOrigin: origin
+            frontendOrigin: origin,
+            includeTeams: req.query?.teams === "1"
         });
         if (req.query?.format === "json") return res.json({authorizationUrl});
         res.redirect(authorizationUrl);
@@ -2477,6 +2533,66 @@ app.get("/email/outlook/status", (req, res) => res.json(getOutlookStatus(req.use
 app.get("/email/outlook/accounts", requireAuthenticated, async (req, res) => {
     try { res.json({accounts: await listOutlookConnectedAccounts(req.user.id)}); }
     catch { res.status(502).json({message:"Impossibile leggere gli account Outlook collegati."}); }
+});
+
+function respondTeamsError(res, error) {
+    const message = error instanceof Error ? error.message : "Unable to load Microsoft Teams.";
+    if (error?.status === 403 || /insufficientprivileges|permission|scope|consent/i.test(message)) {
+        return res.status(403).json({needsConsent: true, message: "Microsoft Teams needs additional Microsoft Graph permissions. Reconnect the selected Microsoft account and approve access; channel messages may require administrator consent."});
+    }
+    if (/not connected|reconnect outlook/i.test(message)) return res.status(401).json({needsConsent: true, message: "Connect or reconnect the Microsoft account selected for this planet."});
+    return res.status(400).json({message});
+}
+
+app.get("/teams/chats", requireAuthenticated, async (req, res) => {
+    try {
+        const blockId = readAlertBlockId(req);
+        if (!getOutlookStatus(req.user.id, blockId).connected) return res.status(401).json({needsConsent: true, message: "Connect the Microsoft account selected for this planet."});
+        const page = typeof req.query.cursor === "string" && req.query.cursor
+            ? await listTeamsDirectoryNextPage(req.query.cursor, "chats", req.user.id, blockId)
+            : await listTeamsChats(req.user.id, blockId);
+        res.json({chats: page.items, nextLink: page.nextLink || ""});
+    } catch (error) { respondTeamsError(res, error); }
+});
+
+app.get("/teams/groups", requireAuthenticated, async (req, res) => {
+    try {
+        const blockId = readAlertBlockId(req);
+        if (!getOutlookStatus(req.user.id, blockId).connected) return res.status(401).json({needsConsent: true, message: "Connect the Microsoft account selected for this planet."});
+        const page = typeof req.query.cursor === "string" && req.query.cursor
+            ? await listTeamsDirectoryNextPage(req.query.cursor, "teams", req.user.id, blockId)
+            : await listJoinedTeams(req.user.id, blockId);
+        res.json({teams: page.items, nextLink: page.nextLink || ""});
+    } catch (error) { respondTeamsError(res, error); }
+});
+
+app.get("/teams/groups/:teamId/channels", requireAuthenticated, async (req, res) => {
+    try {
+        const blockId = readAlertBlockId(req);
+        if (!getOutlookStatus(req.user.id, blockId).connected) return res.status(401).json({needsConsent: true, message: "Connect the Microsoft account selected for this planet."});
+        const page = typeof req.query.cursor === "string" && req.query.cursor
+            ? await listTeamsDirectoryNextPage(req.query.cursor, "channels", req.user.id, blockId)
+            : await listTeamChannels(req.params.teamId, req.user.id, blockId);
+        res.json({channels: page.items, nextLink: page.nextLink || ""});
+    } catch (error) { respondTeamsError(res, error); }
+});
+
+app.get("/teams/messages", requireAuthenticated, async (req, res) => {
+    try {
+        const blockId = readAlertBlockId(req);
+        if (!getOutlookStatus(req.user.id, blockId).connected) return res.status(401).json({needsConsent: true, message: "Connect the Microsoft account selected for this planet."});
+        let page;
+        if (typeof req.query.cursor === "string" && req.query.cursor) page = await listTeamsNextPage(req.query.cursor, req.user.id, blockId, typeof req.query.parentId === "string" ? req.query.parentId : "");
+        else {
+            const kind = req.query.kind === "channel" ? "channel" : req.query.kind === "chat" ? "chat" : "";
+            const identifier = typeof req.query.id === "string" ? req.query.id : "";
+            if (!kind || !identifier) return res.status(400).json({message: "Choose a chat or channel first."});
+            page = kind === "chat"
+                ? await listTeamsChatMessages(identifier, req.user.id, blockId)
+                : await listTeamsChannelMessages(typeof req.query.teamId === "string" ? req.query.teamId : "", identifier, req.user.id, blockId);
+        }
+        res.json({messages: page.messages, nextLink: page.nextLink || ""});
+    } catch (error) { respondTeamsError(res, error); }
 });
 
 app.post("/auth/outlook/disconnect", (req, res) => {

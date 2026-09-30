@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {applicationFileMayBeEssential, applicationFileSensitivity, applicationSensitivityLabel, filterApplicationFiles, groupApplicationFiles} from '../src/applicationFiles.ts';
+import {applicationFileLocation, applicationFileMayBeEssential, applicationFileSensitivity, applicationSensitivityLabel, filterApplicationFiles, groupApplicationFiles, isApplicationFileInManagedFolder} from '../src/applicationFiles.ts';
 
 const files = [
     {name: 'Gear.SLDPRT', path: 'C:\\Projects\\Machine\\Gear.SLDPRT'},
@@ -39,4 +39,18 @@ test('potential application files are warned without flagging ordinary project f
     assert.equal(applicationFileSensitivity({name:'notes.txt',path:'C:\\Users\\me\\OneDrive\\notes.txt'}),'synced');
     assert.equal(applicationSensitivityLabel('installation'),'Installation');
     assert.equal(applicationSensitivityLabel('shared'),'Shared file');
+});
+
+test('location filters use explicit metadata or verifiable path roots, not cloud folder names', () => {
+    assert.equal(applicationFileLocation({name:'plan.docx',path:'C:\\Users\\me\\OneDrive\\plan.docx'}),'computer');
+    assert.equal(applicationFileLocation({name:'shared.docx',path:'\\\\server\\team\\shared.docx'}),'shared');
+    assert.equal(applicationFileLocation({name:'cloud.docx',path:'relative\\cloud.docx'}),'unknown');
+    assert.equal(applicationFileLocation({name:'cloud.docx',path:'C:\\other\\cloud.docx',location:'synced'}),'synced');
+});
+
+test('FolderRocket membership filters match only a saved folder or its descendants', () => {
+    assert.equal(isApplicationFileInManagedFolder('c:/Projects/work/file.pdf',['C:\\Projects\\Work']),true);
+    assert.equal(isApplicationFileInManagedFolder('C:\\Projects\\Work-old\\file.pdf',['C:\\Projects\\Work']),false);
+    assert.equal(isApplicationFileInManagedFolder('/home/me/work/file.pdf',['/home/me/work']),true);
+    assert.equal(isApplicationFileInManagedFolder('/home/me/other/file.pdf',['/home/me/work']),false);
 });

@@ -4,8 +4,10 @@ import {
     useEffect,
     useMemo,
     useRef,
-    useState
+    useState,
+    useId
 } from "react";
+import {createPortal} from "react-dom";
 
 import {
     File,
@@ -70,6 +72,28 @@ const EMAIL_ATTACHMENT_TYPE = "application/x-folderrocket-gmail-attachments";
 const LEGACY_SHARED_GMAIL_ACCOUNT_ID = "folderrocket-legacy-shared-gmail";
 
 function storageKey(key: string, scope: string) { return `${key}-${scope}`; }
+
+function readerMenuPositionForAnchor(anchor: HTMLElement | null) {
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+    const width = Math.min(292, Math.max(160, viewportWidth - 20));
+    if (!anchor) return {top: 10, left: 10, width, maxHeight: Math.max(160, viewportHeight - 20)};
+    const rect = anchor.getBoundingClientRect();
+    const below = viewportHeight - rect.bottom - 16;
+    const above = rect.top - 16;
+    let top = rect.bottom + 6;
+    let maxHeight = Math.min(560, Math.max(160, below));
+    if (below < 320 && above > below) {
+        maxHeight = Math.min(560, Math.max(160, above));
+        top = Math.max(10, rect.top - maxHeight - 6);
+    }
+    if (viewportHeight - top < 180) {
+        top = 10;
+        maxHeight = Math.max(160, viewportHeight - 20);
+    }
+    const left = Math.max(10, Math.min(rect.right - width, viewportWidth - width - 10));
+    return {top, left, width, maxHeight};
+}
 
 function readDismissed(scope: string): string[] {
     try {
@@ -185,6 +209,10 @@ function GmailSourcePanel({storageScope, alertBlockId, accountBlockId, onAccount
     const [endDate, setEndDate] = useState("");
     const [liveReading, setLiveReading] = useState(false);
     const [showSettings, setShowSettings] = useState(false);
+    const [readerMenuPosition, setReaderMenuPosition] = useState<{top: number; left: number; width: number; maxHeight: number} | null>(null);
+    const readerMenuId = `gmail-reader-${useId().replaceAll(":", "")}`;
+    const readerMenuButtonRef = useRef<HTMLButtonElement>(null);
+    const readerMenuRef = useRef<HTMLDivElement>(null);
     const [showWarnings, setShowWarnings] = useState(false);
     const [warnings, setWarnings] = useState<GmailWarningRule[]>(() => readWarnings(storageScope));
     const [favorites, setFavorites] = useState<GmailWarningRule[]>([]);
@@ -198,6 +226,7 @@ function GmailSourcePanel({storageScope, alertBlockId, accountBlockId, onAccount
     const [error, setError] = useState("");
     const [disconnectArmed, setDisconnectArmed] = useState(false);
     const [emailAccounts, setEmailAccounts] = useState<EmailAccount[]>([]);
+    const [accountChooserOpen, setAccountChooserOpen] = useState(false);
     const selectedCatalogAccount = emailAccounts.find(account => emailAccountContainsBlock(account, credentialBlockId));
     const hasAccountSelected = accountBlockId !== null && (Boolean(accountBlockId) || Boolean(selectedCatalogAccount));
     const accountPickerValue = accountBlockId === null
@@ -466,13 +495,26 @@ function GmailSourcePanel({storageScope, alertBlockId, accountBlockId, onAccount
     useEffect(() => {
         const dismissWhenOutside = (event: MouseEvent) => {
             const target = event.target as Element;
-            if (!target.closest(".emailSourceCard")) setSelectedIds([]);
+            const insideReader = readerMenuRef.current?.contains(target) ?? false;
+            if (!target.closest(".emailSourceCard") && !insideReader) setSelectedIds([]);
             if (!target.closest(".gmailWarningsMenu") && !target.closest(".gmailWarningToggle")) setShowWarnings(false);
-            if (!target.closest(".emailReaderHeaderControl")) { setShowSettings(false); setDisconnectArmed(false); }
+            if (!target.closest(".emailReaderHeaderControl") && !insideReader) { setShowSettings(false); setDisconnectArmed(false); }
         };
         document.addEventListener("pointerdown", dismissWhenOutside);
         return () => document.removeEventListener("pointerdown", dismissWhenOutside);
     }, []);
+
+    useEffect(() => {
+        if (!showSettings) return;
+        const reposition = () => setReaderMenuPosition(readerMenuPositionForAnchor(readerMenuButtonRef.current));
+        reposition();
+        window.addEventListener("resize", reposition);
+        document.addEventListener("scroll", reposition, true);
+        return () => {
+            window.removeEventListener("resize", reposition);
+            document.removeEventListener("scroll", reposition, true);
+        };
+    }, [showSettings]);
 
     useEffect(() => {
         const syncFavorites = (event: Event) => {
@@ -609,6 +651,15 @@ function GmailSourcePanel({storageScope, alertBlockId, accountBlockId, onAccount
         window.open(`https://mail.google.com/mail/u/0/#all/${encodeURIComponent(messageId)}`, "_blank", "noopener,noreferrer");
     }
 
+    function toggleReaderSettings() {
+        if (showSettings) {
+            setShowSettings(false);
+            return;
+        }
+        setReaderMenuPosition(readerMenuPositionForAnchor(readerMenuButtonRef.current));
+        setShowSettings(true);
+    }
+
     function dragAttachments(event: React.DragEvent<HTMLElement>, attachment: EmailAttachment) {
         event.stopPropagation();
         const attachmentId = `${attachment.messageId}:${attachment.attachmentId}`;
@@ -627,23 +678,13 @@ function GmailSourcePanel({storageScope, alertBlockId, accountBlockId, onAccount
             <div className="sourceHeader">
                 <Mail className="gmailPanelIcon" size={29} />
                 <span className="sourceTitle">Gmail</span>
-                <span className="emailReaderHeaderControl"><button type="button" className={`emailReaderHeaderButton${attachmentReader.enabled ? " active" : ""}`} onClick={() => { setShowSettings(current => !current); setDisconnectArmed(false); }} aria-expanded={showSettings} title="Account, Read attachments and options"><span className="emailRefreshIcon"><RefreshCw className={loading ? "spin" : ""} size={13}/></span><span>Read attachments</span></button>{showSettings && <div className="emailReaderHeaderMenu" onClick={event => event.stopPropagation()}>
+                <span className="emailReaderHeaderControl"><button ref={readerMenuButtonRef} type="button" className={`emailReaderHeaderButton${attachmentReader.enabled ? " active" : ""}`} onClick={() => { toggleReaderSettings(); setDisconnectArmed(false); }} aria-expanded={showSettings} aria-controls={readerMenuId} title="Account, Read attachments and options"><span className="emailRefreshIcon"><RefreshCw className={loading ? "spin" : ""} size={13}/></span><span>Read attachments</span></button>{showSettings && readerMenuPosition && createPortal(<div id={readerMenuId} ref={readerMenuRef} role="dialog" aria-label="Gmail account and attachment settings" className="emailReaderHeaderMenu" style={readerMenuPosition} onClick={event => event.stopPropagation()}>
                     <header><strong>Gmail account · {worldName || "current planet"}</strong></header>
-                    <label className="emailAccountPickerRow"><span>Account Gmail</span><select aria-label={`Account Gmail per ${worldName || "questo pianeta"}`} title={selectedCatalogAccount ? emailAccountOptionLabel(selectedCatalogAccount, worldNames) : "Seleziona l’account Gmail usato da questo pianeta"} value={accountPickerValue} onChange={event => {
-                        const value = event.target.value;
-                        onAccountBlockIdChange?.(value === "" ? null : value === alertBlockId ? undefined : value);
-                        setConnected(false);
-                        setAttachments([]);
-                        setWarningResults([]);
-                        setSelectedIds([]);
-                    }}>
-                        <option value="">Nessun account selezionato</option>
-                        {accountBlockId && !selectedCatalogAccount && <option value={credentialBlockId}>Selezione salvata · origine non specificata</option>}
-                        {emailAccounts.map(account => {
-                            const optionValue = emailAccountContainsBlock(account, credentialBlockId) ? credentialBlockId : account.blockId;
-                            return <option key={account.blockId} value={optionValue}>{emailAccountOptionLabel(account, worldNames)}</option>;
-                        })}
-                    </select><small>{selectedAccountDescription}</small></label>
+                    <section className="emailAccountPickerRow" aria-label={`Account Gmail per ${worldName || "questo pianeta"}`}><span>Account for this planet</span><div className="emailSelectedAccount" title={selectedCatalogAccount ? emailAccountOptionLabel(selectedCatalogAccount, worldNames) : selectedAccountDescription}><strong>{selectedCatalogAccount?.email || selectedCatalogAccount?.label || (hasAccountSelected ? "Saved account · origin not specified" : "No account selected")}</strong><small>{selectedAccountDescription}</small></div><button type="button" className="emailChooseAccountButton" aria-expanded={accountChooserOpen} onClick={() => setAccountChooserOpen(current => !current)}>{accountChooserOpen ? "Done" : accountPickerValue ? "Change account" : "Choose account"}</button>{accountChooserOpen && <div className="emailAccountChoices" role="listbox" aria-label="Choose the Gmail account for this planet"><button type="button" role="option" aria-selected={!accountPickerValue} onClick={() => { onAccountBlockIdChange?.(null); setConnected(false); setAttachments([]); setWarningResults([]); setSelectedIds([]); setAccountChooserOpen(false); }}>No account selected</button>{emailAccounts.map(account => {
+                        const optionValue = emailAccountContainsBlock(account, credentialBlockId) ? credentialBlockId : account.blockId;
+                        const selected = accountPickerValue === optionValue;
+                        return <button type="button" role="option" aria-selected={selected} className={selected ? "selected" : ""} key={account.blockId} title={emailAccountOptionLabel(account, worldNames)} onClick={() => { onAccountBlockIdChange?.(optionValue === alertBlockId ? undefined : optionValue); setConnected(false); setAttachments([]); setWarningResults([]); setSelectedIds([]); setAccountChooserOpen(false); }}><strong>{account.email || account.label}</strong><small>{emailAccountOptionLabel(account, worldNames)}</small></button>;
+                    })}{!emailAccounts.length && <p>No connected Gmail accounts are available yet.</p>}</div>}</section>
                     <div className="emailAccountMenuActions">{connected ? <><span className="emailAccountMenuStatus">{selectedCatalogAccount?.email || selectedCatalogAccount?.label || "Gmail"}</span><button type="button" className={disconnectArmed ? "emailDisconnectButton armed" : "emailDisconnectButton"} onClick={() => { if (disconnectArmed) void disconnect(); else setDisconnectArmed(true); }} title={disconnectArmed ? (canDisconnectGlobally ? "Press again to disconnect this account from FolderRocket" : "Press again to remove this planet's account link") : (canDisconnectGlobally ? "Disconnect globally" : "Unlink from this planet")}>{disconnectArmed ? (canDisconnectGlobally ? "Confirm disconnect" : "Confirm unlink") : (canDisconnectGlobally ? "Disconnect" : "Unlink from planet")}</button></> : <><span className="emailAccountMenuStatus">{hasAccountSelected ? "Selected account is not connected" : "No account selected for this planet"}</span><button type="button" className="emailConnectButton" onClick={() => void connectGmail()}>{hasAccountSelected ? "Connect selected account" : "Connect Gmail to this planet"}</button></>}</div>
                     <hr/>
                     <header><strong>Read attachments</strong><button type="button" onClick={() => void refresh()} disabled={loading || !connected || !attachmentReader.enabled} title="Refresh attachments"><RefreshCw className={loading ? "spin" : ""} size={14}/></button></header>
@@ -651,7 +692,7 @@ function GmailSourcePanel({storageScope, alertBlockId, accountBlockId, onAccount
                     <select value={mode} disabled={!connected} onChange={event => { const nextMode = event.target.value as FilterMode; setMode(nextMode); setAttachmentReader(current => ({...current, filter: {...current.filter, mode: nextMode}})); }}><option value="relative">Last days</option><option value="range">Date range</option></select>
                     {mode === "relative" ? <label>Days back<input type="number" min="1" value={days} disabled={!connected} onChange={event => { const value = Math.max(1, Number(event.target.value) || 1); setDays(value); setAttachmentReader(current => ({...current, filter: {...current.filter, days: value}})); }}/></label> : <div className="emailDateRange"><label>From<input type="date" value={startDate} disabled={!connected} onChange={event => { setStartDate(event.target.value); setAttachmentReader(current => ({...current, filter: {...current.filter, startDate: event.target.value}})); }}/></label><label>To<input type="date" value={endDate} disabled={!connected} onChange={event => { setEndDate(event.target.value); setAttachmentReader(current => ({...current, filter: {...current.filter, endDate: event.target.value}})); }}/></label></div>}
                     <button type="button" className="emailReaderApply" disabled={!connected} onClick={() => { setShowSettings(false); if (attachmentReader.enabled) void refresh(); }}>Apply & refresh</button>
-                </div>}</span>
+                </div>, document.body)}</span>
                 {connected && <button type="button" className="gmailWarningToggle" onClick={toggleWarnings} title="Gmail alerts"><BellRing size={15} /></button>}
                 {connected && <span className={warningLoading ? "emailAlertSlots analyzing" : "emailAlertSlots"}>{warningLoading ? "Analyzing…" : visibleWarnings.filter(rule => rule.enabled).slice(0, 5).map(rule => { const result = warningResults.find(item => item.ruleId === rule.id); return result ? <button key={`ready-${rule.id}`} type="button" className={`gmailAlertCount alertColor-${rule.color}`} title={`Show ${rule.label} emails`} onClick={() => toggleWarningPreview(rule.kind)}>{result.total}</button> : <span key={`ready-${rule.id}`} className={`emailAlertReadyDot alertColor-${rule.color}`} title={`${rule.label} is active`} />; })}</span>}
                 {connected && <span className="emailHeaderReading">Virtual: <button type="button" className={liveReading ? "emailVirtualReadingToggle active" : "emailVirtualReadingToggle"} onClick={() => setLiveReading(current => !current)} aria-pressed={liveReading} title={liveReading ? "Turn Virtual Reading off" : "Turn Virtual Reading on"}>{liveReading ? "ON" : "OFF"}</button></span>}

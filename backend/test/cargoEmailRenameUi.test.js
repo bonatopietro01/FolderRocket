@@ -25,7 +25,9 @@ test("email account pickers stay in Read attachments without the connected-accou
     const gmail = readSource("src", "components", "GmailSourcePanel.tsx");
     const outlook = readSource("src", "components", "OutlookSourcePanel.tsx");
     assert.match(gmail, /emailReaderHeaderMenu[\s\S]{0,1800}emailAccountPickerRow/);
-    assert.match(gmail, /onAccountBlockIdChange\?\.\(value === "" \? null/);
+    assert.match(gmail, /className="emailAccountChoices" role="listbox"/);
+    assert.match(gmail, /onAccountBlockIdChange\?\.\(null\)/);
+    assert.doesNotMatch(gmail, /<select aria-label=\{`Account Gmail/);
     assert.doesNotMatch(gmail, /Connected ·/);
     assert.doesNotMatch(outlook, /Account collegato|Collegato solo per questo pianeta|emailHeaderStatus/);
     assert.match(outlook, /emailReaderHeaderMenu[\s\S]{0,1500}emailAccountPickerRow/);

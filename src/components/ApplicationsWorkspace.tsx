@@ -4,7 +4,7 @@ import {useEffect, useRef, useState} from "react";
 import type {ReactNode} from "react";
 import {createPortal} from "react-dom";
 import {API_BASE_URL} from "../api";
-import {applicationFileSensitivity, applicationSensitivityLabel, extensionOf, filterApplicationFiles, filterApplicationFilesBySize, groupApplicationFiles} from "../applicationFiles";
+import {applicationFileLocation, applicationFileSensitivity, applicationSensitivityLabel, extensionOf, filterApplicationFiles, filterApplicationFilesBySize, groupApplicationFiles, isApplicationFileInManagedFolder} from "../applicationFiles";
 import type {ApplicationFileEntry as FileEntry} from "../applicationFiles";
 import {SEARCH_RESULT_TYPE} from "./SearchWorkspace";
 import {enqueueFireMountainFiles} from "./FireMountain";
@@ -102,7 +102,11 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
     const fileWindowApp = apps.find(app => app.id === fileWindowId);
     const [appDateFrom, setAppDateFrom] = useState<Record<string, string>>({});
     const [appDateTo, setAppDateTo] = useState<Record<string, string>>({});
-    const [appLocationFilters, setAppLocationFilters] = useState<Record<string, "all" | "local" | "shared">>({});
+    const [appLocationFilters, setAppLocationFilters] = useState<Record<string, "all" | "computer" | "shared" | "synced" | "unknown">>({});
+    const [appInitialLetters, setAppInitialLetters] = useState<Record<string, string>>({});
+    const [appFolderScopes, setAppFolderScopes] = useState<Record<string, "all" | "linked" | "not-linked">>({});
+    const [appFolderFilters, setAppFolderFilters] = useState<Record<string, string>>({});
+    const [appEntryKinds, setAppEntryKinds] = useState<Record<string, "files" | "folders">>({});
     const [appMinSizeMb, setAppMinSizeMb] = useState<Record<string, string>>({});
     const [appMaxSizeMb, setAppMaxSizeMb] = useState<Record<string, string>>({});
     const [selectedFilePaths, setSelectedFilePaths] = useState<string[]>([]);
@@ -292,37 +296,69 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
         const fromTime = from ? new Date(`${from}T00:00:00`).getTime() : null;
         const toTime = to ? new Date(`${to}T23:59:59.999`).getTime() : null;
         const location = appLocationFilters[app.id] || "all";
+        const initialLetter = appInitialLetters[app.id] || "all";
+        const folderScope = appFolderScopes[app.id] || "all";
+        const folderFilter = appFolderFilters[app.id] || "all";
+        const entryKind = appEntryKinds[app.id] || "files";
+        const managedPaths = folders.filter(folder => folder.storage !== "imaginary" && folder.path).map(folder => folder.path);
+        const virtualPaths = folders.flatMap(folder => (folder.virtualFiles || []).map(file => file.path));
+        const startsWith = (name: string) => {
+            if (initialLetter === "all") return true;
+            const first = name.trim().charAt(0).toUpperCase();
+            return initialLetter === "#" ? !/^[A-Z]$/.test(first) : first === initialLetter;
+        };
+        const locationMatches = (path: string, metadata?: FileEntry) => location === "all" || applicationFileLocation(metadata || {name: path.split(/[\\/]/).pop() || "", path}) === location;
+        const inManagedFolder = (path: string) => isApplicationFileInManagedFolder(path, [...managedPaths, ...virtualPaths]);
         const minSize = appMinSizeMb[app.id] === undefined || appMinSizeMb[app.id] === "" ? null : Number(appMinSizeMb[app.id]);
         const maxSize = appMaxSizeMb[app.id] === undefined || appMaxSizeMb[app.id] === "" ? null : Number(appMaxSizeMb[app.id]);
         const visibleFiles = filterApplicationFilesBySize(filterApplicationFiles(appFiles, "", filter).filter(file => {
             if (titleTerms.length && !titleTerms.every(term => file.name.toLowerCase().includes(term))) return false;
+            if (!startsWith(file.name)) return false;
             if (fromTime !== null || toTime !== null) {
                 const fileTime = file.createdAt ? new Date(file.createdAt).getTime() : Number.NaN;
                 if (!Number.isFinite(fileTime) || (fromTime !== null && fileTime < fromTime) || (toTime !== null && fileTime > toTime)) return false;
             }
-            const sensitivity = applicationFileSensitivity(file);
-            const sharedLocation = sensitivity === "shared" || sensitivity === "synced";
-            return location === "all" || (location === "shared" ? sharedLocation : !sharedLocation);
+            if (!locationMatches(file.path, file)) return false;
+            if (folderScope === "linked" && !inManagedFolder(file.path)) return false;
+            if (folderScope === "not-linked" && inManagedFolder(file.path)) return false;
+            if (folderFilter !== "all" && file.path.replace(/[\\/][^\\/]+$/, "") !== folderFilter) return false;
+            return true;
         }), minSize, maxSize);
+        const folderCounts = new Map(groupApplicationFiles(appFiles));
+        const visibleFolders = [...new Set(app.folders || [])].filter(folderPath => {
+            const folderName = folderPath.split(/[\\/]/).filter(Boolean).pop() || folderPath;
+            if (titleTerms.length && !titleTerms.every(term => `${folderName} ${folderPath}`.toLowerCase().includes(term))) return false;
+            if (!startsWith(folderName) || !locationMatches(folderPath)) return false;
+            if (folderScope === "linked" && !inManagedFolder(folderPath)) return false;
+            if (folderScope === "not-linked" && inManagedFolder(folderPath)) return false;
+            return folderFilter === "all" || folderPath === folderFilter;
+        });
+        const availableLetters = [...new Set([...appFiles.map(file => file.name), ...(app.folders || []).map(folder => folder.split(/[\\/]/).filter(Boolean).pop() || folder)].map(name => {
+            const first = name.trim().charAt(0).toUpperCase();
+            return /^[A-Z]$/.test(first) ? first : "#";
+        }))].sort();
         const selectedVisibleFiles = visibleFiles.filter(file => selectedFilePaths.includes(file.path));
         return <div className="applicationFiles" aria-busy={Boolean(scanning[app.id])}>
-            <label className="applicationTypeFilter"><span>File format</span><select aria-label={`${app.name} file format${windowView ? " in window" : ""}`} value={filter} onChange={event => setAppFilters(current => ({...current, [app.id]: event.target.value}))}><option value="all">All ({appFiles.length})</option>{Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)).map(([type, count]) => <option value={type} key={type}>{type.toUpperCase()} ({count})</option>)}</select></label>
+            <div className="applicationPrimaryFilters"><label><span>Show</span><select aria-label={`${app.name} entry type${windowView ? " in window" : ""}`} value={entryKind} onChange={event => setAppEntryKinds(current => ({...current, [app.id]: event.target.value as "files" | "folders"}))}><option value="files">Files ({appFiles.length})</option><option value="folders">Folders ({(app.folders || []).length})</option></select></label>{entryKind === "files" && <label className="applicationTypeFilter"><span>File format</span><select aria-label={`${app.name} file format${windowView ? " in window" : ""}`} value={filter} onChange={event => setAppFilters(current => ({...current, [app.id]: event.target.value}))}><option value="all">All ({appFiles.length})</option>{Object.entries(counts).sort(([a], [b]) => a.localeCompare(b)).map(([type, count]) => <option value={type} key={type}>{type.toUpperCase()} ({count})</option>)}</select></label>}</div>
             <div className="applicationInlineFilters">
+                <label><span>Starts with</span><select aria-label={`${app.name} initial letter`} value={initialLetter} onChange={event => setAppInitialLetters(current => ({...current, [app.id]: event.target.value}))}><option value="all">Any letter</option>{availableLetters.map(letter => <option value={letter} key={letter}>{letter}</option>)}</select></label>
                 <label><span>From</span><input type="date" value={from} max={to || undefined} onChange={event => setAppDateFrom(current => ({...current, [app.id]: event.target.value}))}/></label>
                 <label><span>To</span><input type="date" value={to} min={from || undefined} onChange={event => setAppDateTo(current => ({...current, [app.id]: event.target.value}))}/></label>
-                <label className="applicationInlineLocation"><span>Location</span><select value={location} onChange={event => setAppLocationFilters(current => ({...current, [app.id]: event.target.value as "all" | "local" | "shared"}))}><option value="all">All locations</option><option value="local">Local only</option><option value="shared">Shared / synced</option></select></label>
-                <label><span>Min size (MB)</span><input type="number" min="0" step="0.1" value={appMinSizeMb[app.id] || ""} onChange={event => setAppMinSizeMb(current => ({...current, [app.id]: event.target.value}))}/></label>
-                <label><span>Max size (MB)</span><input type="number" min={appMinSizeMb[app.id] || "0"} step="0.1" value={appMaxSizeMb[app.id] || ""} onChange={event => setAppMaxSizeMb(current => ({...current, [app.id]: event.target.value}))}/></label>
-                <button type="button" onClick={() => { setAppQueries(current => ({...current, [app.id]: ""})); setAppDateFrom(current => ({...current, [app.id]: ""})); setAppDateTo(current => ({...current, [app.id]: ""})); setAppMinSizeMb(current => ({...current, [app.id]: ""})); setAppMaxSizeMb(current => ({...current, [app.id]: ""})); setAppLocationFilters(current => ({...current, [app.id]: "all"})); setAppFilters(current => ({...current, [app.id]: "all"})); }}>Clear filters</button>
+                <label><span>Folder</span><select aria-label={`${app.name} containing folder`} value={folderFilter} onChange={event => setAppFolderFilters(current => ({...current, [app.id]: event.target.value}))}><option value="all">All folders</option>{[...new Set(appFiles.map(file => file.path.replace(/[\\/][^\\/]+$/, "")))].sort((a,b)=>a.localeCompare(b)).map(folderPath=><option value={folderPath} key={folderPath}>{folderPath.split(/[\\/]/).filter(Boolean).pop() || folderPath}</option>)}</select></label>
+                <label><span>FolderRocket</span><select aria-label={`${app.name} linked-folder filter`} value={folderScope} onChange={event => setAppFolderScopes(current => ({...current, [app.id]: event.target.value as "all" | "linked" | "not-linked"}))}><option value="all">All folders</option><option value="linked">Already linked</option><option value="not-linked">Not linked</option></select></label>
+                <label className="applicationInlineLocation"><span>Location</span><select value={location} onChange={event => setAppLocationFilters(current => ({...current, [app.id]: event.target.value as "all" | "computer" | "shared" | "synced" | "unknown"}))}><option value="all">All locations</option><option value="computer">Computer path</option><option value="shared">Network share</option><option value="synced">Synced (metadata)</option><option value="unknown">Unknown / unavailable</option></select></label>
+                {entryKind === "files" && <><label><span>Min size (MB)</span><input type="number" min="0" step="0.1" value={appMinSizeMb[app.id] || ""} onChange={event => setAppMinSizeMb(current => ({...current, [app.id]: event.target.value}))}/></label><label><span>Max size (MB)</span><input type="number" min={appMinSizeMb[app.id] || "0"} step="0.1" value={appMaxSizeMb[app.id] || ""} onChange={event => setAppMaxSizeMb(current => ({...current, [app.id]: event.target.value}))}/></label></>}
+                <button type="button" onClick={() => { setAppQueries(current => ({...current, [app.id]: ""})); setAppDateFrom(current => ({...current, [app.id]: ""})); setAppDateTo(current => ({...current, [app.id]: ""})); setAppMinSizeMb(current => ({...current, [app.id]: ""})); setAppMaxSizeMb(current => ({...current, [app.id]: ""})); setAppLocationFilters(current => ({...current, [app.id]: "all"})); setAppFilters(current => ({...current, [app.id]: "all"})); setAppInitialLetters(current => ({...current, [app.id]: "all"})); setAppFolderScopes(current => ({...current, [app.id]: "all"})); setAppFolderFilters(current => ({...current, [app.id]: "all"})); setAppEntryKinds(current => ({...current, [app.id]: "files"})); }}>Clear filters</button>
             </div>
+            <output className="applicationFilterResults" aria-live="polite">{entryKind === "folders" ? `${visibleFolders.length} folders` : `${visibleFiles.length} files`}</output>
             {scanning[app.id] && <div className="applicationScanProgress" role="status"><span><strong>Finding files… {scanProgress[app.id]?.found || 0} found</strong><small>{scanProgress[app.id]?.directoriesScanned || 0} folders checked · {scanProgress[app.id]?.inspected || 0} files inspected</small>{scanProgress[app.id]?.latest?.map(name=><em key={name}>{name}</em>)}</span><button type="button" onClick={()=>stopDiscovery(app.id)}>Stop</button></div>}
             {scanErrors[app.id] && <p role="alert">{scanErrors[app.id]}</p>}
-            {windowView && !!visibleFiles.length && <div className="applicationBulkToolbar"><button type="button" onClick={() => setSelectedFilePaths(current => [...new Set([...current, ...visibleFiles.map(file => file.path)])])}>Select all</button><button type="button" disabled={!selectedVisibleFiles.length} onClick={() => setSelectedFilePaths(current => current.filter(path => !selectedVisibleFiles.some(file => file.path === path)))}>Deselect</button><button className="applicationOpenAction fileActionPulse" type="button" disabled={!selectedVisibleFiles.length} onClick={() => void openFiles(selectedVisibleFiles)}><ExternalLink size={13}/>Open files</button><button className="applicationFireAction fileActionPulse" type="button" disabled={!selectedVisibleFiles.length} onClick={() => sendToFire(selectedVisibleFiles)}><Flame size={13}/>Fire Mountain</button></div>}
-            {groupApplicationFiles(visibleFiles).map(([folder, folderFiles]) => <section className="applicationFolderGroup" key={folder}>
+            {windowView && entryKind === "files" && !!visibleFiles.length && <div className="applicationBulkToolbar"><button type="button" onClick={() => setSelectedFilePaths(current => [...new Set([...current, ...visibleFiles.map(file => file.path)])])}>Select all</button><button type="button" disabled={!selectedVisibleFiles.length} onClick={() => setSelectedFilePaths(current => current.filter(path => !selectedVisibleFiles.some(file => file.path === path)))}>Deselect</button><button className="applicationOpenAction fileActionPulse" type="button" disabled={!selectedVisibleFiles.length} onClick={() => void openFiles(selectedVisibleFiles)}><ExternalLink size={13}/>Open files</button><button className="applicationFireAction fileActionPulse" type="button" disabled={!selectedVisibleFiles.length} onClick={() => sendToFire(selectedVisibleFiles)}><Flame size={13}/>Fire Mountain</button></div>}
+            {entryKind === "folders" ? visibleFolders.map(folderPath => { const folderName = folderPath.split(/[\\/]/).filter(Boolean).pop() || folderPath; return <div className="applicationFolderOnlyRow" key={folderPath} title={folderPath}><FolderOpen size={15}/><span><strong>{folderName}</strong><small>{folderPath}</small></span><small>{folderCounts.get(folderPath)?.length || 0} files</small><button type="button" onClick={() => void openFile(folderPath, true)} title={`Open ${folderPath}`}><ExternalLink size={14}/></button></div>; }) : groupApplicationFiles(visibleFiles).map(([folder, folderFiles]) => <section className="applicationFolderGroup" key={folder}>
                 <header title={folder}><FolderOpen size={14}/><strong>{folder}</strong><small>{folderFiles.length}</small></header>
                 {folderFiles.map(file => renderFile(file, visibleFiles))}
             </section>)}
-            {!scanning[app.id] && !scanErrors[app.id] && !visibleFiles.length && <p>{files[app.id] ? "No matching files found." : "Scan computer to load this application's files."}</p>}
+            {!scanning[app.id] && !scanErrors[app.id] && !(entryKind === "folders" ? visibleFolders.length : visibleFiles.length) && <p>{files[app.id] ? "No matching files or folders found." : "Scan computer to load this application's files."}</p>}
         </div>;
     }
 

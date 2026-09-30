@@ -4,9 +4,30 @@ export interface ApplicationFileEntry {
     size?: number;
     createdAt?: string;
     sensitivity?: ApplicationFileSensitivity;
+    location?: ApplicationFileLocation;
 }
 
 export type ApplicationFileSensitivity = "installation" | "shared" | "synced" | "system" | "";
+export type ApplicationFileLocation = "computer" | "shared" | "synced" | "unknown";
+
+export function applicationFileLocation(file: ApplicationFileEntry): ApplicationFileLocation {
+    if (file.location === "computer" || file.location === "shared" || file.location === "synced" || file.location === "unknown") return file.location;
+    if (/^(?:\\\\|\/\/)/.test(file.path)) return "shared";
+    if (/^[a-z]:[\\/]/i.test(file.path) || file.path.startsWith("/")) return "computer";
+    return "unknown";
+}
+
+export function isApplicationFileInManagedFolder(filePath: string, folderPaths: string[]) {
+    const candidate = filePath.replaceAll("/", "\\").replace(/[\\]+$/, "");
+    const windowsPath = /^[a-z]:\\/i.test(candidate) || candidate.startsWith("\\\\");
+    return folderPaths.some(folderPath => {
+        if (!folderPath) return false;
+        const root = folderPath.replaceAll("/", "\\").replace(/[\\]+$/, "");
+        const left = windowsPath ? candidate.toLowerCase() : candidate;
+        const right = windowsPath ? root.toLowerCase() : root;
+        return left === right || left.startsWith(`${right}\\`);
+    });
+}
 
 export function extensionOf(name: string) {
     return name.includes(".") ? name.split(".").pop()?.toLowerCase() ?? "" : "";

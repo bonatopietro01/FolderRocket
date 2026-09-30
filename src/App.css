@@ -5288,7 +5288,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .emailAccountPickerRow > small { grid-column:2; min-width:0; color:#74879a; font-size:9px; font-weight:500; }
 
 /* Gmail account selection and connection actions live with the reader controls. */
-.emailReaderHeaderMenu { left:auto!important; right:0!important; width:min(292px,calc(100vw - 20px)); max-height:min(78vh,560px); overflow:auto; box-sizing:border-box; }
+.emailReaderHeaderMenu { position:fixed!important; z-index:16000!important; width:min(292px,calc(100vw - 20px)); max-height:min(78vh,560px); overflow:auto; box-sizing:border-box; }
 .emailReaderHeaderMenu .emailAccountPickerRow { display:grid; grid-template-columns:minmax(0,1fr); gap:4px; padding:0; border:0; background:transparent; color:#4b6378; font-size:10px; }
 .emailReaderHeaderMenu .emailAccountPickerRow select { width:100%; max-width:none; min-height:30px; font-size:11px; }
 .emailReaderHeaderMenu .emailAccountPickerRow > small { grid-column:1; font-size:9px; line-height:1.35; }
@@ -5351,3 +5351,284 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .cargoPostItExtraActions button.active { box-shadow:0 0 0 2px rgba(64,109,146,.16); }
 .cargoPostItExtraActions button:disabled { opacity:.5; cursor:default; }
 .cargoPostItExtraActions button > span { display:grid; width:18px; height:18px; flex:0 0 auto; place-items:center; border:1px solid currentColor; border-radius:50%; font-size:8px; }
+
+/* Workspace controls: compact world-scoped dashboard selection and AI services. */
+.accountDashboardLayoutControl { display:grid; gap:5px; }
+.accountDashboardLayoutToggle { display:grid; grid-template-columns:16px minmax(0,1fr) auto 14px; align-items:center; gap:6px; width:100%; min-height:30px; padding:5px 7px; border:1px solid #ccdae7; border-radius:7px; background:#fff; color:#405d77; cursor:pointer; text-align:left; font-size:10px; font-weight:800; }
+.accountDashboardLayoutToggle small { color:#7a8c9f; font-size:9px; font-weight:700; }
+.accountDashboardLayoutOptions { display:grid; grid-template-columns:1fr 1fr; gap:5px; }
+.accountDashboardLayoutOptions button { display:flex; min-width:0; align-items:center; gap:6px; padding:6px; border:1px solid #d3deea; border-radius:7px; background:#fff; color:#47627c; cursor:pointer; text-align:left; }
+.accountDashboardLayoutOptions button.active { border-color:#7da9ce; background:#eaf5ff; color:#1c6297; }
+.accountDashboardLayoutOptions button > span { display:grid; gap:2px; font-size:9px; font-weight:800; }
+.accountDashboardLayoutOptions button small { color:#73869a; font-size:8px; font-weight:600; }
+.accountAiModeControls { gap:4px; }
+.accountAiModeRow { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:stretch; gap:5px; }
+.accountAiModeRow .accountAiMode { min-width:0; padding:6px; }
+.accountAiModeRow .accountServicesButton { align-self:center; }
+.accountMenu .accountAiModeCopy strong { font-size:10px; }
+.accountMenu .accountAiModeCopy small { font-size:9px; line-height:1.25; }
+
+/* Services descriptions follow their headings instead of competing for one row. */
+.integrationCard > div { display:grid; grid-template-columns:18px minmax(0,1fr); align-items:start; row-gap:3px; column-gap:6px; }
+.integrationCard > div > svg { grid-column:1; grid-row:1 / span 2; margin-top:1px; }
+.integrationCard > div > strong { grid-column:2; grid-row:1; }
+.integrationCard > div > small { grid-column:2; grid-row:2; overflow:visible; text-align:left; line-height:1.35; }
+
+/* Tree Rocket is an on-demand, level-by-level filesystem tree. */
+.treeRocketOpenButton { display:inline-flex; min-height:27px; align-items:center; gap:4px; padding:2px 6px; border:1px solid #a8c9dd; border-radius:7px; background:linear-gradient(180deg,#effaff,#dceffa); color:#286786; cursor:pointer; font-size:9px; font-weight:850; white-space:nowrap; }
+.treeRocketOpenButton:hover { border-color:#6399b8; background:#e0f3ff; }
+.treeRocketOverlay { position:fixed; z-index:15000; inset:0; display:grid; place-items:center; padding:12px; background:rgba(17,35,52,.55); }
+.treeRocketWindow { display:grid; width:min(1440px,100%); height:min(900px,100%); min-height:360px; grid-template-rows:auto auto minmax(0,1fr) auto; overflow:hidden; border:1px solid #9bb5c9; border-radius:14px; background:#f7fbff; box-shadow:0 24px 70px rgba(8,26,44,.35); color:#304b63; }
+.treeRocketHeader { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:8px; padding:8px 12px; border-bottom:1px solid #d7e2ec; background:linear-gradient(110deg,#fff,#edf7ff); }
+.treeRocketBack,.treeRocketClose { display:inline-flex; width:max-content; min-height:30px; align-items:center; gap:5px; padding:4px 8px; border:1px solid #c3d4e2; border-radius:7px; background:#fff; color:#486780; cursor:pointer; font-size:10px; font-weight:800; }
+.treeRocketBack:disabled { opacity:.45; cursor:default; }
+.treeRocketClose { justify-self:end; width:30px; justify-content:center; padding:0; }
+.treeRocketBrand { display:grid; justify-items:center; gap:2px; color:#1d668e; }
+.treeRocketBrand > img { display:block; width:auto; max-width:min(160px,34vw); height:22px; object-fit:contain; }
+.treeRocketBrand > span { display:flex; align-items:center; gap:5px; color:#42799a; font-size:10px; font-weight:850; }
+.treeRocketBrand svg { color:#32865d; }
+.treeRocketToolbar { display:flex; min-width:0; align-items:center; gap:6px; padding:7px 10px; border-bottom:1px solid #e0e8ef; background:#fff; }
+.treeRocketToolbar > button { display:inline-flex; min-height:28px; flex:0 0 auto; align-items:center; justify-content:center; gap:4px; padding:3px 7px; border:1px solid #c9d7e3; border-radius:6px; background:#f9fcff; color:#49647d; cursor:pointer; font-size:9px; font-weight:800; }
+.treeRocketToolbar > button:disabled { cursor:default; opacity:.48; }
+.treeRocketBreadcrumbs { display:flex; min-width:70px; flex:1 1 auto; align-items:center; gap:3px; overflow:auto; }
+.treeRocketBreadcrumbs button { max-width:150px; overflow:hidden; padding:3px 5px; border:0; border-radius:4px; background:transparent; color:#386d91; cursor:pointer; font-size:10px; font-weight:750; text-overflow:ellipsis; white-space:nowrap; }
+.treeRocketBreadcrumbs button:disabled { color:#405a70; cursor:default; }
+.treeRocketBreadcrumbs span { display:inline-flex; flex:0 0 auto; align-items:center; gap:2px; }
+.treeRocketBreadcrumbs i { color:#91a5b6; font-style:normal; }
+.treeRocketPath { max-width:220px; overflow:hidden; color:#8294a4; font:9px/1.3 Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
+.treeRocketToolbar .treeRocketZoom { display:flex; flex:0 0 auto; align-items:center; gap:3px; }
+.treeRocketZoom button { display:grid; width:25px; height:25px; place-items:center; padding:0; border:1px solid #d0dce6; border-radius:5px; background:#fff; color:#55718b; cursor:pointer; }
+.treeRocketZoom button:disabled { opacity:.45; cursor:default; }
+.treeRocketZoom span { min-width:34px; color:#647d94; font-size:9px; font-weight:800; text-align:center; }
+.treeRocketError { margin:0; padding:6px 12px; border-bottom:1px solid #f0d3cf; background:#fff6f4; color:#a84339; font-size:10px; }
+.treeRocketBody { display:grid; min-height:0; grid-template-columns:minmax(0,1fr) minmax(220px,290px); }
+.treeRocketGraph { min-width:0; min-height:0; overflow:auto; background-color:#f5faff; background-image:radial-gradient(#d7e5ef 1px,transparent 1px); background-size:20px 20px; }
+.treeRocketGraphCanvas { width:100%; min-width:820px; min-height:100%; padding:34px 24px; box-sizing:border-box; transform-origin:top left; }
+.treeRocketCurrentNode { display:flex; width:max-content; max-width:min(560px,90%); min-height:64px; align-items:center; gap:10px; margin:0 auto 12px; padding:10px 14px; border:2px solid #81abc4; border-radius:12px; background:linear-gradient(150deg,#fff,#e8f5ff); box-shadow:0 5px 14px rgba(55,104,138,.12); color:#347092; }
+.treeRocketCurrentNode > div { display:grid; min-width:0; gap:3px; }
+.treeRocketCurrentNode > div small { color:#82a1b7; font-size:8px; font-weight:900; letter-spacing:.08em; }
+.treeRocketCurrentNode > div strong { max-width:340px; overflow:hidden; color:#294d67; font-size:13px; text-overflow:ellipsis; white-space:nowrap; }
+.treeRocketCurrentNode > div code { max-width:460px; overflow:hidden; color:#71879a; font:9px Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
+.treeRocketCurrentNode > button { display:inline-flex; min-height:28px; flex:0 0 auto; align-items:center; gap:5px; padding:4px 8px; border:1px solid #70a4c1; border-radius:7px; background:#e4f4ff; color:#286888; cursor:pointer; font-size:9px; font-weight:850; }
+.treeRocketChildren { position:relative; display:flex; min-height:90px; flex-wrap:wrap; justify-content:center; gap:30px 14px; padding:30px 8px 12px; }
+.treeRocketChildren.hasParent::before { position:absolute; top:0; left:50%; height:20px; border-left:2px solid #a9c5d8; content:""; }
+.treeRocketChildren.hasParent::after { position:absolute; top:20px; left:calc(10% + 120px); right:calc(10% + 120px); border-top:2px solid #a9c5d8; content:""; }
+.treeRocketNode { position:relative; display:grid; width:220px; min-height:106px; align-content:start; gap:5px; padding:7px; border:1px solid #c9d9e6; border-radius:10px; background:rgba(255,255,255,.96); box-shadow:0 3px 9px rgba(50,83,109,.08); }
+.treeRocketChildren.hasParent .treeRocketNode::before { position:absolute; top:-12px; left:50%; height:12px; border-left:2px solid #a9c5d8; content:""; }
+.treeRocketNodeEnter { display:grid; grid-template-columns:22px minmax(0,1fr); align-items:center; gap:2px 7px; min-width:0; padding:4px; border:0; border-radius:6px; background:transparent; color:#be8a28; cursor:pointer; text-align:left; }
+.treeRocketNodeEnter:hover { background:#f2f8fd; }
+.treeRocketNodeEnter > svg { grid-row:1 / span 2; }
+.treeRocketNodeEnter strong { overflow:hidden; color:#38566f; font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+.treeRocketNodeEnter small { overflow:hidden; color:#91a0ad; font:8px Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
+.treeRocketNodeActions { display:flex; gap:4px; }
+.treeRocketNodeActions button { display:inline-flex; min-height:25px; flex:1 1 0; align-items:center; justify-content:center; gap:3px; padding:3px; border:1px solid #d5e1ea; border-radius:5px; background:#f9fcff; color:#53748e; cursor:pointer; font-size:8px; font-weight:800; white-space:nowrap; }
+.treeRocketNodeActions button:disabled { cursor:wait; opacity:.5; }
+.treeRocketEmpty,.treeRocketLoading,.treeRocketLimit { color:#7c92a5; font-size:10px; text-align:center; }
+.treeRocketFiles { display:grid; min-height:0; grid-template-rows:auto minmax(0,1fr); border-left:1px solid #d7e2eb; background:#fff; }
+.treeRocketFiles > header { display:flex; min-width:0; align-items:center; justify-content:space-between; gap:8px; padding:9px; border-bottom:1px solid #e2e9ef; }
+.treeRocketFiles > header > div { display:grid; min-width:0; grid-template-columns:18px minmax(0,1fr); gap:3px 5px; align-items:center; }
+.treeRocketFiles > header > div svg { grid-row:1 / span 2; color:#60829e; }
+.treeRocketFiles > header strong,.treeRocketFiles > header small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.treeRocketFiles > header strong { color:#405c74; font-size:11px; }
+.treeRocketFiles > header small { color:#8394a4; font-size:8px; }
+.treeRocketFiles > header button { display:grid; width:24px; height:24px; flex:0 0 auto; place-items:center; border:0; border-radius:5px; background:#f0f5f9; color:#62788c; cursor:pointer; }
+.treeRocketFiles > div { min-height:0; overflow:auto; padding:5px; }
+.treeRocketFile { display:grid; min-width:0; grid-template-columns:20px minmax(0,1fr); align-items:center; gap:5px; min-height:30px; padding:3px 5px; border-bottom:1px solid #edf1f5; }
+.treeRocketFile > span { color:#69859b; }
+.treeRocketFile strong { overflow:hidden; color:#50677b; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+.treeRocketFiles p,.treeRocketFiles > div > small { color:#8293a2; font-size:9px; }
+.treeRocketWindow > footer { display:flex; justify-content:space-between; gap:8px; padding:6px 10px; border-top:1px solid #dce6ee; background:#fff; color:#7d8e9c; font-size:8px; }
+
+/* Keep both dashboard arrangements backed by the same live source and folder blocks. */
+.dashboard.dashboardFoldersTop { grid-template-columns:minmax(0,1fr) minmax(0,1fr); grid-template-rows:minmax(225px,.72fr) minmax(260px,1fr); grid-template-areas:"folders folders" "sourcesLeft sourcesRight"; column-gap:10px; row-gap:10px; }
+.dashboardFoldersTop > .sourcesColumn { grid-area:sourcesLeft; }
+.dashboardFoldersTop > .foldersColumn { grid-area:folders; min-width:0; overflow-x:auto; overflow-y:hidden; }
+.dashboardFoldersTop > .rightSourcesColumn { grid-area:sourcesRight; }
+.dashboardFoldersTop > .dashboardResizer { display:none; }
+.dashboardFoldersTop > .sourcesColumn,.dashboardFoldersTop > .rightSourcesColumn { width:auto; height:100%; min-width:0; overflow:auto; }
+.dashboardFoldersTop .sourcesBlockList { overflow:auto; }
+.dashboardFoldersTop .foldersContainer { display:flex; width:max-content; min-width:100%; height:100%; flex-direction:row; align-items:stretch; gap:10px; }
+.dashboardFoldersTop .foldersContainer > .dashboardProjectGroup { width:228px; min-width:228px; flex:0 0 228px; }
+.dashboardFoldersTop .foldersContainer > .folderOrderItem { width:228px; min-width:228px; flex:0 0 228px; }
+.dashboardFoldersTop .dashboardHeightResizer { grid-column:1/-1; }
+.dashboard.dashboardFoldersTop.pageHidden { display:none; }
+
+/* Expanded Rename title is also the full-width component menu trigger. */
+.processingPage .convertedRenameHeader { width:100%; }
+.processingPage .conversionRenameMenuRoot { display:flex; width:100%; }
+.processingPage .conversionRenameMenuButton { width:100%; min-height:34px; justify-content:flex-start; }
+.processingPage .conversionRenameMenuButton strong { flex:1 1 auto; }
+
+/* Simple post-it return actions use the same warm yellow as a normal note. */
+.cargoPostItExtraActions button.postItSimpleMode,
+.cargoPostItExtraActions button.aiMode.active.postItSimpleMode,
+.cargoPostItExtraActions button.reminderMode.active.postItSimpleMode { border-color:#d8b534; background:linear-gradient(180deg,#fff5b8,#ffe882); color:#725700; }
+.cargoPostItExtraActions button.postItSimpleMode > span { width:auto; height:auto; border:0; border-radius:0; }
+.cargoPostItExtraActions button.postItSimpleMode > span svg { display:block; }
+
+/* Application filters include entry kind, initial, containing folder, and explicit location data. */
+.applicationPrimaryFilters { display:flex; flex-wrap:wrap; align-items:end; gap:6px; }
+.applicationPrimaryFilters > label { display:grid; min-width:105px; gap:3px; color:#62788c; font-size:9px; font-weight:800; }
+.applicationPrimaryFilters select,.applicationInlineFilters select { min-width:0; max-width:100%; min-height:28px; padding:4px 6px; border:1px solid #c8d5e0; border-radius:6px; background:#fff; color:#3f586e; font:inherit; font-size:9px; }
+.applicationInlineFilters > label { min-width:90px; }
+.applicationFolderOnlyRow { display:grid; min-width:0; grid-template-columns:20px minmax(0,1fr) auto 26px; align-items:center; gap:6px; padding:5px 6px; border:1px solid #dbe5ed; border-radius:6px; background:#fff; color:#64839b; }
+.applicationFolderOnlyRow > span { display:grid; min-width:0; gap:2px; }
+.applicationFolderOnlyRow strong,.applicationFolderOnlyRow small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.applicationFolderOnlyRow strong { color:#405b72; font-size:10px; }
+.applicationFolderOnlyRow small { color:#8394a3; font-size:8px; }
+.applicationFolderOnlyRow > button { display:grid; width:24px; height:24px; place-items:center; border:1px solid #c8d6e2; border-radius:5px; background:#f7fbff; color:#557b98; cursor:pointer; }
+.applicationFilterResults { display:block; padding:2px 1px 0; color:#708396; font-size:9px; font-weight:800; }
+
+/* Keep the added Tree Rocket control beside Reorder and Add without clipping. */
+.folderTableRow { min-width:704px; grid-template-columns:34px minmax(0,1.35fr) minmax(90px,.85fr) minmax(110px,1.45fr) 90px; }
+.folderTableRow.orderingFolder,.folderTableRow.orderingHead { min-width:704px; grid-template-columns:34px minmax(0,1.35fr) minmax(90px,.85fr) minmax(110px,1.45fr) 90px; }
+.folderTableTopActions { justify-content:flex-end; gap:3px; }
+.folderTableTopActions .treeRocketOpenButton { width:25px; min-width:25px; min-height:30px; justify-content:center; padding:0; }
+
+@media (prefers-reduced-motion:reduce) {
+  .treeRocketGraphCanvas { scroll-behavior:auto; }
+}
+
+@media (max-width:1050px) {
+  .dashboard.dashboardFoldersTop { display:grid!important; width:100%; max-width:none; height:auto; min-height:0; grid-template-columns:minmax(0,1fr) minmax(0,1fr); grid-template-rows:minmax(190px,auto) minmax(300px,auto); grid-template-areas:"folders folders" "sourcesLeft sourcesRight"; }
+  .dashboard.dashboardFoldersTop > .sourcesColumn,.dashboard.dashboardFoldersTop > .rightSourcesColumn { display:flex!important; min-width:0; height:auto; min-height:280px; }
+  .dashboard.dashboardFoldersTop > .foldersColumn { display:flex!important; min-height:190px; max-height:320px; }
+  .dashboard.dashboardFoldersTop .foldersContainer { height:max-content; min-height:100%; }
+}
+@media (max-width:650px) {
+  .treeRocketOverlay { padding:0; }
+  .treeRocketWindow { width:100%; height:100%; min-height:0; border-radius:0; grid-template-rows:auto auto minmax(0,1fr) auto; }
+  .treeRocketToolbar { flex-wrap:wrap; }
+  .treeRocketBreadcrumbs { order:3; flex-basis:100%; }
+  .treeRocketPath { display:none; }
+  .treeRocketBody { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr) minmax(130px,32vh); }
+  .treeRocketFiles { border-top:1px solid #d7e2eb; border-left:0; }
+  .treeRocketChildren.hasParent::after { left:50px; right:50px; }
+  .treeRocketNode { width:min(220px,calc(100vw - 54px)); }
+  .treeRocketCurrentNode { max-width:calc(100% - 12px); flex-wrap:wrap; }
+  .treeRocketWindow > footer { flex-direction:column; }
+  .dashboard.dashboardFoldersTop { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(180px,auto) auto auto; grid-template-areas:"folders" "sourcesLeft" "sourcesRight"; }
+}
+
+/* Tree Rocket is a full-screen spatial folder graph; its working surfaces stay readable. */
+.treeRocketOverlay { position:fixed; z-index:15000; inset:0; display:block; padding:0; background:linear-gradient(130deg,rgba(3,11,25,.74),rgba(6,19,37,.58) 52%,rgba(12,15,40,.76)),url("./assets/folderrocket-space-login.png") center/cover no-repeat; color:#eaf5ff; }
+.treeRocketWindow { display:grid; width:100%; height:100%; min-height:0; grid-template-rows:auto auto auto minmax(0,1fr) auto; overflow:hidden; border:0; border-radius:0; background:transparent; box-shadow:none; color:#eaf5ff; }
+.treeRocketHeader { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:12px; padding:7px 16px; border-bottom:1px solid #96c9e83b; background:linear-gradient(100deg,#091a2ed9,#172340c9); }
+.treeRocketBack,.treeRocketClose { display:inline-flex; width:max-content; min-height:32px; align-items:center; gap:6px; padding:4px 9px; border:1px solid #a4d5f044; border-radius:8px; background:#112842d9; color:#dcefff; cursor:pointer; font-size:11px; font-weight:800; }
+.treeRocketBack:disabled { opacity:.42; cursor:default; }.treeRocketClose { justify-self:end; width:32px; justify-content:center; padding:0; }
+.treeRocketBrand { display:grid; justify-items:center; gap:1px; color:#fff; }.treeRocketBrand>img { display:block; width:auto; max-width:min(190px,38vw); height:28px; object-fit:contain; filter:drop-shadow(0 2px 8px #061222aa); }
+.treeRocketBrand>span { display:flex; align-items:center; gap:7px; color:#f3fbff; text-shadow:0 2px 9px #020a16; }.treeRocketBrand>span strong { font-family:inherit; font-size:16px; font-weight:850; letter-spacing:.015em; }.treeRocketMark { flex:0 0 auto; filter:drop-shadow(0 3px 5px #020a18aa); }
+.treeRocketToolbar { display:flex; min-width:0; min-height:46px; align-items:center; gap:7px; padding:7px 12px; border-bottom:1px solid #96c9e833; background:#091a2ea8; backdrop-filter:blur(10px); }
+.treeRocketToolbar>button,.treeRocketCopyPath { display:inline-flex; min-height:30px; flex:0 0 auto; align-items:center; justify-content:center; gap:5px; padding:4px 8px; border:1px solid #b3d9f04a; border-radius:7px; background:#122c49dc; color:#e6f5ff; cursor:pointer; font-size:10px; font-weight:800; }
+.treeRocketToolbar>button:disabled { cursor:default; opacity:.46; }.treeRocketBreadcrumbs { display:flex; min-width:55px; flex:1 1 150px; align-items:center; gap:3px; overflow:auto; }
+.treeRocketBreadcrumbs button { max-width:155px; overflow:hidden; padding:4px 6px; border:0; border-radius:5px; background:transparent; color:#dcefff; cursor:pointer; font-size:10px; font-weight:750; text-overflow:ellipsis; white-space:nowrap; }
+.treeRocketBreadcrumbs button:disabled { color:#fff; cursor:default; }.treeRocketBreadcrumbs span { display:inline-flex; flex:0 0 auto; align-items:center; gap:3px; }.treeRocketBreadcrumbs i { color:#87b4d4; font-style:normal; }
+.treeRocketSearch { display:flex; min-width:170px; flex:0 1 285px; align-items:center; gap:5px; padding:3px 4px 3px 8px; border:1px solid #aed4ec59; border-radius:8px; background:#07172ae0; color:#a7d5f1; }
+.treeRocketSearch input { min-width:0; width:100%; height:25px; border:0; outline:0; background:transparent; color:#f5fbff; font:inherit; font-size:10px; }.treeRocketSearch input::placeholder { color:#a4bad0; }.treeRocketSearch>button { min-height:25px; padding:3px 8px; border:0; border-radius:5px; background:#5cb3df; color:#08213a; cursor:pointer; font-size:9px; font-weight:900; }
+.treeRocketPath { max-width:190px; overflow:hidden; color:#b8cfe0; font:9px/1.3 Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }.treeRocketZoom { display:flex; flex:0 0 auto; align-items:center; gap:4px; }.treeRocketZoom button { display:grid; width:27px; height:27px; place-items:center; padding:0; border:1px solid #b3d9f04a; border-radius:6px; background:#102943dc; color:#dff1ff; cursor:pointer; }.treeRocketZoom button:disabled { opacity:.4; cursor:default; }.treeRocketZoom span { min-width:37px; color:#d5eaff; font-size:9px; font-weight:850; text-align:center; }
+.treeRocketError,.treeRocketNotice { display:flex; align-items:center; gap:7px; margin:0; padding:7px 14px; border-bottom:1px solid #f0b6ad55; background:#361c25df; color:#ffd6d0; font-size:10px; }.treeRocketNotice { border-color:#83d7ae55; background:#0e342ce8; color:#d9ffeb; }
+.treeRocketBody { display:grid; min-height:0; grid-template-columns:minmax(0,1fr); overflow:hidden; }.treeRocketBody.withSidebar { grid-template-columns:minmax(255px,310px) minmax(0,1fr); }
+.treeRocketGraph { min-width:0; min-height:0; overflow:auto; touch-action:pan-x pan-y; cursor:grab; background:radial-gradient(circle at 1px 1px,#d7ebff36 1px,transparent 1.5px); background-size:24px 24px; scrollbar-color:#a6c7dc66 transparent; }
+.treeRocketGraph:active { cursor:grabbing; }.treeRocketGraphCanvas { width:100%; min-width:820px; min-height:100%; padding:44px 34px 70px; box-sizing:border-box; transform-origin:top left; transition:transform 120ms ease-out; }
+.treeRocketCurrentNode { display:flex; width:max-content; max-width:min(680px,92%); min-height:72px; align-items:center; gap:12px; margin:0 auto; padding:11px 15px; border:1px solid #a7ddff88; border-radius:15px; background:linear-gradient(145deg,#0c3353f2,#142948ee); box-shadow:0 10px 30px #02091266,inset 0 1px #ffffff1a; color:#f6fbff; }
+.treeRocketCurrentNode>svg { color:#f4c96b; }.treeRocketCurrentNode>div { display:grid; min-width:0; gap:3px; }.treeRocketCurrentNode>div small,.treeRocketGraphHeading>span { color:#a7cce4; font-size:8px; font-weight:900; letter-spacing:.14em; }.treeRocketCurrentNode>div strong { max-width:380px; overflow:hidden; color:#fff; font-size:15px; text-overflow:ellipsis; white-space:nowrap; }.treeRocketCurrentNode>div code { max-width:490px; overflow:hidden; color:#c1d4e3; font:9px Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }.treeRocketCurrentNode>button,.treeRocketAddButton { display:inline-flex; min-height:30px; flex:0 0 auto; align-items:center; gap:5px; padding:5px 9px; border:1px solid #96d1ef77; border-radius:7px; background:#17426aba; color:#eefaff; cursor:pointer; font-size:9px; font-weight:850; }
+.treeRocketTrunk { width:0; height:30px; margin:0 auto; border-left:2px solid #b5ddf188; }.treeRocketChildren { position:relative; display:grid; min-width:100%; grid-template-columns:repeat(auto-fill,minmax(205px,1fr)); align-items:stretch; gap:30px 15px; padding:24px 6px 12px; }
+.treeRocketChildren.hasParent::before { position:absolute; top:0; left:2%; right:2%; border-top:2px solid #b5ddf177; content:""; }.treeRocketChildren.hasParent::after { position:absolute; top:-30px; left:50%; height:30px; border-left:2px solid #b5ddf177; content:""; }
+.treeRocketNode { position:relative; display:grid; min-width:0; min-height:122px; align-content:start; gap:8px; padding:9px; border:1px solid #b4d8ef66; border-radius:12px; background:linear-gradient(145deg,#f7fcfff2,#dcecf2ed); box-shadow:0 7px 20px #03101e44,inset 0 1px #ffffff; color:#25445b; }.treeRocketChildren.hasParent .treeRocketNode::before { position:absolute; top:-26px; left:50%; height:26px; border-left:2px solid #b5ddf188; content:""; }
+.treeRocketNodeEnter { display:grid; min-width:0; grid-template-columns:28px minmax(0,1fr); align-items:center; gap:2px 8px; padding:4px; border:0; border-radius:7px; background:transparent; color:#a47420; cursor:pointer; text-align:left; }.treeRocketNodeEnter:hover { background:#ffffffaa; }.treeRocketNodeIcon { display:grid; grid-row:1 / span 2; place-items:center; color:#bc8a32; }.treeRocketNodeEnter strong { overflow:hidden; color:#25445b; font-size:12px; text-overflow:ellipsis; white-space:nowrap; }.treeRocketNodeEnter small { overflow:hidden; color:#688196; font:9px Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
+.treeRocketNodeActions { display:flex; gap:5px; }.treeRocketNodeActions button { display:inline-flex; min-height:28px; flex:1 1 0; align-items:center; justify-content:center; gap:4px; padding:4px; border:1px solid #a9c5d6; border-radius:6px; background:#ffffffbd; color:#365f78; cursor:pointer; font-size:9px; font-weight:800; white-space:nowrap; }.treeRocketNodeActions button:hover,.treeRocketAddButton:hover { background:#ccecff; }.treeRocketNodeActions button:disabled { cursor:wait; opacity:.5; }
+.treeRocketGraphHeading { display:flex; align-items:center; gap:10px; margin:0 0 16px; }.treeRocketGraphHeading strong { padding:4px 8px; border:1px solid #aed4ec55; border-radius:6px; background:#0e2742a6; color:#ebf7ff; font-size:10px; }.treeRocketSearchGraph { display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:15px; }.treeRocketSearchGraph .treeRocketNode { align-self:start; }.treeRocketSearchGraph .treeRocketAddButton { justify-content:center; }
+.treeRocketEmpty,.treeRocketLoading,.treeRocketLimit { display:flex; grid-column:1/-1; align-items:center; justify-content:center; gap:6px; min-height:70px; color:#d1e3f1; font-size:11px; text-align:center; text-shadow:0 1px 4px #06101a; }.treeRocketLimit { min-height:35px; color:#b9d2e3; }.treeRocketSpinner { animation:treeRocketSpin .9s linear infinite; }@keyframes treeRocketSpin { to { transform:rotate(360deg); } }
+.treeRocketFiles { display:grid; min-height:0; grid-template-rows:auto minmax(0,1fr); border-right:1px solid #a4cce745; background:linear-gradient(155deg,#f7fbfffa,#e7f3f5f5); color:#2b4960; }.treeRocketFiles>header { display:flex; min-width:0; align-items:center; justify-content:space-between; gap:8px; padding:12px 10px; border-bottom:1px solid #c7dce7; background:#f5fbffeb; }.treeRocketFiles>header>div { display:grid; min-width:0; grid-template-columns:21px minmax(0,1fr); align-items:center; gap:3px 6px; }.treeRocketFiles>header>div svg { grid-row:1 / span 2; color:#3c88aa; }.treeRocketFiles>header strong,.treeRocketFiles>header small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }.treeRocketFiles>header strong { color:#23435b; font-size:12px; }.treeRocketFiles>header small { color:#70879a; font-size:9px; }.treeRocketFiles>header button { display:grid; width:27px; height:27px; flex:0 0 auto; place-items:center; border:1px solid #c5d7e1; border-radius:7px; background:#fff; color:#4e6c81; cursor:pointer; }.treeRocketFileList { min-height:0; overflow:auto; padding:6px; }.treeRocketFileList h3 { margin:7px 5px; color:#608196; font-size:10px; text-transform:uppercase; letter-spacing:.06em; }.treeRocketFile { display:grid; min-width:0; grid-template-columns:21px minmax(0,1fr) 24px; align-items:center; gap:6px; min-height:34px; padding:4px 6px; border-bottom:1px solid #dfeaf0; color:#57758b; }.treeRocketFile strong { overflow:hidden; color:#304c61; font-size:10px; text-overflow:ellipsis; white-space:nowrap; }.treeRocketFile>button { display:grid; width:23px; height:23px; place-items:center; border:0; border-radius:5px; background:transparent; color:#70889a; cursor:pointer; }.treeRocketFile>button:hover { background:#d8edf7; color:#306986; }.treeRocketFile.searchHit { width:100%; box-sizing:border-box; grid-template-columns:21px minmax(0,1fr); border:0; border-bottom:1px solid #dfeaf0; background:transparent; cursor:pointer; text-align:left; }.treeRocketFile.searchHit small { grid-column:2; overflow:hidden; color:#8194a2; font-size:8px; text-overflow:ellipsis; white-space:nowrap; }.treeRocketFileList p,.treeRocketFileList>small { display:block; margin:8px; color:#72899a; font-size:10px; line-height:1.4; }
+.treeRocketWindow>footer { display:flex; justify-content:space-between; gap:8px; padding:7px 14px; border-top:1px solid #a6cce43a; background:#08182bcc; color:#bad1e2; font-size:9px; }
+.folderManagementLeft .folderQuickPreview { display:grid; flex-basis:112px; grid-template-columns:minmax(95px,.78fr) minmax(0,1.6fr); grid-template-rows:minmax(0,1fr); gap:6px; padding:6px; }
+.folderManagementLeft .folderQuickPreview>div { display:grid; min-width:0; grid-template-columns:repeat(2,minmax(0,1fr)); gap:5px; }
+.treeRocketQuickLauncher { display:grid; min-width:0; align-content:center; justify-items:center; gap:3px; padding:5px; border:1px solid #97cdb383; border-radius:9px; background:radial-gradient(circle at 50% 10%,#fff,#e8f7f0); color:#326f51; cursor:pointer; box-shadow:0 4px 11px #35614a1c,inset 0 1px #ffffff; }.treeRocketQuickLauncher:hover { border-color:#58a979; background:linear-gradient(150deg,#f5fff8,#d8f1e1); box-shadow:0 6px 15px #35614a2b; }.treeRocketQuickLauncher strong { color:#285b44; font-size:11px; font-weight:900; letter-spacing:.01em; }.treeRocketQuickLauncher small { color:#789286; font-size:8px; font-weight:700; }
+.dashboardFoldersTop .foldersColumn { position:relative; isolation:isolate; }.dashboardFoldersTop .foldersColumn::before,.dashboardFoldersTop .foldersColumn::after { position:absolute; z-index:5; top:0; bottom:0; width:23px; content:""; pointer-events:none; }.dashboardFoldersTop .foldersColumn::before { left:0; background:linear-gradient(90deg,#f5f8fb 0%,transparent 100%); }.dashboardFoldersTop .foldersColumn::after { right:0; background:linear-gradient(270deg,#f5f8fb 0%,transparent 100%); }
+.dashboardFoldersTop .foldersContainer>.dashboardProjectGroup { display:flex; width:max-content; min-width:max-content; flex:0 0 auto; flex-direction:row; align-items:stretch; gap:9px; padding:3px 5px!important; }.dashboardFoldersTop .dashboardProjectGroup.linkedProject { margin:0!important; border-left:0; border-top:2px solid #bdcddd; border-radius:8px 8px 0 0!important; }.dashboardFoldersTop .dashboardProjectLabel { align-self:flex-start; gap:5px; padding:3px 5px 3px 1px; }.dashboardFoldersTop .dashboardProjectLabel>span { width:23px; height:23px; flex:0 0 23px; }.dashboardFoldersTop .dashboardProjectLabel small { max-width:100px; font-size:9px; }.dashboardFoldersTop .dashboardProjectGroup .folderOrderItem { width:228px; min-width:228px; flex:0 0 228px; }
+@media (max-width:850px) { .treeRocketToolbar { flex-wrap:wrap; }.treeRocketSearch { order:4; flex:1 1 250px; }.treeRocketBreadcrumbs { order:3; flex-basis:100%; }.treeRocketPath { display:none; } }
+@media (max-width:650px) { .treeRocketHeader { padding:6px 8px; }.treeRocketHeader .treeRocketBack { font-size:0; gap:0; padding:5px; }.treeRocketHeader .treeRocketBack svg { width:19px; height:19px; }.treeRocketBody.withSidebar { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr) minmax(150px,28vh); }.treeRocketFiles { grid-row:2; border-top:1px solid #a4cce745; border-right:0; }.treeRocketGraph { grid-row:1; }.treeRocketGraphCanvas { min-width:660px; padding:28px 18px 50px; }.treeRocketCurrentNode { max-width:calc(100% - 12px); flex-wrap:wrap; }.treeRocketCurrentNode>div { max-width:calc(100% - 50px); }.treeRocketNode { min-width:190px; }.treeRocketWindow>footer { flex-direction:column; }.folderManagementLeft .folderQuickPreview { grid-template-columns:minmax(75px,.7fr) minmax(0,1.7fr); } }
+@media (prefers-reduced-motion:reduce) { .treeRocketGraphCanvas { transition:none; }.treeRocketSpinner { animation:none; } }
+
+/* One assigned Gmail account is visible at a time; switching uses explicit account cards, not a select menu. */
+.emailReaderHeaderMenu .emailAccountPickerRow { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:6px; padding:8px; border:1px solid #e0e8ef; border-radius:8px; background:#f8fbfe; }
+.emailReaderHeaderMenu .emailAccountPickerRow>span { grid-column:1/-1; color:#45647d; font-size:11px; font-weight:850; }
+.emailReaderHeaderMenu .emailSelectedAccount { display:grid; min-width:0; gap:2px; }
+.emailReaderHeaderMenu .emailSelectedAccount strong { overflow:hidden; color:#29465e; font-size:12px; text-overflow:ellipsis; white-space:nowrap; }
+.emailReaderHeaderMenu .emailSelectedAccount small { color:#71879a; font-size:9px; }
+.emailReaderHeaderMenu .emailChooseAccountButton { align-self:center; min-height:28px; padding:4px 7px; border:1px solid #bfd2e2; border-radius:6px; background:#fff; color:#365b78; font-size:10px; font-weight:800; }
+.emailReaderHeaderMenu .emailAccountChoices { display:grid; grid-column:1/-1; gap:4px; max-height:190px; overflow:auto; padding-top:5px; border-top:1px solid #e1e9ef; }
+.emailReaderHeaderMenu .emailAccountChoices button { display:grid; min-width:0; gap:2px; padding:7px; border:1px solid #dce6ee; border-radius:6px; background:#fff; color:#354e63; text-align:left; cursor:pointer; }
+.emailReaderHeaderMenu .emailAccountChoices button.selected,.emailReaderHeaderMenu .emailAccountChoices button[aria-selected="true"] { border-color:#5e9ac4; background:#eef7fd; }
+.emailReaderHeaderMenu .emailAccountChoices button strong { overflow:hidden; font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+.emailReaderHeaderMenu .emailAccountChoices button small,.emailReaderHeaderMenu .emailAccountChoices p { margin:0; color:#728599; font-size:9px; }
+
+/* Read-only, explicitly selectable Microsoft Teams source. */
+.teamsSourceCard { position:relative; overflow:hidden; color:#334b63; }
+.teamsPanelIcon { color:#6251a4; }
+.teamsSourceCard .sourceHeader { gap:6px; }
+.teamsRefresh,.teamsAccountButton { min-height:27px; border:1px solid #d4d9e8; border-radius:6px; background:#f7f6fc; color:#564789; cursor:pointer; }
+.teamsRefresh { display:grid; width:28px; place-items:center; padding:0; }
+.teamsAccountButton { max-width:125px; overflow:hidden; padding:4px 7px; font-size:9px; font-weight:800; text-overflow:ellipsis; white-space:nowrap; }
+.teamsControlPanel { display:grid; min-height:0; gap:7px; overflow:auto; padding:7px; border:1px solid #e3e0f0; border-radius:8px; background:#fcfbff; }
+.teamsControlPanel>label { display:grid; min-width:0; gap:3px; color:#64768b; font-size:9px; font-weight:800; }
+.teamsControlPanel select,.teamsControlPanel input { min-width:0; width:100%; height:29px; padding:4px 7px; border:1px solid #d9dce8; border-radius:6px; background:#fff; color:#344b63; font:inherit; font-weight:600; }
+.teamsSearch { display:flex!important; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:5px!important; padding-left:7px; border:1px solid #d9dce8; border-radius:6px; background:#fff; }
+.teamsSearch input { border:0; outline:0; }
+.teamsLoadButton { display:flex; align-items:center; justify-content:center; gap:6px; min-height:31px; border:1px solid #c9bee4; border-radius:7px; background:#f2effa; color:#59478d; font-size:10px; font-weight:850; cursor:pointer; }
+.teamsError,.teamsStatus { margin:0; padding:6px 7px; border-radius:6px; background:#fff3f0; color:#a04439; font-size:10px; line-height:1.35; }
+.teamsStatus { background:#edf8f1; color:#34714c; }
+.teamsMessageList { display:grid; gap:6px; }
+.teamsMessage { min-width:0; padding:7px; border:1px solid #e1e5ef; border-left:3px solid #7160ae; border-radius:7px; background:#fff; }
+.teamsMessage.teamsReply { margin-left:15px; border-left-color:#9a8ac2; background:#faf9fd; }
+.teamsMessage>.teamsLoadButton { justify-self:start; min-height:25px; margin-top:6px; padding:3px 7px; font-size:9px; }
+.teamsMessage>header { display:flex; justify-content:space-between; gap:7px; color:#3d4e65; font-size:10px; }
+.teamsMessage time { color:#7a8798; font-size:8px; }
+.teamsMessage p { margin:5px 0 0; color:#475569; font-size:10px; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; }
+.teamsMessageMeta { display:flex; align-items:center; gap:4px; margin-top:5px; color:#685696; font-size:9px; overflow-wrap:anywhere; }
+.teamsMessageMeta a { color:#4c64a1; }
+.teamsAccountChooser { position:absolute; z-index:35; top:40px; right:7px; display:grid; width:min(270px,calc(100% - 14px)); gap:5px; max-height:70%; overflow:auto; padding:8px; border:1px solid #d6d1e7; border-radius:9px; background:#fff; box-shadow:0 8px 24px #24203a2b; }
+.teamsAccountChooser strong { color:#51437a; font-size:10px; }
+.teamsAccountChooser button { min-height:29px; overflow:hidden; padding:5px 7px; border:1px solid #e0e1ea; border-radius:6px; background:#fbfbfe; color:#405268; text-align:left; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; font-size:10px; }
+.teamsAccountChooser button.active { border-color:#9886c4; background:#f2effb; }
+.teamsPermissionHint { display:block; margin-top:5px; color:#7c8797; font-size:8px; line-height:1.3; }
+
+/* Daily Job uses due-today reminders and creates a recap draft only after an explicit click. */
+.dailyRecapPanel { display:grid; gap:9px; margin-bottom:14px; padding:14px; border:1px solid #d2deea; border-top:4px solid #8c78bd; border-radius:12px; background:#fff; box-shadow:0 5px 16px #2949630d; }
+.dailyRecapPanel h2 { display:flex; align-items:center; gap:7px; margin:0; color:#4d3e79; font-size:17px; }
+.dailyRecapPanel>p { margin:0; color:#667b8e; font-size:11px; }
+.dailyRecapControls { display:grid; grid-template-columns:minmax(180px,.8fr) minmax(220px,1fr); gap:9px; }
+.dailyRecapControls label { display:grid; min-width:0; gap:4px; color:#566f83; font-size:10px; font-weight:800; }
+.dailyRecapControls select,.dailyRecapControls input { min-width:0; min-height:32px; padding:5px 8px; border:1px solid #cad9e4; border-radius:6px; background:#fff; color:#314a60; font:inherit; }
+.dailyRecapTomorrow { display:flex; align-items:center; gap:6px; color:#50677b; font-size:10px; }
+.dailyCreateDraft { display:inline-flex; width:max-content; min-height:34px; align-items:center; gap:7px; padding:6px 12px; border:1px solid #a99bc9; border-radius:7px; background:linear-gradient(180deg,#f1edfa,#e4def4); color:#514078; font-size:11px; font-weight:850; cursor:pointer; }
+.dailyCreateDraft:disabled { opacity:.5; cursor:not-allowed; }
+.dailyRecapStatus,.dailyRecapError { margin:0!important; color:#34714c!important; font-size:10px!important; }
+.dailyRecapError { color:#a04439!important; }
+@media(max-width:640px) { .dailyRecapControls { grid-template-columns:minmax(0,1fr); }.dailyCreateDraft { width:100%; justify-content:center; } }
+
+/* Keep Rename compact while its title remains the component picker. */
+.processingPage .conversionStack>.convertedRenamePanel { gap:4px; padding:7px 8px; }
+.processingPage .convertedRenameHeader { padding-bottom:4px; }
+.processingPage .convertedRenameHeader .conversionRenameMenuButton { min-height:30px; padding:4px 7px; }
+.processingPage .convertedRenameHeader .conversionRenameMenuButton strong { font-size:13px; }
+.processingPage .convertedRenamePanel .conversionRenameBuilder { min-height:27px; padding:4px; }
+.processingPage .convertedRenamePanel .conversionRenamePreview { padding:3px 5px; font-size:9px; }
+.processingPage .convertedRenamePanel .conversionRenameActions button { min-height:22px; padding:3px 6px; font-size:9px; }
+.processingPage .conversionStack>.conversionToolCard { border:1px solid #d5e0e8; border-radius:12px; box-shadow:0 7px 19px #263f5510; }
+.processingPage .conversionToolCard>h2 { min-height:47px; margin-left:-12px; margin-right:-12px; padding:9px 12px; border-radius:11px 11px 0 0; }
+.processingPage .conversionPanel>h2 { background:linear-gradient(100deg,#c5e9cf,#f2fbf3 76%); color:#265e3e; }
+.processingPage .changeFormatPanel>h2 { background:linear-gradient(100deg,#d8c9ed,#f9f6fd 76%); color:#604583; }
+.processingPage .conversionCardHeading { display:flex; min-width:0; align-items:center; gap:9px; }
+.processingPage .conversionCardHeading>svg { width:21px; height:21px; flex:0 0 21px; padding:5px; border-radius:7px; background:#ffffffa6; }
+.processingPage .conversionCardHeading>span { display:grid; gap:2px; }
+.processingPage .conversionCardHeading small { color:inherit; opacity:.76; font-size:9px; font-weight:600; }
+.processingPage .conversionPanel .formatChoiceField,.processingPage .changeFormatPanel .formatChoiceField { min-height:47px; padding:6px 8px; border-radius:8px; box-shadow:inset 0 1px #ffffff; }
+.processingPage .conversionPanel .formatFieldCopy,.processingPage .changeFormatPanel .formatFieldCopy { display:grid; gap:2px; }
+.processingPage .conversionPanel .studioQueueHeading,.processingPage .changeFormatPanel .studioQueueHeading { padding:5px 7px; border-radius:6px; background:#f6f8fa; }
+.processingPage .conversionPanel .formatQueueRow { min-height:32px; border-radius:7px; background:linear-gradient(90deg,#f8fcf9,#fff); }
+.processingPage .changeFormatPanel .formatQueueRow { min-height:32px; border-radius:7px; background:linear-gradient(90deg,#fbf9fe,#fff); }
+.processingPage .conversionPanel .formatQueueRow.source,.processingPage .changeFormatPanel .formatQueueRow.source { background:linear-gradient(90deg,#f1e8fa,#fcfaff); }
+.processingPage .conversionPanel>.convertButton,.processingPage .changeFormatPanel>.applyMotherFormat { min-height:40px; height:40px; border-radius:9px; box-shadow:0 3px 7px #1d513016; letter-spacing:.01em; }
+.processingPage .changeFormatPanel>.applyMotherFormat { border-color:#aa91c5; background:linear-gradient(180deg,#efe8f8,#dbcbef); box-shadow:0 3px 7px #4c2f6815; }
+.processingPage .conversionStack>.convertedRenamePanel { border-radius:9px; box-shadow:0 5px 13px #263f550a; }

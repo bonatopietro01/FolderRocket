@@ -1,7 +1,7 @@
 import {ChevronDown, ChevronUp, GripHorizontal, Minus, X} from "lucide-react";
 import {useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode} from "react";
 
-export type DashboardSourceType = "gmail" | "outlook" | "calendar" | "usb" | "domain" | "screen" | "search" | "recent" | "phone";
+export type DashboardSourceType = "gmail" | "outlook" | "teams" | "calendar" | "usb" | "domain" | "screen" | "search" | "recent" | "phone";
 
 export interface ScreenCaptureCrop { x: number; y: number; width: number; height: number; }
 

@@ -37,6 +37,7 @@ const UsbSourcePanel = lazy(() => import("./components/UsbSourcePanel"));
 const ApplicationsWorkspace = lazy(() => import("./components/ApplicationsWorkspace"));
 const DashboardFolderBrowser = lazy(() => import("./components/DashboardFolderBrowser"));
 const DailyJob = lazy(() => import("./components/DailyJob"));
+const TeamsSourcePanel = lazy(() => import("./components/TeamsSourcePanel"));
 
 type Folder = ManagedFolder;
 interface DashboardWidths { left: number; center: number; right: number; }
@@ -46,6 +47,7 @@ const SEARCH_FOLDER_SELECTION_KEY = "folderrocket-search-folder-selection";
 const SOURCE_BLOCKS_KEY = "folderrocket-source-blocks";
 const RIGHT_SOURCE_BLOCKS_KEY = "folderrocket-right-source-blocks";
 const DASHBOARD_HEIGHT_KEY = "folderrocket-dashboard-height";
+const DASHBOARD_LAYOUT_KEY = "folderrocket-dashboard-layout";
 const AI_MODE_KEY = "folderrocket-ai-mode";
 const APP_ZOOM_KEY = "folderrocket-app-zoom";
 const FLOATING_TOOLS_SCALE_KEY = "folderrocket-floating-tools-scale";
@@ -76,7 +78,7 @@ function normalizeSourceBlocks(value: unknown): DashboardSourceBlockData[] | nul
     if (!Array.isArray(value)) return null;
     const blocks = value.filter((block): block is DashboardSourceBlockData => block
         && typeof block.id === "string"
-        && ["gmail", "outlook", "calendar", "usb", "domain", "screen", "search", "recent", "phone"].includes(block.type)
+        && ["gmail", "outlook", "teams", "calendar", "usb", "domain", "screen", "search", "recent", "phone"].includes(block.type)
         && Number.isFinite(block.height));
     return blocks.map(block => {
         // Earlier Search + Fire defaults were intentionally tall. Migrate only
@@ -199,6 +201,7 @@ function WorldWorkspace({user, onLogout, world, worldNames, onOpenWorlds, onWorl
     },[applicationChecking,page]);
     const [dashboardWidths, setDashboardWidths] = useState<DashboardWidths | null>(() => readDashboardWidths(widthsStorageKey));
     const [dashboardHeight, setDashboardHeight] = useState<number | null>(() => readDashboardHeight(heightStorageKey));
+    const [dashboardLayout, setDashboardLayout] = useState<"three-column" | "folders-top">(() => localStorage.getItem(`${DASHBOARD_LAYOUT_KEY}-${workspaceScope}`) === "folders-top" ? "folders-top" : "three-column");
     const [searchFolderIds, setSearchFolderIds] = useState<string[]>(() => readSearchFolderSelection(searchStorageKey));
     const [sourceBlocks, setSourceBlocks] = useState<DashboardSourceBlockData[]>(() => readSourceBlocks(sourceBlocksStorageKey));
     const [rightSourceBlocks, setRightSourceBlocks] = useState<DashboardSourceBlockData[]>(() => readSourceBlocks(rightSourceBlocksStorageKey, createDefaultRightSourceBlocks));
@@ -343,12 +346,13 @@ function WorldWorkspace({user, onLogout, world, worldNames, onOpenWorlds, onWorl
         }
         fetch(dashboardSettingsUrl, {credentials: "include"})
             .then(response => response.ok ? response.json() : {settings: null})
-            .then((data: {settings?: {folders?: Folder[]; dashboardWidths?: DashboardWidths | null; dashboardHeight?: number | null; searchFolderIds?: string[]; sourceBlocks?: DashboardSourceBlockData[]; rightSourceBlocks?: DashboardSourceBlockData[] } | null}) => {
+            .then((data: {settings?: {folders?: Folder[]; dashboardWidths?: DashboardWidths | null; dashboardHeight?: number | null; dashboardLayout?: "three-column" | "folders-top"; searchFolderIds?: string[]; sourceBlocks?: DashboardSourceBlockData[]; rightSourceBlocks?: DashboardSourceBlockData[] } | null}) => {
                 if (!active || !data.settings) return;
                 const settings = data.settings;
                 if (Array.isArray(settings.folders) && settings.folders.every(folder => folder && typeof folder.id === "string" && typeof folder.name === "string")) setFolders(settings.folders);
                 if (settings.dashboardWidths === null || (settings.dashboardWidths && [settings.dashboardWidths.left, settings.dashboardWidths.center, settings.dashboardWidths.right].every(value => Number.isFinite(value) && value >= 240))) setDashboardWidths(settings.dashboardWidths ?? null);
                 if (settings.dashboardHeight === null || (Number.isFinite(settings.dashboardHeight) && Number(settings.dashboardHeight) >= MIN_DASHBOARD_HEIGHT)) setDashboardHeight(settings.dashboardHeight === null ? null : Math.min(MAX_DASHBOARD_HEIGHT, Number(settings.dashboardHeight)));
+                if (settings.dashboardLayout === "three-column" || settings.dashboardLayout === "folders-top") setDashboardLayout(settings.dashboardLayout);
                 if (Array.isArray(settings.searchFolderIds)) setSearchFolderIds(settings.searchFolderIds.filter((id): id is string => typeof id === "string"));
                 const leftBlocks = normalizeSourceBlocks(settings.sourceBlocks);
                 if (leftBlocks) setSourceBlocks(leftBlocks);
@@ -369,6 +373,7 @@ function WorldWorkspace({user, onLogout, world, worldNames, onOpenWorlds, onWorl
         if (dashboardHeight) localStorage.setItem(heightStorageKey, String(dashboardHeight));
         else localStorage.removeItem(heightStorageKey);
     }, [dashboardHeight, heightStorageKey, preferencesReady]);
+    useEffect(() => { if (preferencesReady) localStorage.setItem(`${DASHBOARD_LAYOUT_KEY}-${workspaceScope}`, dashboardLayout); }, [dashboardLayout, preferencesReady, workspaceScope]);
     useEffect(() => { if (preferencesReady) localStorage.setItem(foldersStorageKey, JSON.stringify(folders)); }, [folders, foldersStorageKey, preferencesReady]);
     useEffect(() => { if (preferencesReady) localStorage.setItem(searchStorageKey, JSON.stringify(searchFolderIds)); }, [searchFolderIds, searchStorageKey, preferencesReady]);
     useEffect(() => { if (preferencesReady) localStorage.setItem(sourceBlocksStorageKey, JSON.stringify(sourceBlocks)); }, [preferencesReady, sourceBlocks, sourceBlocksStorageKey]);
@@ -380,7 +385,7 @@ function WorldWorkspace({user, onLogout, world, worldNames, onOpenWorlds, onWorl
                 method: "PUT",
                 headers: {"Content-Type": "application/json"},
                 credentials: "include",
-                body: JSON.stringify({settings: {folders, dashboardWidths, dashboardHeight, searchFolderIds, sourceBlocks, rightSourceBlocks}})
+                body: JSON.stringify({settings: {folders, dashboardWidths, dashboardHeight, dashboardLayout, searchFolderIds, sourceBlocks, rightSourceBlocks}})
             }).then(async response => {
                 if (!response.ok) {
                     const data=await response.json().catch(()=>({})) as {message?:string};
@@ -390,9 +395,18 @@ function WorldWorkspace({user, onLogout, world, worldNames, onOpenWorlds, onWorl
             }).catch(error=>setDashboardSaveError(error instanceof Error?error.message:"Dashboard settings could not be saved."));
         }, 350);
         return () => window.clearTimeout(timer);
-    }, [dashboardHeight, dashboardSettingsUrl, dashboardWidths, folders, preferencesReady, rightSourceBlocks, searchFolderIds, sourceBlocks]);
+    }, [dashboardHeight, dashboardLayout, dashboardSettingsUrl, dashboardWidths, folders, preferencesReady, rightSourceBlocks, searchFolderIds, sourceBlocks]);
 
-    function addFolder() { setFolders(current => [...current, {id: crypto.randomUUID(), name: `Folder ${current.length + 1}`, path: "", description: ""}]); }
+    function addFolder(path = "", name?: string): boolean {
+        const normalizedPath = path.trim().replace(/[\\/]+$/, "").toLowerCase();
+        if (normalizedPath && folders.some(folder => folder.path.trim().replace(/[\\/]+$/, "").toLowerCase() === normalizedPath)) {
+            setFolderPathNotice("This folder is already in Folder Management.");
+            return false;
+        }
+        setFolders(current => normalizedPath && current.some(folder => folder.path.trim().replace(/[\\/]+$/, "").toLowerCase() === normalizedPath) ? current : [...current, {id: crypto.randomUUID(), name: name?.trim() || `Folder ${current.length + 1}`, path, description: "", storage: "physical"}]);
+        setFolderPathNotice("");
+        return true;
+    }
     function useUsbDriveAsFolder(drive: UsbDrive) {
         const normalizedPath = normalizedUsbPath(drive.path);
         setFolders(current => {
@@ -495,6 +509,7 @@ function WorldWorkspace({user, onLogout, world, worldNames, onOpenWorlds, onWorl
         const deferred = (content: ReactNode) => <Suspense fallback={<p className="sourceLoading">Loading…</p>}>{content}</Suspense>;
         if (block.type === "gmail") return <GmailSourcePanel key={`${world.id}-${block.id}-${block.accountBlockId === null ? "none" : block.accountBlockId || "default"}`} storageScope={`${workspaceScope}-${block.id}`} alertBlockId={block.id} accountBlockId={block.accountBlockId} onAccountBlockIdChange={accountBlockId => updateSourceBlock(column, block.id, {accountBlockId})} accountCatalogKey={user.id} worldId={world.id} worldName={world.name} worldNames={worldNames} aiEnabled={aiEnabled} />;
         if (block.type === "outlook") return <OutlookSourcePanel storageScope={`${workspaceScope}-${block.id}`} alertBlockId={block.id} accountBlockId={block.accountBlockId ?? undefined} onAccountBlockIdChange={accountBlockId => updateSourceBlock(column, block.id, {accountBlockId})} accountCatalogKey={user.id} worldId={world.id} aiEnabled={aiEnabled} />;
+        if (block.type === "teams") return deferred(<TeamsSourcePanel key={`${world.id}-${block.id}-${block.accountBlockId === null ? "none" : block.accountBlockId || "default"}`} blockId={block.id} accountBlockId={block.accountBlockId} onAccountBlockIdChange={accountBlockId => updateSourceBlock(column, block.id, {accountBlockId})} />);
         if (block.type === "calendar") return deferred(<GoogleCalendarSourcePanel storageScope={workspaceScope} alertBlockId={block.id} weekStart={block.calendarWeekStart} onWeekStartChange={calendarWeekStart => updateSourceBlock(column, block.id, {calendarWeekStart})} />);
         if (block.type === "recent") return deferred(<RecentFilesSourcePanel folders={folders.filter(folder => folder.storage !== "imaginary" && folder.path).map(folder => folder.path)} hours={block.recentHours} extraPaths={block.recentPaths} onSettings={(recentHours, recentPaths) => updateSourceBlock(column, block.id, {recentHours, recentPaths})}/>);
         if (block.type === "phone") return deferred(<PhoneSourcePanel hours={block.phoneHours} onHoursChange={phoneHours=>updateSourceBlock(column,block.id,{phoneHours})}/>);
@@ -543,16 +558,16 @@ function WorldWorkspace({user, onLogout, world, worldNames, onOpenWorlds, onWorl
                 </div></div>
                 {page === "dashboard" && <button type="button" className="dashboardResetButton" onClick={resetDashboardLayout} title="Restore default dashboard size" aria-label="Restore default dashboard size"><RotateCcw size={14} /></button>}
             </nav>
-            <div className="appHeaderTools"><button type="button" className="worldChangeLauncher" onClick={onOpenWorlds} title="Fly To Another Planet"><Orbit size={14}/><span>Fly To Another Planet</span></button><CargoShip {...cargoShipProps} /><AccountMenu user={user} onLogout={onLogout} onOpenDiagnostics={() => setDiagnosticsOpen(true)} appZoom={appZoom} onAppZoomChange={setDesktopZoom} aiConfigured={aiConfigured} aiMode={aiMode} onAIModeChange={setAiMode} onAIStatusChange={setAiConfigured} floatingToolsScale={floatingToolsScale} onFloatingToolsScaleChange={setFloatingToolsScale} bookmarkScale={floatingBookmarkScale} onBookmarkScaleChange={setFloatingBookmarkScale} bookmarkWidth={floatingBookmarkWidth} onBookmarkWidthChange={setFloatingBookmarkWidth} bookmarkHeight={floatingBookmarkHeight} onBookmarkHeightChange={setFloatingBookmarkHeight} /><DiagnosticsCenter userId={user.id} worldNames={worldNames} open={diagnosticsOpen} onOpenChange={setDiagnosticsOpen}/></div>
+            <div className="appHeaderTools"><button type="button" className="worldChangeLauncher" onClick={onOpenWorlds} title="Fly To Another Planet"><Orbit size={14}/><span>Fly To Another Planet</span></button><CargoShip {...cargoShipProps} /><AccountMenu user={user} onLogout={onLogout} onOpenDiagnostics={() => setDiagnosticsOpen(true)} appZoom={appZoom} onAppZoomChange={setDesktopZoom} aiConfigured={aiConfigured} aiMode={aiMode} onAIModeChange={setAiMode} onAIStatusChange={setAiConfigured} dashboardLayout={dashboardLayout} onDashboardLayoutChange={setDashboardLayout} floatingToolsScale={floatingToolsScale} onFloatingToolsScaleChange={setFloatingToolsScale} bookmarkScale={floatingBookmarkScale} onBookmarkScaleChange={setFloatingBookmarkScale} bookmarkWidth={floatingBookmarkWidth} onBookmarkWidthChange={setFloatingBookmarkWidth} bookmarkHeight={floatingBookmarkHeight} onBookmarkHeightChange={setFloatingBookmarkHeight} /><DiagnosticsCenter userId={user.id} worldNames={worldNames} open={diagnosticsOpen} onOpenChange={setDiagnosticsOpen}/></div>
         </header>
-        {dashboardSaveError&&<div className="appSaveError" role="alert">{dashboardSaveError} Your local copy is still available.</div>}{folderPathNotice&&<div className="appSaveError folderPathNotice" role="status"><span>{folderPathNotice}</span><button type="button" onClick={()=>setFolderPathNotice("")} aria-label="Chiudi avviso">×</button></div>}<DailyAgendaRail storageScope={workspaceScope} onOpenDailyJob={()=>navigate("daily")}/><StickyNotes key={workspaceScope} storageScope={workspaceScope} folders={folders} aiEnabled={aiEnabled} floatingScale={floatingToolsScale} bookmarkScale={floatingBookmarkScale} bookmarkWidth={floatingBookmarkWidth} bookmarkHeight={floatingBookmarkHeight} addRequest={noteAddRequest} aiAddRequest={aiNoteAddRequest} /><div className="pageFrame"><main ref={dashboardRef} style={dashboardStyle} className={page === "dashboard" ? "dashboard" : "dashboard pageHidden"}>
+        {dashboardSaveError&&<div className="appSaveError" role="alert">{dashboardSaveError} Your local copy is still available.</div>}{folderPathNotice&&<div className="appSaveError folderPathNotice" role="status"><span>{folderPathNotice}</span><button type="button" onClick={()=>setFolderPathNotice("")} aria-label="Chiudi avviso">×</button></div>}<DailyAgendaRail storageScope={workspaceScope} onOpenDailyJob={()=>navigate("daily")}/><StickyNotes key={workspaceScope} storageScope={workspaceScope} folders={folders} aiEnabled={aiEnabled} floatingScale={floatingToolsScale} bookmarkScale={floatingBookmarkScale} bookmarkWidth={floatingBookmarkWidth} bookmarkHeight={floatingBookmarkHeight} addRequest={noteAddRequest} aiAddRequest={aiNoteAddRequest} /><div className="pageFrame"><main ref={dashboardRef} style={dashboardStyle} className={`dashboard${page !== "dashboard" ? " pageHidden" : ""}${dashboardLayout === "folders-top" ? " dashboardFoldersTop" : ""}`}>
             <DashboardSourceColumn className="sourcesColumn" title="Sources" blocks={sourceBlocks} onAdd={type => addSourceBlock("left", type)} onDelete={id => deleteSourceBlock("left", id)} onMove={(id, direction) => moveSourceBlock("left", id, direction)} onResize={(id, height) => updateSourceBlock("left", id, {height})} renderBlock={block => renderSourceBlock("left", block)} />
             <div className="dashboardResizer" role="separator" aria-label="Ridimensiona colonne sinistra e centrale" onPointerDown={event => startColumnResize("left", event)} />
             <section className="dashboardColumn foldersColumn">{dashboardBrowser ? <Suspense fallback={<p className="sourceLoading">Loading folder…</p>}><DashboardFolderBrowser key={dashboardBrowser.path} initialPath={dashboardBrowser.path} initialName={dashboardBrowser.name} onHome={()=>setDashboardBrowser(null)} sourceFolderPaths={folders.filter(item => item.storage !== "imaginary" && Boolean(item.path)).map(item => item.path)} storageScope={workspaceScope} aiEnabled={aiEnabled}/></Suspense> : <div className="foldersContainer">{folderProjectGroups(folders).map(group=><div className={group.members.length>1?"dashboardProjectGroup linkedProject":"dashboardProjectGroup"} key={group.key}>{group.members.length>1&&<div className="dashboardProjectLabel"><span>{group.symbol}</span><small>{group.members[0].appearance?.workGroup || group.members[0].description}</small></div>}{group.members.map(folder => <div className={draggedFolderId === folder.id ? "folderOrderItem draggingFolder" : "folderOrderItem"} draggable onDragStart={event => { if (event.target !== event.currentTarget) return; setDraggedFolderId(folder.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("application/x-folderrocket-folder-order", folder.id); }} onDragOver={event => { if (event.dataTransfer.types.includes("application/x-folderrocket-folder-order")) event.preventDefault(); }} onDrop={event => { const sourceId = event.dataTransfer.getData("application/x-folderrocket-folder-order"); if (sourceId) { event.preventDefault(); event.stopPropagation(); moveFolder(sourceId, folder.id); } setDraggedFolderId(null); }} onDragEnd={() => setDraggedFolderId(null)} key={folder.id}><FileDropZone id={folder.id} name={folder.name} pathValue={folder.path} hidePath imaginary={folder.storage === "imaginary"} selected={Boolean(folder.path) && searchFolderIds.includes(folder.id)} sourceFolderPaths={folders.filter(item => item.storage !== "imaginary" && Boolean(item.path)).map(item => item.path)} storageScope={workspaceScope} aiEnabled={aiEnabled} onVirtualFilesAdd={items => updateFolder(folder.id, {virtualFiles: [...(folder.virtualFiles ?? []), ...items.filter(item => !(folder.virtualFiles ?? []).some(file => file.path === item.path))]})} onPathChange={path => updateFolder(folder.id, {path, storage: "physical"})} /></div>)}</div>)}</div>}</section>
             <div className="dashboardResizer" role="separator" aria-label="Resize center and right columns" onPointerDown={event => startColumnResize("right", event)} />
             <DashboardSourceColumn className="rightSourcesColumn" title="Sources" blocks={rightSourceBlocks} onAdd={type => addSourceBlock("right", type)} onDelete={id => deleteSourceBlock("right", id)} onMove={(id, direction) => moveSourceBlock("right", id, direction)} onResize={(id, height) => updateSourceBlock("right", id, {height})} renderBlock={block => renderSourceBlock("right", block)} />
             <button type="button" className="dashboardHeightResizer" onPointerDown={startDashboardHeightResize} title="Drag to set dashboard height" aria-label="Set dashboard height"><GripHorizontal size={15} /></button>
-        </main>{page === "folders" && <div className="folderPage"><Suspense fallback={<p className="sourceLoading">Loading folders…</p>}><FolderManagement folders={folders} onAdd={addFolder} onUpdate={updateFolder} onDelete={deleteFolder} onReorder={moveFolder} aiEnabled={aiEnabled} /></Suspense></div>}{page === "processing" && <div className="processingView"><Suspense fallback={<p className="sourceLoading">Loading File Studio…</p>}><ProcessingWorkspace folders={folders} onUpdate={updateFolder} storageScope={workspaceScope} /></Suspense></div>}{page === "applications" && <div className="applicationsView"><Suspense fallback={<p className="sourceLoading">Loading applications…</p>}><ApplicationsWorkspace storageScope={workspaceScope} folders={folders} onScanningChange={setApplicationChecking} onVirtualFilesAdd={(folderId,items)=>updateFolder(folderId,{virtualFiles:[...(folders.find(folder=>folder.id===folderId)?.virtualFiles??[]),...items.filter(item=>!(folders.find(folder=>folder.id===folderId)?.virtualFiles??[]).some(existing=>existing.path===item.path))]})}/></Suspense></div>}{page === "daily" && <Suspense fallback={<p className="sourceLoading">Loading Daily Job…</p>}><DailyJob storageScope={workspaceScope} onOpenWorkspace={kind=>navigate(kind==="studio"?"processing":kind==="applications"?"applications":"dashboard")}/></Suspense>}</div>
+        </main>{page === "folders" && <div className="folderPage"><Suspense fallback={<p className="sourceLoading">Loading folders…</p>}><FolderManagement folders={folders} onAdd={addFolder} onUpdate={updateFolder} onDelete={deleteFolder} onReorder={moveFolder} aiEnabled={aiEnabled} /></Suspense></div>}{page === "processing" && <div className="processingView"><Suspense fallback={<p className="sourceLoading">Loading File Studio…</p>}><ProcessingWorkspace folders={folders} onUpdate={updateFolder} storageScope={workspaceScope} /></Suspense></div>}{page === "applications" && <div className="applicationsView"><Suspense fallback={<p className="sourceLoading">Loading applications…</p>}><ApplicationsWorkspace storageScope={workspaceScope} folders={folders} onScanningChange={setApplicationChecking} onVirtualFilesAdd={(folderId,items)=>updateFolder(folderId,{virtualFiles:[...(folders.find(folder=>folder.id===folderId)?.virtualFiles??[]),...items.filter(item=>!(folders.find(folder=>folder.id===folderId)?.virtualFiles??[]).some(existing=>existing.path===item.path))]})}/></Suspense></div>}{page === "daily" && <Suspense fallback={<p className="sourceLoading">Loading Daily Job…</p>}><DailyJob storageScope={workspaceScope} worldId={world.id} onOpenWorkspace={kind=>navigate(kind==="studio"?"processing":kind==="applications"?"applications":"dashboard")}/></Suspense>}</div>
     </div>;
 }
 
@@ -655,6 +670,7 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
                     [`${FOLDERS_KEY}-${scope}`, settings.folders],
                     [`${DASHBOARD_WIDTHS_KEY}-${scope}`, settings.dashboardWidths],
                     [`${DASHBOARD_HEIGHT_KEY}-${scope}`, settings.dashboardHeight],
+                    [`${DASHBOARD_LAYOUT_KEY}-${scope}`, settings.dashboardLayout],
                     [`${SEARCH_FOLDER_SELECTION_KEY}-${scope}`, settings.searchFolderIds],
                     [`${SOURCE_BLOCKS_KEY}-${scope}`, settings.sourceBlocks],
                     [`${RIGHT_SOURCE_BLOCKS_KEY}-${scope}`, settings.rightSourceBlocks]

@@ -22,6 +22,7 @@ function getRedirectUri(origin = process.env.APP_ORIGIN || "http://localhost:300
 const connections = new Map();
 const authorizationStates = new Map();
 const OUTLOOK_SCOPES = "offline_access https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.ReadWrite";
+const TEAMS_SCOPES = "https://graph.microsoft.com/Chat.Read https://graph.microsoft.com/Channel.ReadBasic.All https://graph.microsoft.com/ChannelMessage.Read.All";
 
 function connectionKey(userId, blockId = "") {
     return `${userId}:${blockId || "legacy"}`;
@@ -55,19 +56,21 @@ function getAuthorizationUrl(userId, blockId = "", options = {}) {
     const {clientId} = getConfiguration();
     const state = crypto.randomBytes(24).toString("hex");
     const redirectUri = getRedirectUri(options.origin);
+    const scopes = options.includeTeams ? `${OUTLOOK_SCOPES} ${TEAMS_SCOPES}` : OUTLOOK_SCOPES;
     authorizationStates.set(state, {
         userId,
         blockId,
         redirectUri,
-        frontendOrigin: options.frontendOrigin || ""
+        frontendOrigin: options.frontendOrigin || "",
+        scopes
     });
     const parameters = new URLSearchParams({
         client_id: clientId,
         redirect_uri: redirectUri,
         response_type: "code",
         response_mode: "query",
-        prompt: "select_account",
-        scope: OUTLOOK_SCOPES
+        prompt: options.includeTeams ? "consent" : "select_account",
+        scope: scopes
     });
     parameters.set("state", state);
     return `${AUTHORITY}/authorize?${parameters}`;
@@ -95,7 +98,7 @@ async function exchangeAuthorizationCode(code, state, expectedUserId) {
             code,
             redirect_uri: authorization.redirectUri || getRedirectUri(),
             grant_type: "authorization_code",
-            scope: OUTLOOK_SCOPES
+            scope: authorization.scopes || OUTLOOK_SCOPES
         })
     });
     const data = await readTokenResponse(response, "Microsoft rejected the Outlook authorisation");
@@ -105,7 +108,8 @@ async function exchangeAuthorizationCode(code, state, expectedUserId) {
     const connection = {
         accessToken: data.access_token,
         refreshToken: data.refresh_token || previousConnection?.refreshToken || "",
-        expiresAt: Date.now() + Number(data.expires_in || 3600) * 1000
+        expiresAt: Date.now() + Number(data.expires_in || 3600) * 1000,
+        scopes: authorization.scopes || OUTLOOK_SCOPES
     };
     saveUserConnection(authorization.userId, authorization.blockId, connection);
     try {
@@ -130,7 +134,7 @@ async function refreshAccessToken(userId, blockId = "") {
             client_secret: clientSecret,
             refresh_token: connection.refreshToken,
             grant_type: "refresh_token",
-            scope: OUTLOOK_SCOPES
+            scope: connection.scopes || OUTLOOK_SCOPES
         })
     });
     const data = await readTokenResponse(response, "Unable to refresh Outlook access");
@@ -158,7 +162,9 @@ async function graphFetch(userId, resource, blockId = "", options = {}) {
     }
     if (!response.ok) {
         const data = await response.json().catch(() => ({}));
-        throw new Error(data.error?.message ?? "Unable to read Outlook");
+        const error = new Error(data.error?.message ?? "Unable to read Outlook");
+        error.status = response.status;
+        throw error;
     }
     return response;
 }
@@ -291,6 +297,116 @@ async function listInboxMessages(filters = {}, userId, blockId = "") {
     }));
 }
 
+function cleanTeamsBody(value) {
+    return String(value || "")
+        .replace(/<(script|style)[^>]*>[\s\S]*?<\/\1>/gi, " ")
+        .replace(/<br\s*\/?\s*>/gi, "\n")
+        .replace(/<\/(?:p|div|li)>/gi, "\n")
+        .replace(/<[^>]*>/g, " ")
+        .replace(/&nbsp;/gi, " ")
+        .replace(/&amp;/gi, "&")
+        .replace(/&lt;/gi, "<")
+        .replace(/&gt;/gi, ">")
+        .replace(/&quot;/gi, '"')
+        .replace(/&#39;/gi, "'")
+        .replace(/[ \t\r\f]+/g, " ")
+        .replace(/\n\s+/g, "\n")
+        .trim()
+        .slice(0, 1200);
+}
+
+function shapeTeamsMessage(message, parentMessageId = "") {
+    const attachments = Array.isArray(message.attachments) ? message.attachments.map(item => ({
+        name: String(item.name || item.contentType || "Shared file").slice(0, 180),
+        url: typeof item.contentUrl === "string" && /^https:\/\//i.test(item.contentUrl) ? item.contentUrl : ""
+    })) : [];
+    const mentions = Array.isArray(message.mentions) ? message.mentions.map(item => String(item.mentionText || item.mentioned?.user?.displayName || "").trim()).filter(Boolean).slice(0, 20) : [];
+    return {
+        id: message.id,
+        createdAt: message.createdDateTime || "",
+        sender: message.from?.user?.displayName || message.from?.application?.displayName || "Teams user",
+        text: cleanTeamsBody(message.body?.content),
+        mentions,
+        attachments,
+        parentMessageId: parentMessageId || message.replyToId || "",
+        repliesNextLink: isSafeTeamsNextLink(message["replies@odata.nextLink"]) ? message["replies@odata.nextLink"] : ""
+    };
+}
+
+function shapeTeamsMessages(messages, parentMessageId = "") {
+    const shaped = [];
+    for (const message of Array.isArray(messages) ? messages : []) {
+        shaped.push(shapeTeamsMessage(message, parentMessageId));
+        if (Array.isArray(message.replies)) shaped.push(...message.replies.map(reply => shapeTeamsMessage(reply, message.id)));
+    }
+    return shaped;
+}
+
+function shapeTeamsDirectoryPage(data, kind) {
+    const items = Array.isArray(data.value) ? data.value : [];
+    const values = kind === "chats" ? items.map(chat => ({
+        id: chat.id,
+        type: chat.chatType || "chat",
+        topic: String(chat.topic || "").slice(0, 180),
+        members: (chat.members || []).map(member => String(member.displayName || member.email || "").trim()).filter(Boolean).slice(0, 12),
+        updatedAt: chat.lastUpdatedDateTime || ""
+    })) : items.map(item => kind === "teams"
+        ? ({id: item.id, name: String(item.displayName || "Team").slice(0, 180)})
+        : ({id: item.id, name: String(item.displayName || "Channel").slice(0, 180), description: String(item.description || "").slice(0, 240), membershipType: item.membershipType || "standard"}));
+    return {items: values, nextLink: data["@odata.nextLink"] || ""};
+}
+
+async function listTeamsChats(userId, blockId = "") {
+    const data = await graphJson(userId, "/me/chats?$top=50&$expand=members", blockId);
+    return shapeTeamsDirectoryPage(data, "chats");
+}
+
+async function listJoinedTeams(userId, blockId = "") {
+    const data = await graphJson(userId, "/me/joinedTeams?$top=50", blockId);
+    return shapeTeamsDirectoryPage(data, "teams");
+}
+
+async function listTeamChannels(teamId, userId, blockId = "") {
+    const safeId = String(teamId || "").trim();
+    if (!safeId || safeId.length > 256) throw new Error("Choose a valid Team first.");
+    const data = await graphJson(userId, `/teams/${encodeURIComponent(safeId)}/channels?$top=50`, blockId);
+    return shapeTeamsDirectoryPage(data, "channels");
+}
+
+async function listTeamsDirectoryNextPage(nextLink, kind, userId, blockId = "") {
+    if (!isSafeTeamsNextLink(nextLink)) throw new Error("Invalid Teams directory continuation link.");
+    if (!["chats", "teams", "channels"].includes(kind)) throw new Error("Choose a valid Teams directory first.");
+    return shapeTeamsDirectoryPage(await graphJson(userId, nextLink, blockId), kind);
+}
+
+async function listTeamsChatMessages(chatId, userId, blockId = "") {
+    const safeId = String(chatId || "").trim();
+    if (!safeId || safeId.length > 512) throw new Error("Choose a valid Teams chat first.");
+    const data = await graphJson(userId, `/chats/${encodeURIComponent(safeId)}/messages?$top=50`, blockId);
+    return {messages: shapeTeamsMessages(data.value), nextLink: data["@odata.nextLink"] || ""};
+}
+
+async function listTeamsChannelMessages(teamId, channelId, userId, blockId = "") {
+    const safeTeamId = String(teamId || "").trim();
+    const safeChannelId = String(channelId || "").trim();
+    if (!safeTeamId || !safeChannelId || safeTeamId.length > 256 || safeChannelId.length > 256) throw new Error("Choose a valid Teams channel first.");
+    const data = await graphJson(userId, `/teams/${encodeURIComponent(safeTeamId)}/channels/${encodeURIComponent(safeChannelId)}/messages?$top=50&$expand=replies`, blockId);
+    return {messages: shapeTeamsMessages(data.value), nextLink: data["@odata.nextLink"] || ""};
+}
+
+function isSafeTeamsNextLink(value) {
+    try {
+        const url = new URL(String(value || ""));
+        return url.protocol === "https:" && url.hostname === "graph.microsoft.com" && url.pathname.startsWith("/v1.0/");
+    } catch { return false; }
+}
+
+async function listTeamsNextPage(nextLink, userId, blockId = "", parentMessageId = "") {
+    if (!isSafeTeamsNextLink(nextLink)) throw new Error("Invalid Teams message continuation link.");
+    const data = await graphJson(userId, nextLink, blockId);
+    return {messages: shapeTeamsMessages(data.value, parentMessageId), nextLink: data["@odata.nextLink"] || ""};
+}
+
 function getStatus(userId, blockId = "") {
     return {connected: Boolean(getUserConnection(userId, blockId))};
 }
@@ -335,4 +451,4 @@ async function createDraft({to, subject, text, attachments = []}, userId, blockI
     return draft;
 }
 
-module.exports = {createDraft, disconnect, downloadAttachment, exchangeAuthorizationCode, getAuthorizationUrl, getEmailIdentity, getMessageText, getStatus, listAttachments, listConnectedAccounts, listInboxMessages};
+module.exports = {createDraft, disconnect, downloadAttachment, exchangeAuthorizationCode, getAuthorizationUrl, getEmailIdentity, getMessageText, getStatus, listAttachments, listConnectedAccounts, listTeamsChats, listJoinedTeams, listTeamChannels, listTeamsDirectoryNextPage, listTeamsChatMessages, listTeamsChannelMessages, listTeamsNextPage, isSafeTeamsNextLink, shapeTeamsMessage, shapeTeamsMessages, OUTLOOK_SCOPES, TEAMS_SCOPES};

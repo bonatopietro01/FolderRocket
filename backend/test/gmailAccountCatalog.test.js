@@ -119,8 +119,10 @@ test("Gmail picker keeps selection world-scoped, explicit, and race-isolated", (
     const panel = require("node:fs").readFileSync(path.join(root, "src", "components", "GmailSourcePanel.tsx"), "utf8");
     assert.match(app, /key=\{`\$\{world\.id\}-\$\{block\.id\}-\$\{block\.accountBlockId === null \? "none" : block\.accountBlockId \|\| "default"\}`\}/);
     assert.match(panel, /accountBlockId === null \? "" : accountBlockId \|\| alertBlockId/);
-    assert.match(panel, /<option value="">Nessun account selezionato<\/option>/);
-    assert.match(panel, /value=\{accountPickerValue\}/);
+    assert.match(panel, /className="emailAccountChoices" role="listbox"/);
+    assert.match(panel, /aria-selected=\{selected\}/);
+    assert.match(panel, /onAccountBlockIdChange\?\.\(null\)/);
+    assert.doesNotMatch(panel, /<select aria-label=\{`Account Gmail/);
     assert.match(panel, /worldId, worldName/);
     assert.match(panel, /accountDataScope = `\$\{storageScope\}-gmail-\$\{credentialBlockId \|\| "none"\}`/);
 });
