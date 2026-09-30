@@ -26,3 +26,11 @@ included in the production build.
 
 These checks simulate browser drag events; native Explorer-to-Electron dragging
 still merits a manual check in the desktop application.
+
+For the dashboard folder rows and Tree Rocket layout, open
+`/tests/ui/tree-rocket-smoke.html` on the same local Vite server. This fixture
+uses only fictitious folders and files. Switch between Folders on Top and Three
+Columns, then choose 0, 1, 2, or 12 folders. Open Tree Rocket to inspect the
+matching graph; click a folder, try Mostra file, search, back/root navigation,
+and Add to Folder Management. The latter reports the path only in this fixture
+and does not save a real folder. Repeat at a narrow browser width.
