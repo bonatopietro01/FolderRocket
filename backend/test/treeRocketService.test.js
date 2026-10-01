@@ -15,9 +15,25 @@ test("Tree Rocket lists only direct child folders until files are requested", as
     const tree = await listTreeDirectory(root);
     assert.deepEqual(tree.folders.map(folder => folder.name), ["nested"]);
     assert.deepEqual(tree.files, []);
+    assert.equal(tree.directFileCount, 1);
+    assert.equal(tree.folders[0].directFileCount, undefined);
     const preview = await listTreeDirectory(root, {includeFiles: true});
     assert.deepEqual(preview.files.map(file => file.name), ["visible.txt"]);
     assert.equal(preview.path, root);
+});
+
+test("Tree Rocket provides bounded direct-file counts without recursively scanning child folders", async t => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "folderrocket-tree-counts-"));
+    t.after(async () => fs.rm(root, {recursive: true, force: true}));
+    const child = path.join(root, "child");
+    await fs.mkdir(path.join(child, "grandchild"), {recursive: true});
+    await fs.writeFile(path.join(child, "direct.txt"), "fixture");
+    await fs.writeFile(path.join(child, "grandchild", "nested.txt"), "fixture");
+    const tree = await listTreeDirectory(root, {includeFolderFileCounts: true});
+    assert.equal(tree.directFileCount, 0);
+    assert.equal(tree.folders[0].directFileCount, 1);
+    assert.equal(tree.folders[0].directFolderCount, 1);
+    assert.equal(tree.folderCountsLimited, false);
 });
 
 test("Tree Rocket roots are limited to the private workspace for non-admin users", async t => {

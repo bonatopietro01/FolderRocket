@@ -63,6 +63,7 @@ const {
 
 const {
     createDraft: createGmailDraft,
+    sendEmail: sendGmailEmail,
     downloadAttachment,
     disconnect: disconnectGmail,
     exchangeAuthorizationCode,
@@ -91,6 +92,7 @@ const {
 
 const {
     createDraft: createOutlookDraft,
+    sendEmail: sendOutlookEmail,
     downloadAttachment: downloadOutlookAttachment,
     disconnect: disconnectOutlook,
     exchangeAuthorizationCode: exchangeOutlookAuthorizationCode,
@@ -565,12 +567,12 @@ app.delete("/diagnostics", requireAuthenticated, async (req, res) => {
     res.json({message: "Diagnostica del backend svuotata."});
 });
 
-app.put("/settings/worlds/:worldId", requireAuthenticated, (req, res) => {
+app.put("/settings/worlds/:worldId", requireAuthenticated, async (req, res) => {
     const worldId = typeof req.params.worldId === "string" ? req.params.worldId.trim() : "";
     if (!/^[a-zA-Z0-9_-]{1,80}$/.test(worldId) || ["__proto__", "prototype", "constructor"].includes(worldId)) {
         return res.status(400).json({message: "Identificativo del pianeta non valido."});
     }
-    if (typeof req.body?.aiEnabled !== "boolean") return res.status(400).json({message: "Stato AI del pianeta non valido."});
+    if (req.body?.aiEnabled !== undefined && typeof req.body.aiEnabled !== "boolean") return res.status(400).json({message: "Stato AI del pianeta non valido."});
     const normaliseProfiles = value => {
         if (!Array.isArray(value) || value.length > 100) throw new Error("Configurazione agente o skill non valida.");
         const seen = new Set();
@@ -593,15 +595,119 @@ app.put("/settings/worlds/:worldId", requireAuthenticated, (req, res) => {
     const currentWorlds = existing.worlds && typeof existing.worlds === "object" && !Array.isArray(existing.worlds) ? existing.worlds : {};
     try {
         const currentWorld = currentWorlds[worldId] || {};
-        const nextWorld = {...currentWorld, aiEnabled: req.body.aiEnabled};
+        const nextWorld = {...currentWorld, ...(typeof req.body.aiEnabled === "boolean" ? {aiEnabled:req.body.aiEnabled} : {})};
+        if (req.body.name !== undefined) {
+            if (typeof req.body.name !== "string" || !req.body.name.trim() || req.body.name.length > 40) throw new Error("Nome del pianeta non valido.");
+            nextWorld.name = req.body.name.trim();
+        }
         for (const key of ["agents", "skills"]) {
             if (req.body[key] !== undefined) nextWorld[key] = normaliseProfiles(req.body[key]);
+        }
+        if (req.body.activityNotifications !== undefined) {
+            const service = require("./services/worldActivityEmailService");
+            let config = service.normalizeWorldActivityNotifications(req.body.activityNotifications);
+            const previous = currentWorld.activityNotifications || {};
+            if (config.enabled) {
+                const accounts = config.senderProvider === "gmail" ? await listGmailConnectedAccounts(req.user.id) : config.senderProvider === "outlook" ? await listOutlookConnectedAccounts(req.user.id) : [];
+                const account = accounts.find(item => item.blockId === config.senderBlockId);
+                if (!account) throw new Error("Select a connected sender account for this planet.");
+                config = service.validForEnable(config, account.canSend === true);
+                if (previous.enabled !== true || !config.anchorDate) config.anchorDate = service.localDateKey(new Date(), config.timeZone);
+            } else config.anchorDate = previous.anchorDate || config.anchorDate;
+            nextWorld.activityNotifications = {...config, snapshot:previous.snapshot || {activities:[],calendarEvents:[],reminders:[]}, runtime:previous.runtime || {}};
         }
         writeDashboardPreferences(req.user.id, {...existing, worlds: {...currentWorlds, [worldId]: nextWorld}});
     } catch (error) {
         return res.status(400).json({message:error instanceof Error ? error.message : "Configurazione del pianeta non valida."});
     }
     res.json({message: "Impostazione AI del pianeta salvata."});
+});
+
+function validWorldId(value) { return typeof value === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(value) && !["__proto__", "prototype", "constructor"].includes(value); }
+function readWorldActivityConfig(userId, worldId) {
+    const settings = readDashboardPreferences(userId) || {};
+    const world = settings.worlds?.[worldId] || {};
+    return {settings, world, config:require("./services/worldActivityEmailService").normalizeWorldActivityNotifications(world.activityNotifications)};
+}
+
+app.get("/settings/worlds/:worldId/activity-notifications", requireAuthenticated, (req, res) => {
+    const worldId = String(req.params.worldId || "").trim();
+    if (!validWorldId(worldId)) return res.status(400).json({message:"Invalid planet identifier."});
+    const {config, world} = readWorldActivityConfig(req.user.id, worldId);
+    const runtime = world.activityNotifications?.runtime && typeof world.activityNotifications.runtime === "object" ? world.activityNotifications.runtime : {};
+    res.json({config, runtime, nextDigestAt:require("./services/worldActivityEmailService").nextDigestAt(world.activityNotifications, runtime), scheduler:"Runs every 30 seconds while FolderRocket backend is active."});
+});
+
+app.put("/settings/worlds/:worldId/activity-notifications", requireAuthenticated, (req, res) => {
+    const worldId = String(req.params.worldId || "").trim();
+    if (!validWorldId(worldId)) return res.status(400).json({message:"Invalid planet identifier."});
+    const service = require("./services/worldActivityEmailService");
+    try {
+        const {settings, world, config:previous} = readWorldActivityConfig(req.user.id, worldId);
+        let config = service.normalizeWorldActivityNotifications(req.body?.config);
+        if (config.enabled) {
+            const accountList = config.senderProvider === "gmail" ? awaitableListGmailAccounts(req.user.id) : awaitableListOutlookAccounts(req.user.id);
+            if (accountList instanceof Promise) throw new Error("Account catalog is loading; retry saving in a moment.");
+            const account = accountList.find(item => item.blockId === config.senderBlockId);
+            if (!account) throw new Error("Select a connected sender account for this planet.");
+            config = service.validForEnable(config, account.canSend === true);
+            if (!previous.enabled || !previous.anchorDate) config.anchorDate = service.localDateKey(new Date(), config.timeZone);
+        } else config.anchorDate = previous.anchorDate || config.anchorDate;
+        const currentNotifications = world.activityNotifications && typeof world.activityNotifications === "object" ? world.activityNotifications : {};
+        const nextWorld = {...world, activityNotifications:{...config, snapshot:currentNotifications.snapshot || {activities:[],calendarEvents:[],reminders:[]}, runtime:currentNotifications.runtime || {}}};
+        writeDashboardPreferences(req.user.id, {...settings, worlds:{...(settings.worlds || {}), [worldId]:nextWorld}});
+        res.json({config, runtime:nextWorld.activityNotifications.runtime});
+    } catch (error) { res.status(400).json({message:error instanceof Error ? error.message : "Unable to save world digest settings."}); }
+});
+
+function awaitableListGmailAccounts(userId) {
+    try { return require("./services/emailTokenStore").listConnections("gmail", userId).map(connection => ({blockId:connection.blockId,canSend:!connection.scopes || String(connection.scopes).split(/\s+/).includes("https://www.googleapis.com/auth/gmail.compose")})); }
+    catch { return []; }
+}
+function awaitableListOutlookAccounts(userId) {
+    try { return require("./services/emailTokenStore").listConnections("outlook", userId).map(connection => ({blockId:connection.blockId,canSend:String(connection.scopes || "").split(/\s+/).includes("https://graph.microsoft.com/Mail.Send")})); }
+    catch { return []; }
+}
+
+app.post("/settings/worlds/:worldId/activity-snapshot", requireAuthenticated, (req, res) => {
+    const worldId = String(req.params.worldId || "").trim();
+    if (!validWorldId(worldId)) return res.status(400).json({message:"Invalid planet identifier."});
+    const {settings, world} = readWorldActivityConfig(req.user.id, worldId);
+    const current = world.activityNotifications && typeof world.activityNotifications === "object" ? world.activityNotifications : {};
+    if (current.enabled !== true) return res.status(409).json({message:"Activity notifications are disabled for this planet."});
+    const snapshot = require("./services/worldActivityEmailService").selectActivitySnapshotSources(req.body?.snapshot, current.sources);
+    writeDashboardPreferences(req.user.id, {...settings, worlds:{...(settings.worlds || {}), [worldId]:{...world, activityNotifications:{...current, snapshot}}}});
+    res.json({saved:true, updatedAt:snapshot.updatedAt});
+});
+
+app.post("/settings/worlds/:worldId/activity-notifications/preview", requireAuthenticated, (req, res) => {
+    const worldId = String(req.params.worldId || "").trim();
+    if (!validWorldId(worldId)) return res.status(400).json({message:"Invalid planet identifier."});
+    try {
+        const {world} = readWorldActivityConfig(req.user.id, worldId);
+        const digest = require("./services/worldActivityEmailService").buildWorldActivityDigest({worldName:String(req.body?.worldName || world.name || "Workspace").slice(0,80), config:req.body?.config, snapshot:req.body?.snapshot, emailAlerts:world.emailAlerts});
+        res.json({preview:digest});
+    } catch (error) { res.status(400).json({message:error instanceof Error ? error.message : "Unable to build digest preview."}); }
+});
+
+app.post("/settings/worlds/:worldId/activity-notifications/test", requireAuthenticated, async (req, res) => {
+    const worldId = String(req.params.worldId || "").trim();
+    if (!validWorldId(worldId)) return res.status(400).json({message:"Invalid planet identifier."});
+    try {
+        const {settings, world} = readWorldActivityConfig(req.user.id, worldId);
+        const config = require("./services/worldActivityEmailService").normalizeWorldActivityNotifications(req.body?.config);
+        const accounts = config.senderProvider === "gmail" ? await listGmailConnectedAccounts(req.user.id) : await listOutlookConnectedAccounts(req.user.id);
+        const account = accounts.find(item => item.blockId === config.senderBlockId);
+        if (!account) throw new Error("The selected sender account is no longer connected.");
+        require("./services/worldActivityEmailService").validForEnable({...config, enabled:true, sources:config.sources.length ? config.sources : ["dailyActivities"]}, account.canSend === true);
+        const digest = require("./services/worldActivityEmailService").buildWorldActivityDigest({worldName:String(req.body?.worldName || world.name || "Workspace").slice(0,80), config, snapshot:req.body?.snapshot, emailAlerts:world.emailAlerts});
+        const sender = config.senderProvider === "gmail" ? sendGmailEmail : sendOutlookEmail;
+        await sender({to:config.recipient, subject:`Test · ${digest.subject}`, text:digest.text}, req.user.id, config.senderBlockId);
+        const activityNotifications = world.activityNotifications && typeof world.activityNotifications === "object" ? world.activityNotifications : {};
+        const history = require("./services/worldActivityEmailService").appendDigestHistory(activityNotifications.runtime, {at:new Date().toISOString(),kind:"test",status:"sent"});
+        writeDashboardPreferences(req.user.id, {...settings, worlds:{...(settings.worlds || {}), [worldId]:{...world, activityNotifications:{...activityNotifications, runtime:history}}}});
+        res.json({sent:true, message:"Test email sent at your explicit request."});
+    } catch (error) { res.status(400).json({message:error instanceof Error ? error.message : "Unable to send test email."}); }
 });
 
 app.put("/settings/active-world", requireAuthenticated, (req, res) => {
@@ -1707,10 +1813,31 @@ app.post("/devices/phone/:action", requireAuthenticated, requireAdministrator, a
     } catch (error) { res.status(400).json({message: error.message}); }
 });
 
+app.get("/applications/catalog", requireAuthenticated, async (req, res) => {
+    try {
+        const result = await require("./services/windowsTask").windowsTask("open-application.ps1", {list:true}, 25000);
+        const applications = Array.isArray(result?.applications) ? result.applications.filter(item => item && typeof item.name === "string" && typeof item.appId === "string") : [];
+        res.json({applications, source:"Windows Start menu"});
+    } catch (error) { res.status(400).json({message:error.message || "Unable to read the Windows Start menu catalog."}); }
+});
+
+app.post("/applications/open-installed", requireAuthenticated, async (req, res) => {
+    try {
+        const appId = typeof req.body?.appId === "string" ? req.body.appId.trim() : "";
+        if (!appId || appId.length > 512) throw new Error("Invalid application identifier.");
+        res.json(await require("./services/windowsTask").windowsTask("open-application.ps1", {appId}));
+    } catch (error) { res.status(400).json({message:error.message || "Unable to open the selected Start menu application."}); }
+});
+
 app.post("/applications/open", requireAuthenticated, requireAdministrator, async (req, res) => {
     try {
-        if (typeof req.body?.name !== "string" || !req.body.name.trim() || req.body.name.length > 120) throw new Error("Invalid application name.");
-        res.json(await require("./services/windowsTask").windowsTask("open-application.ps1", {name: req.body.name}));
+        if (typeof req.body?.appId === "string" && req.body.appId.trim()) {
+            if (req.body.appId.length > 512) throw new Error("Invalid application identifier.");
+            res.json(await require("./services/windowsTask").windowsTask("open-application.ps1", {appId:req.body.appId}));
+        } else {
+            if (typeof req.body?.name !== "string" || !req.body.name.trim() || req.body.name.length > 120) throw new Error("Invalid application name.");
+            res.json(await require("./services/windowsTask").windowsTask("open-application.ps1", {name: req.body.name}));
+        }
     } catch (error) { res.status(400).json({message: error.message || "Unable to open application."}); }
 });
 
@@ -1843,7 +1970,7 @@ app.post("/filesystem/tree-children", requireAuthenticated, async (req, res) => 
             }
             directory = directoryRealPath;
         }
-        const contents = await listTreeDirectory(directory, {includeFiles: req.body?.includeFiles === true});
+        const contents = await listTreeDirectory(directory, {includeFiles: req.body?.includeFiles === true, includeFolderFileCounts: req.body?.includeFolderFileCounts === true});
         res.json(contents);
     } catch (error) {
         const message = error instanceof Error ? error.message : "Unable to read this folder.";
@@ -2510,7 +2637,8 @@ app.get("/auth/outlook/start", (req, res) => {
         const authorizationUrl = getOutlookAuthorizationUrl(req.user.id, readAlertBlockId(req), {
             origin,
             frontendOrigin: origin,
-            includeTeams: req.query?.teams === "1"
+            includeTeams: req.query?.teams === "1",
+            includeSend: req.query?.send === "1"
         });
         if (req.query?.format === "json") return res.json({authorizationUrl});
         res.redirect(authorizationUrl);

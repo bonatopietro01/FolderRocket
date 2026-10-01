@@ -71,7 +71,7 @@ export default function ChangeFormatPanel({files, onRemove, onComplete}: Props) 
         </h2>
 
         <label className="formatChoiceField">
-            <span className="formatFieldCopy"><strong>Format source</strong><small>Fonts, spacing and structure come from this file</small></span>
+            <span className="formatFieldCopy"><strong>Format source</strong></span>
             <span className="formatSelectShell"><FileText size={15}/><select aria-label="Format source file" value={mother?.path || ""} disabled={busy || !files.length} onChange={event => setMother(event.target.value)}><option value="" disabled>Choose a source file</option>{files.map(file => <option key={file.path} value={file.path}>{formatLabel(file.name)} · {file.name}</option>)}</select></span>
         </label>
 
@@ -84,7 +84,7 @@ export default function ChangeFormatPanel({files, onRemove, onComplete}: Props) 
                     <span className="fileFormatBadge">{formatLabel(file.name)}</span>
                     <button type="button" title={`Remove ${file.name} from format queue`} disabled={busy} onClick={() => onRemove(file.path)}><X size={13}/></button>
                 </div>;
-            }) : <p className="conversionEmptyState">Add one source file and at least one target file.</p>}
+            }) : null}
         </div>
 
         {image ? <div className="formatOptionSummary">

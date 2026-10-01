@@ -1,4 +1,4 @@
-export type DailyActivityKind = "gmail"|"outlook"|"recent"|"phone"|"domain"|"usb"|"fire"|"studio"|"folders"|"applications";
+export type DailyActivityKind = "gmail"|"outlook"|"recent"|"phone"|"domain"|"usb"|"fire"|"studio"|"folders"|"applications"|"teams";
 export type DailyActivityUndo =
  | {type:"move";entries:Array<{from:string;to:string}>}
  | {type:"trash-created";paths:string[]};

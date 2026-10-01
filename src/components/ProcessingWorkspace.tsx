@@ -7,6 +7,7 @@ import type {ManagedFolder} from "./FolderManagement";
 import FireMountain from "./FireMountain";
 import ChangeFormatPanel from "./ChangeFormatPanel";
 import {recordDailyActivity} from "../dailyActivity";
+import {folderColourMap} from "../folderProjects";
 
 interface FileEntry { name: string; path: string; createdAt?: string; size?: number; sourceName?: string; }
 interface Props { folders: ManagedFolder[]; onUpdate: (id: string, change: Partial<ManagedFolder>) => void; storageScope?: string; }
@@ -88,6 +89,7 @@ export default function ProcessingWorkspace({folders, onUpdate, storageScope = "
     const [deliveryBusy, setDeliveryBusy] = useState(false);
     const [keepingPaths, setKeepingPaths] = useState<string[]>([]);
     const selected = folders.find(folder => folder.id === selectedId);
+    const folderColours = useMemo(() => folderColourMap(folders), [folders]);
 
     useEffect(() => {
         const controller = new AbortController();
@@ -237,7 +239,7 @@ export default function ProcessingWorkspace({folders, onUpdate, storageScope = "
     return <main className="processingPage">
         <aside className="processingFolders">
             <div className="processingFoldersHead"><h2>Folders</h2></div>
-            <div className="processingFolderList">{folders.map(folder => <button type="button" className={folder.id === selectedId ? "processingFolder selected" : "processingFolder"} onClick={() => setSelectedId(folder.id)} key={folder.id}><FolderOpen size={17}/><span><strong>{folder.name}</strong></span></button>)}</div>
+            <div className="processingFolderList">{folders.map(folder => {const folderColour = folderColours.get(folder.id); return <button type="button" className={folder.id === selectedId ? "processingFolder selected" : "processingFolder"} style={folderColour ? {background: `color-mix(in srgb, ${folderColour} 13%, white)`, borderColor: folder.appearance?.borderColor && /^#[a-f\d]{6}$/i.test(folder.appearance.borderColor) ? `color-mix(in srgb, ${folder.appearance.borderColor} 42%, white)` : undefined} : undefined} onClick={() => setSelectedId(folder.id)} key={folder.id}><FolderOpen size={17}/><span><strong>{folder.name}</strong></span></button>;})}</div>
             <section className="processingQuickPreview">{previewFile ? <div className="processingPreviewContent">{previewContent?.kind === "loading" && <p>Loading file preview…</p>}{previewContent?.kind === "text" && <pre>{previewContent.text || "No readable text was found."}</pre>}{previewContent?.kind === "image" && previewContent.url && <img src={`${API_BASE_URL}${previewContent.url}`} alt={`Preview of ${previewFile.name}`}/>} {previewContent?.kind === "pdf" && previewContent.url && <iframe src={`${API_BASE_URL}${previewContent.url}`} title={`Preview of ${previewFile.name}`}/>} {previewContent?.kind === "unavailable" && <p>{previewContent.message || "A preview is not available for this file."}</p>}<div className="processingPreviewCaption"><FileKindIcon name={previewFile.name}/><strong title={previewFile.name}>{previewFile.name}</strong><em>{queuePaths.has(previewFile.path) ? "Ready" : "Selected"}</em></div></div> : <p>Select one file to preview it here.</p>}</section>
         </aside>
         <section className="processingFiles">
@@ -247,9 +249,9 @@ export default function ProcessingWorkspace({folders, onUpdate, storageScope = "
         <aside className="conversionStack">
             <section className="conversionPanel conversionToolCard">
                 <h2><span className="conversionCardHeading"><FileCog size={17}/><span>Local conversion<small>Create a copy in another format</small></span></span>{converting&&<RotateCw className="conversionHeaderSpinner local" size={14}/>}</h2>
-                <label className="formatChoiceField localFormatChoice"><span className="formatFieldCopy"><strong>Output format</strong><small>The original file remains unchanged</small></span><span className="formatSelectShell"><FormatIcon format={format}/><select aria-label="Output format" value={format} onChange={event => setFormat(event.target.value)}><option>PDF</option><option>TXT</option><option>CSV</option><option>XLSX</option></select></span></label>
+                <label className="formatChoiceField localFormatChoice"><span className="formatFieldCopy"><strong>Output format</strong></span><span className="formatSelectShell"><FormatIcon format={format}/><select aria-label="Output format" value={format} onChange={event => setFormat(event.target.value)}><option>PDF</option><option>TXT</option><option>CSV</option><option>XLSX</option></select></span></label>
                 {queue.length > 0 && <div className="studioQueueHeading"><span>Files to convert</span><strong>{queue.length}</strong></div>}
-                <div className="conversionQueue localConversionQueue">{queue.length ? queue.map(file => <div className="formatQueueRow" key={file.path} onClick={() => choosePreview(file)}><span className="formatQueueName" title={file.name}>{file.name}</span><span className="fileFormatBadge">{extensionOf(file.name).toUpperCase()}</span><button type="button" title="Remove from conversion queue" onClick={event => { event.stopPropagation(); setQueue(current => current.filter(item => item.path !== file.path)); }} disabled={converting}><X size={13}/></button></div>) : <p className="conversionEmptyState">Add files with the green arrow.</p>}</div>
+                <div className="conversionQueue localConversionQueue">{queue.length ? queue.map(file => <div className="formatQueueRow" key={file.path} onClick={() => choosePreview(file)}><span className="formatQueueName" title={file.name}>{file.name}</span><span className="fileFormatBadge">{extensionOf(file.name).toUpperCase()}</span><button type="button" title="Remove from conversion queue" onClick={event => { event.stopPropagation(); setQueue(current => current.filter(item => item.path !== file.path)); }} disabled={converting}><X size={13}/></button></div>) : null}</div>
                 {queue.length > 0 && <button className="clearConversionQueue" type="button" onClick={() => setQueue([])} disabled={converting}>Clear list</button>}
                 <button type="button" className={converting ? "convertButton converting" : "convertButton"} disabled={!queue.length || converting} onClick={() => void convert()} title="Convert"><RotateCw className={converting ? "spin" : ""} size={16}/>{converting ? "Converting…" : "Convert files"}</button>
                 {converting && <p className="conversionProgress">Converting files…</p>}{queue.length > 0 && <p className="conversionCount">{`${queue.length} file${queue.length === 1 ? "" : "s"} ready to convert`}</p>}{status && <p className="conversionCount">{status}</p>}{converted.length > 0 && convertedSources.length > 0 && <button className="sendConvertedButton" type="button" onClick={() => window.dispatchEvent(new CustomEvent("folderrocket-add-to-fire", {detail: convertedSources}))}>Send original files to Fire Mountain</button>}

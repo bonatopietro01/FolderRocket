@@ -11,11 +11,11 @@ let scenario = 2;
 const children = (count: number) => Array.from({length: count}, (_, index) => ({name: `Project ${index + 1}`, path: `${rootPath}\\Project-${index + 1}`}));
 window.fetch = async (input, init) => {
     const url = new URL(String(input), location.href);
-    if (url.pathname === '/filesystem/tree-roots') return Response.json({roots: [{name: 'Fixture', path: rootPath, kind: 'computer'}]});
+    if (url.pathname === '/filesystem/tree-roots') return Response.json({roots: [{name: 'Fixture', path: rootPath, kind: 'computer', directFileCount: 3}]});
     if (url.pathname === '/filesystem/tree-children') {
         const body = JSON.parse(String(init?.body || '{}'));
         const isRoot = body.path === rootPath;
-        return Response.json({path: body.path, folders: isRoot ? children(scenario) : [], files: body.includeFiles ? [
+        return Response.json({path: body.path, directFileCount: isRoot ? 3 : 1, folders: isRoot ? children(scenario).map((item,index)=>({...item,directFileCount:index%3})) : [], folderCountsLimited:false, files: body.includeFiles ? [
             {name: 'Plans.pdf', path: `${body.path}\\Plans.pdf`},
             {name: 'Report.docx', path: `${body.path}\\Report.docx`},
             {name: 'Image.png', path: `${body.path}\\Image.png`}
@@ -51,7 +51,6 @@ export default function Fixture() {
                 <div className="foldersContainer">{groups.map(group => <div key={group.key} className={`dashboardProjectGroup${group.members.length > 1 ? ' linkedProject' : ''}`}>
                     {group.members.length > 1 && <div className="dashboardProjectLabel"><span>{group.symbol}</span><small>{group.members[0].description}</small></div>}
                     {group.members.map(entry => <div key={entry.path} className="folderOrderItem" style={{height: 94, border: '1px solid #bccfdc', borderRadius: 9, background: '#f6fbff', padding: 8, boxSizing: 'border-box'}}>
-                        {group.members.length > 1 && <span className="dashboardTopProjectTag" aria-hidden="true"><span>{group.symbol}</span><small>{group.members[0].description}</small></span>}
                         <strong>{entry.name}</strong><small>{entry.description || 'No project description'}</small>
                     </div>)}
                 </div>)}</div>

@@ -1,6 +1,9 @@
-import {memo, useCallback, useState, type CSSProperties} from "react";
-import {ArrowLeft, Check, CirclePlus, LoaderCircle, Orbit, Pencil, Plus, Send, Sparkles, Trash2, X} from "lucide-react";
-import type {WorldAgentProfile, WorldAssistantCapability, WorldAssistantModel, WorkspaceWorld, WorldPlanetStyle, WorldSkillProfile} from "../worlds";
+import {memo, useCallback, useEffect, useState, type CSSProperties} from "react";
+import {ArrowLeft, BellRing, CalendarDays, Check, CirclePlus, Clock3, LoaderCircle, Mail, Orbit, Pencil, Plus, Send, Sparkles, Trash2, X} from "lucide-react";
+import type {WorldActivityNotifications, WorldAgentProfile, WorldAssistantCapability, WorldAssistantModel, WorkspaceWorld, WorldPlanetStyle, WorldSkillProfile, WorldDigestSource} from "../worlds";
+import {normalizeActivityNotifications} from "../worlds";
+import {API_BASE_URL} from "../api";
+import {readWorldActivitySnapshot, selectWorldActivitySnapshot} from "../worldActivitySnapshot";
 import "../worlds.css";
 
 interface Props {
@@ -17,6 +20,17 @@ interface Props {
 }
 
 const PLANET_COLORS = ["#5dbdff", "#c28cff", "#ff967d", "#f4c95d", "#79d7a3", "#f17db2", "#8c9dff", "#72d6d1"];
+interface DigestAccount {blockId:string; email:string; label:string; canSend:boolean;}
+interface DigestHistoryEntry {at:string;kind:"scheduled"|"test";status:string;error?:string;}
+interface DigestRuntime {lastSentAt?:string;lastStatus?:string;lastError?:string;nextDigestAt?:string|null;history?:DigestHistoryEntry[];}
+const DIGEST_SOURCE_OPTIONS: Array<{id:WorldDigestSource; label:string; detail:string}> = [
+    {id:"dailyActivities",label:"Daily Job activity",detail:"Recent file and workspace actions (summary only)"},
+    {id:"reminders",label:"Post-it reminders",detail:"Reminder title and due time, not note body"},
+    {id:"calendar",label:"Google Calendar",detail:"Event title, date and time"},
+    {id:"gmailAlerts",label:"Gmail alerts",detail:"Counts from existing saved alert checks"},
+    {id:"outlookAlerts",label:"Outlook alerts",detail:"Counts from existing saved alert checks"},
+    {id:"teams",label:"Teams activity",detail:"Counts from chats/channels you open in FolderRocket; no message text"}
+];
 
 export function Planet({world, large = false}: {world: WorkspaceWorld; large?: boolean}) {
     return <span className={`worldPlanet ${world.style}${large ? " large" : ""}${world.aiEnabled ? " aiEnabled" : ""}`} style={{"--planet-color": world.color} as CSSProperties} aria-hidden="true"><i/><b/><em/>{world.aiEnabled && <span className="worldAiSatelliteOrbit"><i/></span>}</span>;
@@ -47,6 +61,12 @@ const WorldGrid = memo(function WorldGrid({worlds, activeWorldId, switchingWorld
 
 export default function ChangeWorld({worlds, activeWorldId, storageScope, onSelect, onInvokeAssistant, switchError, onBack, onAdd, onUpdate, onDelete}: Props) {
     const [editingWorld, setEditingWorld] = useState<WorkspaceWorld | null>(null);
+    const [digestAccounts, setDigestAccounts] = useState<{gmail:DigestAccount[];outlook:DigestAccount[]}>({gmail:[],outlook:[]});
+    const [digestAccountsBusy, setDigestAccountsBusy] = useState(false);
+    const [digestRuntime, setDigestRuntime] = useState<DigestRuntime>({});
+    const [digestPreview, setDigestPreview] = useState("");
+    const [digestPreviewBusy, setDigestPreviewBusy] = useState(false);
+    const [digestTestBusy, setDigestTestBusy] = useState(false);
     const [agentName, setAgentName] = useState("");
     const [skillName, setSkillName] = useState("");
     const [deletingWorld, setDeletingWorld] = useState(false);
@@ -59,7 +79,25 @@ export default function ChangeWorld({worlds, activeWorldId, storageScope, onSele
     const [postItSaved, setPostItSaved] = useState(false);
     const [saveError, setSaveError] = useState("");
 
-    const beginEditWorld = useCallback((world: WorkspaceWorld) => setEditingWorld({...world}), []);
+    const beginEditWorld = useCallback((world: WorkspaceWorld) => {setDigestAccountsBusy(true);setDigestRuntime({});setDigestPreview("");setEditingWorld({...world, activityNotifications:normalizeActivityNotifications(world.activityNotifications)});}, []);
+    const digestEditingWorldId = editingWorld?.id;
+
+    useEffect(() => {
+        const worldId = digestEditingWorldId;
+        if (!worldId) return;
+        const controller = new AbortController();
+        void Promise.all([
+            fetch(`${API_BASE_URL}/email/gmail/accounts`, {credentials:"include", signal:controller.signal}).then(async response => response.ok ? (await response.json() as {accounts?:DigestAccount[]}).accounts || [] : []),
+            fetch(`${API_BASE_URL}/email/outlook/accounts`, {credentials:"include", signal:controller.signal}).then(async response => response.ok ? (await response.json() as {accounts?:DigestAccount[]}).accounts || [] : []),
+            fetch(`${API_BASE_URL}/settings/worlds/${encodeURIComponent(worldId)}/activity-notifications`, {credentials:"include", signal:controller.signal}).then(async response => response.ok ? await response.json() as {runtime?:DigestRuntime;config?:WorldActivityNotifications;nextDigestAt?:string|null} : {})
+        ]).then(([gmail,outlook,status]) => {
+            if (controller.signal.aborted) return;
+            setDigestAccounts({gmail:Array.isArray(gmail)?gmail:[],outlook:Array.isArray(outlook)?outlook:[]});
+            setDigestRuntime({...status.runtime,nextDigestAt:status.nextDigestAt});
+            if (status.config) setEditingWorld(current => current?.id === worldId ? {...current, activityNotifications:normalizeActivityNotifications(status.config)} : current);
+        }).catch(() => { if (!controller.signal.aborted) setDigestAccounts({gmail:[],outlook:[]}); }).finally(() => { if (!controller.signal.aborted) setDigestAccountsBusy(false); });
+        return () => controller.abort();
+    }, [digestEditingWorldId]);
 
     async function saveWorld() {
         if (!editingWorld) return;
@@ -76,6 +114,52 @@ export default function ChangeWorld({worlds, activeWorldId, storageScope, onSele
         } catch (error) {
             setSaveError(error instanceof Error ? error.message : "Non è stato possibile salvare il pianeta.");
         }
+    }
+
+    function updateDigest(changes: Partial<WorldActivityNotifications>) {
+        setEditingWorld(current => current ? {...current, activityNotifications:{...normalizeActivityNotifications(current.activityNotifications), ...changes}} : current);
+    }
+
+    async function previewActivityDigest() {
+        if (!editingWorld) return;
+        const config = normalizeActivityNotifications(editingWorld.activityNotifications);
+        setDigestPreviewBusy(true); setDigestPreview(""); setSaveError("");
+        try {
+            const response = await fetch(`${API_BASE_URL}/settings/worlds/${encodeURIComponent(editingWorld.id)}/activity-notifications/preview`, {method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({worldName:editingWorld.name,config,snapshot:selectWorldActivitySnapshot(readWorldActivitySnapshot(storageScope),config.sources)})});
+            const data = await response.json().catch(() => ({})) as {preview?:{subject?:string;text?:string};message?:string};
+            if (!response.ok) throw new Error(data.message || "Could not build preview.");
+            setDigestPreview(`${data.preview?.subject || "FolderRocket update"}\n\n${data.preview?.text || "No preview content."}`);
+        } catch (error) { setSaveError(error instanceof Error ? error.message : "Could not build preview."); }
+        finally { setDigestPreviewBusy(false); }
+    }
+
+    async function sendDigestTest() {
+        if (!editingWorld || digestTestBusy) return;
+        const config = normalizeActivityNotifications(editingWorld.activityNotifications);
+        if (!window.confirm(`Send one real test email to ${config.recipient || "the configured recipient"}?`)) return;
+        setDigestTestBusy(true); setSaveError("");
+        try {
+            const response = await fetch(`${API_BASE_URL}/settings/worlds/${encodeURIComponent(editingWorld.id)}/activity-notifications/test`, {method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({worldName:editingWorld.name,config,snapshot:selectWorldActivitySnapshot(readWorldActivitySnapshot(storageScope),config.sources)})});
+            const data = await response.json().catch(() => ({})) as {message?:string};
+            if (!response.ok) throw new Error(data.message || "Test email could not be sent.");
+            const sentAt = new Date().toISOString();
+            setDigestRuntime(current => ({...current,lastStatus:"test-sent",lastSentAt:sentAt,history:[...(current.history || []),{at:sentAt,kind:"test" as const,status:"sent"}].slice(-25)}));
+        } catch (error) { setSaveError(error instanceof Error ? error.message : "Test email could not be sent."); }
+        finally { setDigestTestBusy(false); }
+    }
+
+    async function authorizeOutlookSending() {
+        if (!editingWorld) return;
+        const config = normalizeActivityNotifications(editingWorld.activityNotifications);
+        const blockId = config.senderProvider === "outlook" ? config.senderBlockId : "";
+        if (!blockId) { setSaveError("Select an Outlook account first."); return; }
+        try {
+            const response = await fetch(`${API_BASE_URL}/auth/outlook/start?blockId=${encodeURIComponent(blockId)}&send=1&format=json`, {credentials:"include",headers:{Accept:"application/json"}});
+            const data = await response.json().catch(() => ({})) as {authorizationUrl?:string;message?:string};
+            if (!response.ok || !data.authorizationUrl) throw new Error(data.message || "Microsoft consent could not start.");
+            const opened = window.folderRocketDesktop ? await window.folderRocketDesktop.openExternal(data.authorizationUrl) : false;
+            if (!opened) { const popup = window.open(data.authorizationUrl,"_blank","noopener,noreferrer"); if (!popup) window.location.assign(data.authorizationUrl); }
+        } catch (error) { setSaveError(error instanceof Error ? error.message : "Microsoft consent could not start."); }
     }
 
     function addAgent() {
@@ -135,11 +219,14 @@ export default function ChangeWorld({worlds, activeWorldId, storageScope, onSele
         finally { setDeletingWorld(false); }
     }
 
+    const digestConfig = editingWorld ? normalizeActivityNotifications(editingWorld.activityNotifications) : null;
+    const digestSenderAccounts = digestConfig?.senderProvider ? digestAccounts[digestConfig.senderProvider] : [];
+
     return <main className={editingWorld ? "changeWorldPage worldEditorOpen" : "changeWorldPage"}>
         <div className="changeWorldBackdrop" aria-hidden="true"/>
         <header className="changeWorldHeader">
             <button type="button" className="worldBackButton" onClick={onBack} disabled={Boolean(switchingWorldId)}><ArrowLeft size={16}/>Torna a FolderRocket</button>
-            <div className="changeWorldTitle"><Orbit size={19}/><div><h1>Change World</h1><p>Scegli l’ambiente in cui vuoi lavorare</p></div></div>
+            <div className="changeWorldTitle"><Orbit size={19}/><div><h1>Fly to Another Planet</h1><p>Scegli l’ambiente in cui vuoi lavorare</p></div></div>
             <button type="button" className="worldAddButton" onClick={() => {setEditingWorld(onAdd());setAgentName("");setSkillName("");}} disabled={Boolean(switchingWorldId)}><CirclePlus size={16}/>Aggiungi pianeta</button>
         </header>
 
@@ -163,6 +250,25 @@ export default function ChangeWorld({worlds, activeWorldId, storageScope, onSele
                     <section className="worldAgentsEditor"><div className="worldAgentsHeading"><div><h3>Skill del pianeta</h3><p>Competenze e istruzioni riutilizzabili solo qui.</p></div><span>{editingWorld.skills.length}</span></div>
                         <div className="worldAgentCreate"><input value={skillName} maxLength={60} onChange={event => setSkillName(event.target.value)} onKeyDown={event => {if(event.key === "Enter"){event.preventDefault();addSkill();}}} placeholder="Nome della skill"/><button type="button" onClick={addSkill} disabled={!skillName.trim()}><Plus size={14}/>Aggiungi</button></div>
                         <div className="worldAgentList">{editingWorld.skills.map(skill => <article key={skill.id}><div className="worldAgentTitle"><label><input type="checkbox" checked={skill.enabled} onChange={event => updateSkill(skill.id, {enabled: event.target.checked})}/><input aria-label="Nome skill" value={skill.name} onChange={event => updateSkill(skill.id, {name: event.target.value})}/></label><button type="button" title={`Rimuovi ${skill.name}`} aria-label={`Rimuovi ${skill.name}`} onClick={() => setEditingWorld({...editingWorld, skills: editingWorld.skills.filter(item => item.id !== skill.id)})}><Trash2 size={14}/></button></div><input className="worldProfileDescription" aria-label={`Descrizione skill ${skill.name}`} value={skill.description} maxLength={240} onChange={event => updateSkill(skill.id, {description: event.target.value})} placeholder="Descrizione breve"/><textarea value={skill.instructions} maxLength={2000} onChange={event => updateSkill(skill.id, {instructions: event.target.value})} placeholder="Istruzioni della skill…"/><div className="worldAssistantOptions"><label>Modello condiviso<select value={skill.model||"gpt-4.1-mini"} onChange={event=>updateSkill(skill.id,{model:event.target.value as WorldAssistantModel})}><option value="gpt-4.1-mini">GPT-4.1 mini · rapido</option><option value="gpt-4.1">GPT-4.1 · avanzato</option></select></label><label><input type="checkbox" checked={(skill.capabilities||[]).includes("search-files")} onChange={event=>updateSkill(skill.id,{capabilities:event.target.checked?[...new Set([...(skill.capabilities||[]),"search-files" as const])]:skill.capabilities.filter(item=>item!=="search-files")})}/>Cerca nomi file nelle cartelle di questo pianeta</label><label><input type="checkbox" checked={(skill.capabilities||[]).includes("draft-post-it")} onChange={event=>updateSkill(skill.id,{capabilities:event.target.checked?[...new Set([...(skill.capabilities||[]),"draft-post-it" as const])]:skill.capabilities.filter(item=>item!=="draft-post-it")})}/>Consenti di salvare la risposta come post-it (con conferma)</label></div><button type="button" className="worldInvokeButton" disabled={!canInvoke(editingWorld.id, skill.enabled) || !editingWorld.aiEnabled} title={activeWorldId !== editingWorld.id ? "Entra in questo pianeta prima di richiamare la skill" : undefined} onClick={() => {setInvoking({worldId:editingWorld.id,profileId:skill.id,kind:"skill",name:skill.name,instructions:skill.instructions,model:skill.model||"gpt-4.1-mini",capabilities:skill.capabilities||[]});setInvokePrompt("");setInvokeResult("");setInvokeError("");}}>Richiama con AI</button></article>)}{!editingWorld.skills.length && <p className="worldAgentsEmpty">Non hai ancora aggiunto skill a questo pianeta.</p>}</div>
+                    </section>
+                    <section className="worldActivityEmailEditor">
+                        <div className="worldAgentsHeading"><div><h3><BellRing size={16}/>Alert and email summaries</h3><p>Independent settings for this planet. Nothing is sent until you explicitly enable and save it.</p></div><label className="worldDigestEnable"><input type="checkbox" checked={digestConfig?.enabled === true} onChange={event => updateDigest({enabled:event.target.checked})}/>Enable scheduled emails</label></div>
+                        <div className="worldDigestGrid">
+                            <label>Sender provider<select value={digestConfig?.senderProvider || ""} onChange={event => updateDigest({senderProvider:event.target.value as WorldActivityNotifications["senderProvider"],senderBlockId:""})}><option value="">Choose provider</option><option value="gmail">Gmail</option><option value="outlook">Outlook</option></select></label>
+                            <label>Sender account<select value={digestConfig?.senderBlockId || ""} disabled={!digestConfig?.senderProvider || digestAccountsBusy} onChange={event => updateDigest({senderBlockId:event.target.value})}><option value="">{digestAccountsBusy ? "Loading accounts…" : "Choose a connected account"}</option>{digestSenderAccounts.map(account => <option key={account.blockId} value={account.blockId}>{account.email || account.label}{account.canSend ? " · can send" : " · sending not authorized"}</option>)}</select></label>
+                            <label>Recipient email<input type="email" maxLength={254} value={digestConfig?.recipient || ""} onChange={event => updateDigest({recipient:event.target.value})} placeholder="you@example.com"/></label>
+                            <label>Repeat every N days<input type="number" min={1} max={30} value={digestConfig?.everyDays ?? 1} onChange={event => updateDigest({everyDays:Math.max(1,Math.min(30,Number(event.target.value)||1))})}/></label>
+                            <label><Clock3 size={13}/>Local send time<input type="time" value={digestConfig?.time || "08:00"} onChange={event => updateDigest({time:event.target.value})}/></label>
+                            <label><CalendarDays size={13}/>Calendar range<select value={digestConfig?.calendarWindow || "today"} onChange={event => updateDigest({calendarWindow:event.target.value as "today"|"tomorrow"|"week"})}><option value="today">Today</option><option value="tomorrow">Tomorrow</option><option value="week">This week</option></select></label>
+                        </div>
+                        <fieldset className="worldDigestSources"><legend>Included sources</legend>{DIGEST_SOURCE_OPTIONS.map(source => <label key={source.id}><input type="checkbox" checked={digestConfig?.sources.includes(source.id) || false} onChange={event => updateDigest({sources:event.target.checked ? [...new Set([...(digestConfig?.sources || []),source.id])] : (digestConfig?.sources || []).filter(item => item !== source.id)})}/><span><strong>{source.label}</strong><small>{source.detail}</small></span></label>)}</fieldset>
+                        {digestConfig?.senderProvider === "outlook" && digestConfig.senderBlockId && !digestSenderAccounts.find(account => account.blockId === digestConfig.senderBlockId)?.canSend && <div className="worldDigestConsent"><span>Outlook is currently connected without Mail.Send. Continue to Microsoft only if you want to grant this separate send permission.</span><button type="button" onClick={() => void authorizeOutlookSending()}><Mail size={13}/>Authorize Outlook sending</button></div>}
+                        {digestConfig?.senderProvider === "gmail" && digestConfig.senderBlockId && digestSenderAccounts.find(account => account.blockId === digestConfig.senderBlockId)?.canSend === false && <p className="worldDigestHint">Reconnect this Gmail account before enabling sending; FolderRocket does not request new Google permissions automatically.</p>}
+                        <div className="worldDigestActions"><button type="button" onClick={() => void previewActivityDigest()} disabled={digestPreviewBusy}>{digestPreviewBusy ? "Building preview…" : "Preview email"}</button><button type="button" onClick={() => void sendDigestTest()} disabled={digestTestBusy || !digestConfig?.senderBlockId || !digestConfig.recipient}>{digestTestBusy ? "Sending test…" : "Send test email now"}</button><span>{digestConfig?.enabled && digestRuntime.nextDigestAt ? `Next scheduled run: ${new Date(digestRuntime.nextDigestAt).toLocaleString()}` : digestRuntime.lastSentAt ? `Last send: ${new Date(digestRuntime.lastSentAt).toLocaleString()}` : digestRuntime.lastStatus ? `Status: ${digestRuntime.lastStatus}` : "No scheduled send yet"}{digestRuntime.lastError ? ` · ${digestRuntime.lastError}` : ""}</span></div>
+                        {!!digestRuntime.history?.length && <ul className="worldDigestHistory" aria-label="Recent email delivery history">{digestRuntime.history.slice(-5).reverse().map((entry,index) => <li key={`${entry.at}-${index}`}><time dateTime={entry.at}>{new Date(entry.at).toLocaleString()}</time><span>{entry.kind === "test" ? "Test" : "Scheduled"} · {entry.status}</span>{entry.error && <small>{entry.error}</small>}</li>)}</ul>}
+                        {digestRuntime.lastError && <p className="worldDigestHint" role="status">Last send issue: {digestRuntime.lastError}</p>}
+                        {digestPreview && <pre className="worldDigestPreview" aria-label="Email preview">{digestPreview}</pre>}
+                        <small className="worldDigestFootnote">Scheduled delivery runs only while FolderRocket’s local backend is active. Daily Job, reminders, calendar cache and Teams browsing metadata are uploaded to this local backend only while the feature is enabled. Email and document bodies are never included. The test button sends one real email only after you confirm.</small>
                     </section>
                     <section className="worldPermissionFoundation"><strong>Permessi del pianeta</strong><span>Predisposizione futura. Ruoli e regole di accesso verranno definiti in una fase successiva; al momento non viene applicata alcuna restrizione.</span></section>
                 </div>

@@ -1,6 +1,7 @@
 import {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {AtSign, File, Hash, LoaderCircle, MessageCircle, RefreshCw, Search, Users} from "lucide-react";
 import {API_BASE_URL} from "../api";
+import {recordDailyActivity} from "../dailyActivity";
 
 interface Props { blockId: string; accountBlockId?: string | null; onAccountBlockIdChange: (id?: string | null) => void; }
 interface Account {blockId: string; email: string; label: string;}
@@ -37,6 +38,7 @@ export default function TeamsSourcePanel({blockId, accountBlockId, onAccountBloc
     const [directoryBlockId, setDirectoryBlockId] = useState("");
     const [messagesBlockId, setMessagesBlockId] = useState("");
     const requestSequence = useRef(0);
+    const activityRecorded = useRef(new Set<string>());
     const [snapshotAt, setSnapshotAt] = useState(() => Date.now());
     const selectedBlockId = accountBlockId === null ? "" : accountBlockId || blockId;
     const activeBusy = busy && busyBlockId === selectedBlockId;
@@ -141,7 +143,16 @@ export default function TeamsSourcePanel({blockId, accountBlockId, onAccountBloc
             const response = await fetch(endpoint(`/teams/messages?${params}`), {credentials: "include"});
             const data = await response.json().catch(() => ({})) as {messages?: TeamsMessage[]; nextLink?: string; message?: string};
             if (!response.ok) throw new Error(data.message || "Impossibile caricare i messaggi Teams.");
-            if (requestId === requestSequence.current) { setMessages(Array.isArray(data.messages) ? data.messages : []); setMessageCursor(data.nextLink || ""); }
+            if (requestId === requestSequence.current) {
+                const incoming = Array.isArray(data.messages) ? data.messages : [];
+                setMessages(incoming); setMessageCursor(data.nextLink || "");
+                const day = new Date().toLocaleDateString("sv-SE");
+                const activityKey = `${day}:${selectedBlockId}:${kind}:${id}`;
+                if (!activityRecorded.current.has(activityKey)) {
+                    activityRecorded.current.add(activityKey);
+                    recordDailyActivity({kind:"teams", summary:`Teams ${kind === "chats" ? "chat" : "channel"} activity · ${incoming.length} messages`});
+                }
+            }
         } catch (reason) { if (requestId === requestSequence.current) setError(reason instanceof Error ? reason.message : "Impossibile caricare i messaggi Teams."); }
         finally { if (requestId === requestSequence.current) setBusy(false); }
     }

@@ -27,7 +27,7 @@ test("Tree Rocket is mounted from Folder Management and navigates without readin
     const server = source("backend", "server.js");
     assert.match(tree, /createPortal\(<section className="treeRocketOverlay"/);
     assert.match(tree, /appRoot\.inert = true/);
-    assert.match(tree, /TreeRocketMark size=\{44\}/);
+    assert.match(tree, /TreeRocketMark size=\{82\}/);
     assert.match(manager, /aria-label="Open Tree Rocket"/);
     assert.doesNotMatch(manager, /<small>Folder map<\/small>/);
     assert.match(manager, /<TreeRocket folders=\{folders\}/);
@@ -35,12 +35,24 @@ test("Tree Rocket is mounted from Folder Management and navigates without readin
     assert.match(tree, /aria-label=\{`Open folder \$\{folder\.name\}`\}/);
     assert.match(tree, /className="treeRocketNodeActions"/);
     assert.match(tree, /<span>Show Files<\/span>/);
-    assert.match(tree, /<span>Add to Folder Management<\/span>/);
-    assert.match(tree, /<span><strong id="treeRocketTitle">Tree Rocket<\/strong><\/span>/);
+    assert.match(tree, /Add to Folder Management/);
+    assert.match(tree, /<strong id="treeRocketTitle"><span>Tree<\/span><span>Rocket<\/span><\/strong>/);
+    assert.match(tree, /aria-label="Tree Rocket view"/);
+    assert.match(tree, />Folder<\/button>/);
+    assert.match(tree, />Apps<\/button>/);
+    assert.match(tree, /<strong>Applications<\/strong>/);
+    assert.match(tree, /Windows Start menu/);
+    assert.match(tree, /\/applications\/catalog/);
+    assert.match(tree, /\/applications\/open-installed/);
+    assert.match(server, /app\.get\("\/applications\/catalog", requireAuthenticated/);
+    assert.match(server, /app\.post\("\/applications\/open-installed", requireAuthenticated/);
+    assert.match(server, /Array\.isArray\(result\?\.applications\)/);
+    assert.match(tree, /Added to Folder Management/);
+    assert.match(tree, /Add folders from this location/);
     assert.doesNotMatch(tree, /<small>FOLDERROCKET<\/small>|Indietro|Radici|Mostra file|Cerca cartelle|Nessuna sottocartella/);
     assert.match(tree, /event\.stopPropagation\(\); onShowFiles\(\)/);
     assert.match(tree, /event\.stopPropagation\(\); onAdd\(\)/);
-    assert.match(tree, /onContextMenu=\{event => \{const target = event\.target as HTMLElement; if \(target\.closest\("\[data-graph-node\],button,input"\)\) return; event\.preventDefault\(\); back\(\);\}\}/);
+    assert.match(tree, /onContextMenu=\{event => \{event\.preventDefault\(\); back\(\);\}\}/);
     assert.match(tree, /cameraByPath = useRef\(new Map<string, TreeCamera>\(\)\)/);
     assert.match(tree, /function rememberCamera\(path = currentPath\)/);
     assert.match(tree, /function restoreCamera\(path: string\)/);
@@ -51,19 +63,33 @@ test("Tree Rocket is mounted from Folder Management and navigates without readin
     assert.match(tree, /event\.key === "Escape" \|\| \(event\.altKey && event\.key === "ArrowLeft"\)/);
     assert.match(tree, /event\.key === "Backspace" && !editing/);
     assert.match(tree, /event\.stopPropagation\(\)/);
-    assert.match(tree, /includeFiles\}/);
+    assert.match(tree, /includeFiles, includeFolderFileCounts: true/);
     assert.match(app, /normalizedPath && folders\.some/);
     assert.match(server, /app\.get\("\/filesystem\/tree-roots", requireAuthenticated/);
     assert.match(server, /app\.post\("\/filesystem\/tree-children", requireAuthenticated/);
     assert.match(tree, /\/filesystem\/tree-search/);
     assert.match(tree, /<FileKindIcon name=\{file\.name\} size=\{22\}\/>/);
     assert.match(tree, /onAddFolder\(folder\.path, folder\.name\)/);
+    assert.match(tree, /iconDataUrl\?: string/);
+    assert.match(tree, /InstalledApplicationIcon application=\{application\}/);
+    assert.match(tree, /className="treeRocketAppsScroll"/);
+    assert.match(tree, /className="treeRocketGraphStage"/);
+    assert.match(tree, /className="treeRocketBranch"/);
+    assert.doesNotMatch(tree, /treeRocketZoom|style=\{\{zoom\}\}|Open Applications workspace|<footer><span>Click a folder/);
+    const appsScript = source("backend", "scripts", "open-application.ps1");
+    assert.match(appsScript, /function Get-ApplicationIconDataUrl/);
+    assert.match(appsScript, /ExtractAssociatedIcon/);
+    assert.match(appsScript, /iconDataUrl/);
+    assert.match(appsScript, /catch \{\s*return \$null\s*\}/);
     const css = source("src", "App.css");
     assert.match(css, /grid-template-columns:repeat\(auto-fit,minmax\(min\(230px,100%\),270px\)\)/);
     assert.match(css, /\.treeRocketNode:hover,\.treeRocketNode:focus-within/);
     assert.match(css, /\.treeRocketNodeEnter \{ position:absolute; z-index:0; inset:0;/);
     assert.match(css, /\.treeRocketNodeActions \{ position:relative; z-index:2;/);
-    assert.match(tree, /className="treeRocketLogoProposal" title="Tree Rocket logo proposal"/);
+    assert.match(tree, /document\.addEventListener\("pointerdown", dismissOutside, true\)/);
+    assert.match(tree, /includeFolderFileCounts: true/);
+    assert.match(server, /includeFolderFileCounts: req\.body\?\.includeFolderFileCounts === true/);
+    assert.doesNotMatch(tree, /window\.setTimeout\(onClose/);
     assert.match(css, /\.treeRocketGraph \{ overflow-x:hidden; overflow-y:auto/);
     assert.match(css, /\.treeRocketOverlay::before \{ background-image:radial-gradient/);
     assert.match(css.slice(css.lastIndexOf("/* Tree Rocket is a separate, space-themed workspace.")), /\.treeRocketGraph \{[^}]*background-image:none/);
@@ -74,6 +100,33 @@ test("Tree Rocket is mounted from Folder Management and navigates without readin
     assert.match(source("src", "components", "DashboardSourceBlock.tsx"), /"teams"/);
     assert.match(server, /fs\.promises\.realpath\(userWorkspace\(req\.user\)\)/);
     assert.match(server, /if \(!isPathWithin\(workspaceRealPath, directoryRealPath\)\)/);
+    assert.match(server, /if \(current\.enabled !== true\) return res\.status\(409\)\.json\(\{message:"Activity notifications are disabled for this planet\."\}\)/);
+    assert.match(server, /nextDigestAt:require\("\.\/services\/worldActivityEmailService"\)\.nextDigestAt/);
+});
+
+test("Tree Rocket uses app icons, shared zoom, a fixed root branch and no bottom action bar", () => {
+    const tree = source("src", "components", "TreeRocket.tsx");
+    const css = source("src", "App.css");
+    const script = source("backend", "scripts", "open-application.ps1");
+    assert.match(tree, /iconDataUrl\?: string/);
+    assert.match(tree, /InstalledApplicationIcon application=\{application\}/);
+    assert.match(tree, /className="treeRocketAppsScroll"/);
+    assert.match(tree, /className="treeRocketGraphStage"/);
+    assert.match(tree, /className="treeRocketBranch"/);
+    assert.doesNotMatch(tree, /treeRocketZoom|style=\{\{zoom\}\}|Open Applications workspace|<footer><span>Click a folder/);
+    assert.match(script, /function Get-ApplicationIconDataUrl/);
+    assert.match(script, /ExtractAssociatedIcon/);
+    assert.match(script, /iconDataUrl/);
+    assert.match(script, /catch \{\s*return \$null\s*\}/);
+    const refined = css.slice(css.lastIndexOf("/* Tree Rocket shares the workspace zoom"));
+    assert.match(refined, /\.treeRocketBrandTitle \.treeRocketMark \{ width:82px; height:82px;/);
+    assert.match(refined, /\.treeRocketBrandTitle > strong span:last-child \{ color:#087ed8;/);
+    assert.match(refined, /\.treeRocketHeaderTools \{ display:flex/);
+    assert.match(refined, /\.treeRocketGraphStage \{ display:grid;[^}]*grid-template-columns:minmax\(225px,260px\) minmax\(0,1fr\)/);
+    assert.match(refined, /\.treeRocketChildren \{[^}]*overflow:auto/);
+    assert.match(refined, /\.treeRocketChildrenHeading > i \{ display:grid; width:25px; height:25px;[^}]*place-items:center/);
+    assert.match(refined, /\.treeRocketAppIcon img \{ display:block; width:30px; height:30px;/);
+    assert.doesNotMatch(refined, /treeRocketWindow.?footer|treeRocketZoom|treeRocketAppsWorkspaceLink/);
 });
 
 test("dashboard folder layouts use compact rows and conditional scroll-edge fades", () => {
@@ -84,7 +137,7 @@ test("dashboard folder layouts use compact rows and conditional scroll-edge fade
     assert.match(app, /<FolderScrollFrame layout=\{dashboardLayout\} itemCount=\{dashboardBrowser \? 0 : folders\.length\}>/);
     assert.match(app, /dashboardLayout === "folders-top" \? folderDescriptionGroups\(folders\) : folderProjectGroups\(folders\)/);
     assert.match(groups, /description\.trim\(\)\.toLocaleLowerCase\(\)/);
-    assert.match(frame, /closest<HTMLElement>\("\.dashboardProjectGroup"\)/);
+    assert.doesNotMatch(frame, /addEventListener\("wheel"|deltaY/);
     assert.match(frame, /maxScroll - scrollPosition > 2/);
     assert.match(frame, /folderFadeBefore/);
     assert.match(frame, /folderFadeAfter/);
@@ -93,6 +146,8 @@ test("dashboard folder layouts use compact rows and conditional scroll-edge fade
     assert.match(css, /\.dashboardFoldersTop \.foldersContainer > \.dashboardProjectGroup \{ position:relative; display:flex;/);
     assert.match(css, /\.dashboardFoldersTop \.dashboardProjectGroup \.folderOrderItem/);
     assert.match(css, /\.dashboardFoldersTop \.dashboardTopProjectTag \{ position:absolute; top:50%;/);
+    assert.match(css, /\.dashboardFoldersTop \.dashboardTopProjectTag \{ display:none!important; \}/);
+    assert.match(css, /overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain/);
     assert.match(css, /\.foldersColumn\.folderFadeAfter::after/);
 });
 
@@ -101,12 +156,27 @@ test("File Studio queue labels and cards adapt without changing their queues", (
     const changeFormat = source("src", "components", "ChangeFormatPanel.tsx");
     const css = source("src", "App.css");
     assert.match(workspace, /queue\.length > 0 && <div className="studioQueueHeading"><span>Files to convert<\/span>/);
+    assert.doesNotMatch(workspace, /The original file remains unchanged|conversionEmptyState/);
     assert.doesNotMatch(changeFormat, /Files receiving the format/);
+    assert.doesNotMatch(changeFormat, /Fonts, spacing and structure come from this file|Add one source file and at least one target file/);
     assert.match(changeFormat, /files\.map\(file =>/);
     assert.match(css, /@media \(max-width:1050px\) \{[\s\S]*\.processingPage \{ height:auto;/);
     assert.match(css, /@media \(max-width:720px\) \{[\s\S]*\.processingPage \{ display:flex;/);
     assert.match(css, /\.processingPage \.conversionToolCard > h2 \{ margin-left:0; margin-right:0; border-radius:8px; \}/);
     assert.match(css, /\.processingPage \.changeFormatPanel \.formatQueueRow \{ grid-template-columns:minmax\(34px,auto\) minmax\(0,1fr\) auto 21px;/);
+    assert.match(workspace, /folderColourMap\(folders\)/);
+    assert.match(workspace, /folderColours\.get\(folder\.id\)/);
+});
+
+test("Folder Management reorder and add controls use a compact toolbar above the list", () => {
+    const manager = source("src", "components", "FolderManagement.tsx");
+    const css = source("src", "App.css");
+    assert.match(manager, /className="folderTableToolbar" role="toolbar"/);
+    assert.match(manager, /orderingFolders \? "Finish ordering folders" : "Reorder folders"/);
+    assert.match(manager, /title="Add folder"/);
+    assert.match(manager, /<div className="folderTable" role="table">/);
+    assert.match(css, /\.folderTable \{ min-width:0!important; overflow-x:hidden!important;/);
+    assert.match(css, /\.folderTableRow,\.folderTableRow\.orderingFolder,\.folderTableRow\.orderingHead \{ width:100%; min-width:0!important;/);
 });
 
 test("Application filters can be composed and reset, and account integration descriptions remain under their titles", () => {
@@ -129,6 +199,18 @@ test("Cargo Rocket switches back to the yellow Simple Post-it action without a c
     assert.match(cargo, /Choose mailbox/);
     assert.doesNotMatch(cargo, /Choose connected mailbox|No connected mailbox/);
     assert.match(css, /cargoPostItExtraActions button\.postItSimpleMode[^\{]*\{ border-color:#d8b534; background:linear-gradient/);
+});
+
+test("Cargo Rocket email choices are loaded only from the active planet's dashboard", () => {
+    const cargo = source("src", "components", "CargoShip.tsx");
+    const server = source("backend", "server.js");
+    assert.match(cargo, /email-sources\?worldId=\$\{encodeURIComponent\(worldId\)\}/);
+    assert.match(cargo, /No email account is selected for this planet[\s\S]*Gmail block on the Dashboard/);
+    assert.match(server, /const worldId = readWorkspaceWorldId\(req\)/);
+    assert.match(server, /allPreferences\.worlds\?\.\[worldId\]\?\.dashboard/);
+    assert.match(server, /if \(block\.accountBlockId === null\) continue/);
+    assert.match(server, /const account = \(provider === "gmail" \? gmailAccounts : outlookAccounts\)\.find\(item => item\.blockId === blockId\)/);
+    assert.match(server, /seenAccounts\.has\(accountKey\)/);
 });
 
 test("Gmail Read attachments menu is allowed to escape the source block clipping", () => {
@@ -173,7 +255,7 @@ test("Teams source offers selectable chats, channels, mentions and shared-file f
     assert.match(outlook, /https:\/\/graph\.microsoft\.com\/Chat\.Read/);
     assert.match(outlook, /https:\/\/graph\.microsoft\.com\/ChannelMessage\.Read\.All/);
     assert.match(teams, /&teams=1&format=json/);
-    assert.match(outlook, /const scopes = options\.includeTeams \? `\$\{OUTLOOK_SCOPES\} \$\{TEAMS_SCOPES\}` : OUTLOOK_SCOPES/);
+    assert.match(outlook, /const scopes = \[OUTLOOK_SCOPES, \.\.\.\(options\.includeTeams \? \[TEAMS_SCOPES\] : \[\]\), \.\.\.\(options\.includeSend \? \[OUTLOOK_SEND_SCOPE\] : \[\]\)\]\.join\(" "\)/);
     assert.match(teams, /Read-only/);
 });
 

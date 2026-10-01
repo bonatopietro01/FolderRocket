@@ -32,7 +32,9 @@ For the dashboard folder rows and Tree Rocket layout, open
 uses only fictitious folders and files. Switch between Folders on Top and Three
 Columns, then choose 0, 1, 2, or 12 folders. Open Tree Rocket to inspect the
 matching graph; click a folder, try Show Files, search, Back/Roots navigation,
-and Add to Folder Management. Folders on Top groups non-empty descriptions and
-allows vertical scrolling within groups plus horizontal scrolling between them.
-The add action reports the path only in this fixture and does not save a real
-folder. Repeat at a narrow browser width.
+and Add to Folder Management. Switch to Tree Rocket Apps to verify the honest
+installed-app inventory limitation and its Applications-workspace link. Folders
+on Top groups non-empty descriptions and keeps vertical scrolling inside the
+group under the pointer while horizontal movement is reserved for horizontal
+trackpad input. The add action reports the path only in this fixture and does
+not save a real folder. Repeat at a narrow browser width.

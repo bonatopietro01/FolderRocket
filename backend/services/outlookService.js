@@ -23,6 +23,7 @@ const connections = new Map();
 const authorizationStates = new Map();
 const OUTLOOK_SCOPES = "offline_access https://graph.microsoft.com/Mail.Read https://graph.microsoft.com/Mail.ReadWrite";
 const TEAMS_SCOPES = "https://graph.microsoft.com/Chat.Read https://graph.microsoft.com/Channel.ReadBasic.All https://graph.microsoft.com/ChannelMessage.Read.All";
+const OUTLOOK_SEND_SCOPE = "https://graph.microsoft.com/Mail.Send";
 
 function connectionKey(userId, blockId = "") {
     return `${userId}:${blockId || "legacy"}`;
@@ -56,7 +57,7 @@ function getAuthorizationUrl(userId, blockId = "", options = {}) {
     const {clientId} = getConfiguration();
     const state = crypto.randomBytes(24).toString("hex");
     const redirectUri = getRedirectUri(options.origin);
-    const scopes = options.includeTeams ? `${OUTLOOK_SCOPES} ${TEAMS_SCOPES}` : OUTLOOK_SCOPES;
+    const scopes = [OUTLOOK_SCOPES, ...(options.includeTeams ? [TEAMS_SCOPES] : []), ...(options.includeSend ? [OUTLOOK_SEND_SCOPE] : [])].join(" ");
     authorizationStates.set(state, {
         userId,
         blockId,
@@ -69,7 +70,7 @@ function getAuthorizationUrl(userId, blockId = "", options = {}) {
         redirect_uri: redirectUri,
         response_type: "code",
         response_mode: "query",
-        prompt: options.includeTeams ? "consent" : "select_account",
+        prompt: options.includeTeams || options.includeSend ? "consent" : "select_account",
         scope: scopes
     });
     parameters.set("state", state);
@@ -428,7 +429,8 @@ async function listConnectedAccounts(userId) {
     return listConnections("outlook", userId).slice(0, 30).map(connection => ({
         blockId: connection.blockId,
         email: connection.email,
-        label: connection.email || `Account collegato · ${connection.blockId.slice(-6)}`
+        label: connection.email || `Account collegato · ${connection.blockId.slice(-6)}`,
+        canSend: String(connection.scopes || "").split(/\s+/).includes(OUTLOOK_SEND_SCOPE)
     }));
 }
 
@@ -451,4 +453,13 @@ async function createDraft({to, subject, text, attachments = []}, userId, blockI
     return draft;
 }
 
-module.exports = {createDraft, disconnect, downloadAttachment, exchangeAuthorizationCode, getAuthorizationUrl, getEmailIdentity, getMessageText, getStatus, listAttachments, listConnectedAccounts, listTeamsChats, listJoinedTeams, listTeamChannels, listTeamsDirectoryNextPage, listTeamsChatMessages, listTeamsChannelMessages, listTeamsNextPage, isSafeTeamsNextLink, shapeTeamsMessage, shapeTeamsMessages, OUTLOOK_SCOPES, TEAMS_SCOPES};
+async function sendEmail({to, subject, text}, userId, blockId = "") {
+    const connection = getUserConnection(userId, blockId);
+    if (!String(connection?.scopes || "").split(/\s+/).includes(OUTLOOK_SEND_SCOPE)) throw new Error("Outlook sending is not authorized. Explicitly reconnect and approve Mail.Send first.");
+    const recipients = String(to ?? "").split(/[;,]/).map(value => value.trim()).filter(value => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value));
+    if (!recipients.length) throw new Error("Add a valid digest recipient.");
+    await graphFetch(userId, "/me/sendMail", blockId, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({message:{subject:String(subject || "FolderRocket update").replace(/[\r\n]+/g," ").slice(0,180),body:{contentType:"Text",content:String(text ?? "").slice(0,12000)},toRecipients:recipients.map(address=>({emailAddress:{address}}))},saveToSentItems:true})});
+    return {sent:true};
+}
+
+module.exports = {createDraft, sendEmail, disconnect, downloadAttachment, exchangeAuthorizationCode, getAuthorizationUrl, getEmailIdentity, getMessageText, getStatus, listAttachments, listConnectedAccounts, listTeamsChats, listJoinedTeams, listTeamChannels, listTeamsDirectoryNextPage, listTeamsChatMessages, listTeamsChannelMessages, listTeamsNextPage, isSafeTeamsNextLink, shapeTeamsMessage, shapeTeamsMessages, OUTLOOK_SCOPES, OUTLOOK_SEND_SCOPE, TEAMS_SCOPES};

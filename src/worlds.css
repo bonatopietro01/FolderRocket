@@ -103,4 +103,38 @@
 .worldAssistantOptions select { min-width:0; min-height:27px; border:1px solid #cbd9e5; border-radius:5px; background:#fff; color:#34556d; font:inherit; padding:4px 6px; }
 @keyframes worldShipLanding { 0% { transform:translate(0,0) rotate(-9deg) scale(.75); opacity:0; } 12% { opacity:1; } 74% { transform:translate(53vw,-14vh) rotate(8deg) scale(1.15); opacity:1; } 100% { transform:translate(61vw,-17vh) rotate(32deg) scale(.08); opacity:0; } }
 @keyframes worldPlanetArrival { 0% { transform:scale(.72); filter:brightness(.55); } 72% { transform:scale(1.05); filter:brightness(1.3); } 100% { transform:scale(1); filter:brightness(1); } }
+.worldActivityEmailEditor { display:grid; gap:11px; padding:12px; border:1px solid #d2e0eb; border-radius:10px; background:linear-gradient(145deg,#fbfdff,#f3f8fb); }
+.worldActivityEmailEditor .worldAgentsHeading { align-items:center; }
+.worldActivityEmailEditor .worldAgentsHeading h3 { display:flex; align-items:center; gap:7px; }
+.worldActivityEmailEditor .worldAgentsHeading h3 svg { color:#4b83a8; }
+.worldDigestEnable { display:flex; align-items:center; gap:6px; color:#355d77; font-size:10px; font-weight:850; }
+.worldDigestEnable input,.worldDigestSources input { accent-color:#328ab7; }
+.worldDigestGrid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.worldDigestGrid > label { display:grid; min-width:0; gap:4px; color:#597185; font-size:9px; font-weight:800; }
+.worldDigestGrid > label svg { margin-bottom:-1px; }
+.worldDigestGrid input,.worldDigestGrid select { width:100%; min-width:0; min-height:31px; box-sizing:border-box; padding:5px 7px; border:1px solid #cbd9e4; border-radius:6px; background:#fff; color:#344d62; font:inherit; font-size:10px; }
+.worldDigestSources { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin:0; padding:9px; border:1px solid #d9e4ec; border-radius:8px; background:#fff; }
+.worldDigestSources legend { padding:0 5px; color:#45647b; font-size:10px; font-weight:850; }
+.worldDigestSources > label { display:grid; grid-template-columns:15px minmax(0,1fr); align-items:start; gap:7px; color:#536c80; }
+.worldDigestSources > label input { margin:2px 0 0; }
+.worldDigestSources > label span { display:grid; gap:2px; }
+.worldDigestSources strong { color:#36546a; font-size:10px; }
+.worldDigestSources small { color:#7b8e9d; font-size:8px; line-height:1.35; }
+.worldDigestConsent { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; padding:8px; border:1px solid #e8d49a; border-radius:7px; background:#fff9e7; color:#755d25; font-size:9px; line-height:1.4; }
+.worldDigestConsent button,.worldDigestActions button { display:inline-flex; min-height:30px; align-items:center; justify-content:center; gap:5px; padding:4px 8px; border:1px solid #9fb8ca; border-radius:6px; background:#fff; color:#3f627b; cursor:pointer; font:inherit; font-size:9px; font-weight:850; }
+.worldDigestConsent button:hover,.worldDigestActions button:hover { background:#eef7fc; }
+.worldDigestHint { margin:0; color:#86612b; font-size:9px; }
+.worldDigestActions { display:flex; flex-wrap:wrap; align-items:center; gap:6px; }
+.worldDigestActions button:first-child { border-color:#95bfd3; background:#edf8fd; color:#326c8b; }
+.worldDigestActions button:nth-child(2) { border-color:#73b693; background:#effbf3; color:#32704d; }
+.worldDigestActions button:disabled,.worldDigestConsent button:disabled { cursor:not-allowed; opacity:.48; }
+.worldDigestActions > span { margin-left:auto; color:#718496; font-size:9px; }
+.worldDigestHistory { display:grid; max-height:120px; gap:4px; overflow:auto; margin:0; padding:0; list-style:none; }
+.worldDigestHistory li { display:grid; grid-template-columns:minmax(110px,auto) auto minmax(0,1fr); align-items:center; gap:7px; padding:4px 6px; border-radius:5px; background:#f5f9fc; color:#5a7184; font-size:8px; }
+.worldDigestHistory time { font-variant-numeric:tabular-nums; }
+.worldDigestHistory li > span { font-weight:800; }
+.worldDigestHistory small { overflow:hidden; color:#a74c46; text-overflow:ellipsis; white-space:nowrap; }
+.worldDigestPreview { max-height:230px; overflow:auto; margin:0; padding:9px; border:1px solid #d4e2eb; border-radius:7px; background:#fff; color:#3b5266; font:10px/1.45 Consolas,monospace; white-space:pre-wrap; }
+.worldDigestFootnote { color:#75889a; font-size:8px; line-height:1.45; }
 @media(prefers-reduced-motion:reduce) { .worldInlineSpinner,.worldTravelShip,.worldTravelDestination .worldPlanet,.worldPlanet.glowing::before,.worldAiSatelliteOrbit > i { animation:none !important; } .worldTravelShip { opacity:0; } }
+@media(max-width:620px) { .worldDigestGrid,.worldDigestSources { grid-template-columns:minmax(0,1fr); }.worldDigestActions > span { width:100%; margin-left:0; }.worldDigestHistory li { grid-template-columns:minmax(0,1fr) auto; }.worldDigestHistory small { grid-column:1/-1; white-space:normal; } }

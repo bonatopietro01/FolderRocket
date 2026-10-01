@@ -226,6 +226,7 @@ async function exchangeAuthorizationCode(
             data.access_token,
         refreshToken:
             data.refresh_token || previousConnection?.refreshToken || "",
+        scopes:data.scope || GMAIL_SCOPES,
         originWorldId: previousConnection?.originWorldId || authorization.worldId || "",
         originWorldName: previousConnection?.originWorldName || authorization.worldName || "",
         expiresAt:
@@ -373,11 +374,13 @@ async function gmailFetch(
             return gmailFetch(userId, path, blockId, remainingRetries - 1, options);
         }
 
-        throw new Error(
+        const requestError = new Error(
             rateLimited
                 ? "Gmail is temporarily rate-limited. Wait about one minute, then refresh again."
                 : errorText || "Errore durante la lettura di Gmail"
         );
+        requestError.status = response.status;
+        throw requestError;
 
     }
 
@@ -818,8 +821,17 @@ async function listConnectedAccounts(userId) {
         label: connection.email || `Account collegato · ${connection.blockId.slice(-6)}`,
         originWorldId: connection.originWorldId,
         originWorldName: connection.originWorldName,
-        legacyShared: connection.legacyShared === true
+        legacyShared: connection.legacyShared === true,
+        canSend: !connection.scopes || String(connection.scopes).split(/\s+/).includes("https://www.googleapis.com/auth/gmail.compose")
     }));
+}
+
+async function sendEmail({to, subject, text}, userId, blockId = "") {
+    const recipient = cleanHeader(to);
+    if (!recipient || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(recipient)) throw new Error("Add a valid digest recipient.");
+    const raw = [`To: ${recipient}`, `Subject: ${cleanHeader(subject) || "FolderRocket update"}`, "MIME-Version: 1.0", "Content-Type: text/plain; charset=UTF-8", "", String(text ?? "").slice(0, 12000)].join("\r\n");
+    const response = await gmailFetch(userId, "/messages/send", blockId, 2, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({raw:Buffer.from(raw,"utf8").toString("base64url")})});
+    return response.json();
 }
 
 async function createDraft({to, subject, text, attachments = []}, userId, blockId = "") {
@@ -862,5 +874,6 @@ module.exports = {
     getStatus,
     listAttachments,
     listConnectedAccounts,
-    listInboxMessages
+    listInboxMessages,
+    sendEmail
 };

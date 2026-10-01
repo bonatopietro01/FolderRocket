@@ -3,6 +3,7 @@ const {normalizeEmailAlertSettings} = require("./emailAlertSettingsService");
 const {evaluateGmailWarnings} = require("./gmailWarningService");
 const {listAttachments: listGmailAttachments, listInboxMessages: listGmailInboxMessages} = require("./gmailService");
 const {listAttachments: listOutlookAttachments, listInboxMessages: listOutlookInboxMessages} = require("./outlookService");
+const {appendDigestHistory, buildWorldActivityDigest, dueDigestKey, normalizeWorldActivityNotifications, sanitizeDigestText} = require("./worldActivityEmailService");
 
 const CHECK_INTERVAL_MS = 30_000;
 const runningUsers = new Set();
@@ -100,13 +101,52 @@ async function runProviderRulesForBlocks(provider, providerSettings, userId) {
     return changed;
 }
 
+async function runWorldActivityDigest(userId, worldId, worldName, worldSettings, persist, dependencies = {}) {
+    const saved = worldSettings?.activityNotifications;
+    if (!saved || typeof saved !== "object") return false;
+    const config = normalizeWorldActivityNotifications(saved);
+    const runtime = saved.runtime && typeof saved.runtime === "object" ? saved.runtime : {};
+    const now = typeof dependencies.now === "function" ? dependencies.now() : new Date();
+    const scheduleKey = dueDigestKey(config, runtime, now);
+    if (!scheduleKey) return false;
+    const pending = {...runtime, pendingKey:scheduleKey, pendingAt:now.toISOString(), attemptKey:scheduleKey, attempts:(runtime.attemptKey === scheduleKey ? Number(runtime.attempts || 0) : 0) + 1, lastAttemptAt:now.toISOString(), lastStatus:"sending", lastError:""};
+    const pendingConfig = {...saved, ...config, runtime:pending};
+    await persist({...worldSettings, activityNotifications:pendingConfig});
+    const digest = buildWorldActivityDigest({worldName, config, snapshot:saved.snapshot, emailAlerts:worldSettings.emailAlerts, now});
+    try {
+        const service = dependencies[config.senderProvider] || (config.senderProvider === "gmail" ? require("./gmailService") : require("./outlookService"));
+        await service.sendEmail({to:config.recipient, subject:digest.subject, text:digest.text}, userId, config.senderBlockId);
+        const complete = appendDigestHistory({...pending, pendingKey:"", pendingAt:"", lastSentKey:scheduleKey, lastSentAt:now.toISOString(), lastStatus:"sent", lastError:"", nextAttemptAt:""}, {at:now.toISOString(),kind:"scheduled",status:"sent"});
+        await persist({...worldSettings, activityNotifications:{...pendingConfig, runtime:complete}});
+    } catch (error) {
+        const retryableThrottle = Number(error?.status) === 429;
+        const definitiveRejection = Number.isFinite(Number(error?.status)) && ![408, 429].includes(Number(error.status)) && Number(error.status) < 500;
+        const failed = {...pending, lastStatus:retryableThrottle ? "retrying" : definitiveRejection ? "failed" : "delivery-uncertain", lastError:String(error instanceof Error ? error.message : "Digest send failed.").replace(/Bearer\s+\S+/gi,"Bearer [redacted]").slice(0,500)};
+        if (retryableThrottle) {
+            failed.pendingKey = ""; failed.pendingAt = "";
+            if (failed.attempts < 3) failed.nextAttemptAt = new Date(now.getTime() + Math.min(30, 5 * failed.attempts) * 60_000).toISOString();
+            else { failed.lastStatus = "failed"; failed.nextAttemptAt = ""; }
+        } else if (definitiveRejection) {
+            failed.pendingKey = ""; failed.pendingAt = ""; failed.attempts = 3; failed.nextAttemptAt = "";
+        } else {
+            // A timeout or transport/5xx failure can happen after the provider accepted the message.
+            // Keep the delivery key pending for human review instead of risking a duplicate.
+            failed.nextAttemptAt = "";
+        }
+        failed.lastError = sanitizeDigestText(failed.lastError, 300);
+        Object.assign(failed, appendDigestHistory(failed, {at:now.toISOString(),kind:"scheduled",status:failed.lastStatus,error:failed.lastError}));
+        await persist({...worldSettings, activityNotifications:{...pendingConfig, runtime:failed}});
+    }
+    return true;
+}
+
 async function runScheduledEmailAlerts() {
     for (const record of listDashboardPreferences()) {
         if (runningUsers.has(record.userId)) continue;
         const settings = record.settings;
         const worldSettings = settings?.worlds && typeof settings.worlds === "object" ? settings.worlds : {};
         const worldContexts = Object.entries(worldSettings)
-            .filter(([, value]) => value && typeof value === "object" && value.emailAlerts)
+            .filter(([, value]) => value && typeof value === "object" && (value.emailAlerts || value.activityNotifications))
             .map(([worldId, value]) => ({worldId, alerts: normalizeEmailAlertSettings(value.emailAlerts)}));
         const contexts = worldContexts.length
             ? worldContexts
@@ -115,7 +155,8 @@ async function runScheduledEmailAlerts() {
             [alerts[provider], ...Object.values(alerts[provider].blocks ?? {})]
                 .some(providerSettings => providerSettings.rules.some(rule => scheduledRuleIsDue(rule, providerSettings.runtime)))
         ));
-        if (!hasDueRule) continue;
+        const hasDueDigest = Object.entries(worldSettings).some(([, value]) => value && dueDigestKey(value.activityNotifications, value.activityNotifications?.runtime));
+        if (!hasDueRule && !hasDueDigest) continue;
         runningUsers.add(record.userId);
         try {
             let changed = false;
@@ -132,6 +173,17 @@ async function runScheduledEmailAlerts() {
                 }
             }
             if (changed) writeDashboardPreferences(record.userId, next);
+            for (const [worldId, world] of Object.entries(next.worlds || {})) {
+                if (!world?.activityNotifications) continue;
+                try {
+                    await runWorldActivityDigest(record.userId, worldId, world.name || worldId, world, async changedWorld => {
+                        next = {...next, worlds:{...next.worlds, [worldId]:changedWorld}};
+                        writeDashboardPreferences(record.userId, next);
+                    });
+                } catch (error) {
+                    console.error("Scheduled world digest error:", error instanceof Error ? error.message : error);
+                }
+            }
         } catch (error) {
             console.error("Scheduled email-alert error:", error instanceof Error ? error.message : error);
         } finally {
@@ -146,4 +198,4 @@ function startEmailAlertScheduler() {
     setTimeout(() => void runScheduledEmailAlerts(), 5_000).unref?.();
 }
 
-module.exports = {runScheduledEmailAlerts, startEmailAlertScheduler};
+module.exports = {runScheduledEmailAlerts, runWorldActivityDigest, startEmailAlertScheduler};

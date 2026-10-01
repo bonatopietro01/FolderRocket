@@ -1,18 +1,20 @@
-import {useEffect, useId, useMemo, useRef, useState} from "react";
+import {useEffect, useMemo, useRef, useState} from "react";
 import {createPortal} from "react-dom";
-import {ArrowLeft, Check, Copy, Files, FolderOpen, FolderTree, HardDrive, Home, LoaderCircle, Minus, Plus, Search, X} from "lucide-react";
+import {AppWindow, ArrowLeft, Check, Copy, Files, FolderOpen, FolderPlus, FolderTree, HardDrive, LoaderCircle, Search, X} from "lucide-react";
 import {API_BASE_URL} from "../api";
+import treeRocketLogo from "../assets/tree-rocket-logo.png";
 import FileKindIcon from "./FileKindIcon";
 
-interface TreeFolder { name: string; path: string; kind?: "computer" | "user" | "workspace" | "linked"; }
+interface TreeFolder { name: string; path: string; kind?: "computer" | "user" | "workspace" | "linked"; directFileCount?: number; directFolderCount?: number; }
+interface InstalledApplication {name: string; appId: string; iconDataUrl?: string;}
 interface TreeFile { name: string; path: string; }
-interface TreeContents { path: string; folders: TreeFolder[]; files: TreeFile[]; truncatedFolders?: boolean; truncatedFiles?: boolean; }
+interface TreeContents { path: string; folders: TreeFolder[]; files: TreeFile[]; directFileCount?: number; truncatedFolders?: boolean; truncatedFiles?: boolean; folderCountsLimited?: boolean; }
 interface LinkedFolder { id: string; name: string; path: string; storage?: "physical" | "imaginary"; }
 interface SearchFolder extends TreeFolder { rootPath: string; rootName: string; depth: number; }
 interface SearchFile extends TreeFile { parentPath: string; parentName: string; rootPath: string; rootName: string; }
 interface TreeSearchResults { folders: SearchFolder[]; files: SearchFile[]; scannedDirectories: number; truncated: boolean; }
 interface FileView { path: string; name: string; files: TreeFile[]; truncated: boolean; }
-interface TreeCamera { zoom: number; scrollProgress: number; }
+interface TreeCamera { scrollProgress: number; }
 interface Props { folders: LinkedFolder[]; onAddFolder: (path: string, name: string) => boolean | void | Promise<boolean | void>; onClose: () => void; }
 
 function pathKey(value: string) { return value.replaceAll("/", "\\").replace(/[\\]+$/, "").toLowerCase(); }
@@ -30,44 +32,29 @@ function pathTrail(rootPath: string, rootName: string, targetPath: string): Tree
 }
 
 export function TreeRocketMark({size = 23}: {size?: number}) {
-    const id = useId().replaceAll(":", "");
-    return <svg width={size} height={size} viewBox="0 0 128 132" fill="none" className="treeRocketMark" role="img" aria-label="Tree Rocket folder tree logo proposal">
-        <defs>
-            <linearGradient id={`${id}-leaf`} x1="20" y1="17" x2="105" y2="84"><stop stopColor="#a5edbd"/><stop offset=".48" stopColor="#43bd91"/><stop offset="1" stopColor="#16718a"/></linearGradient>
-            <linearGradient id={`${id}-folder`} x1="20" y1="27" x2="105" y2="77"><stop stopColor="#fff8c8"/><stop offset=".52" stopColor="#ffc94d"/><stop offset="1" stopColor="#e98524"/></linearGradient>
-            <linearGradient id={`${id}-rocket`} x1="52" y1="63" x2="76" y2="108"><stop stopColor="#8de0ff"/><stop offset=".55" stopColor="#328fe0"/><stop offset="1" stopColor="#174b9d"/></linearGradient>
-            <linearGradient id={`${id}-flame`} x1="64" y1="101" x2="64" y2="130"><stop stopColor="#fff9a8"/><stop offset=".42" stopColor="#ff9b2b"/><stop offset="1" stopColor="#f04419" stopOpacity="0"/></linearGradient>
-        </defs>
-        <ellipse cx="64" cy="126" rx="25" ry="4" fill="#071a31" opacity=".34"/>
-        <path d="M64 91V45M64 65 38 49M64 61 91 46M64 78 39 69M64 76 90 66" stroke="#155f55" strokeWidth="7" strokeLinecap="round" strokeLinejoin="round"/>
-        <path d="M35 74C20 74 12 64 14 52 8 40 16 27 30 25 34 12 48 7 59 14 70 5 86 11 89 24 103 24 113 36 108 49 116 62 107 76 93 77 84 88 70 87 63 80 54 88 41 84 35 74Z" fill={`url(#${id}-leaf)`} stroke="#15536c" strokeWidth="4" strokeLinejoin="round"/>
-        <circle cx="35" cy="42" r="17" fill={`url(#${id}-leaf)`}/><circle cx="64" cy="31" r="18" fill={`url(#${id}-leaf)`}/><circle cx="92" cy="43" r="17" fill={`url(#${id}-leaf)`}/><circle cx="34" cy="65" r="15" fill={`url(#${id}-leaf)`}/><circle cx="64" cy="57" r="20" fill={`url(#${id}-leaf)`}/><circle cx="94" cy="64" r="15" fill={`url(#${id}-leaf)`}/>
-        <g fill={`url(#${id}-folder)`} stroke="#9e5a22" strokeWidth="2.5" strokeLinejoin="round">
-            <path d="M20 39h10l3 3h13v14H20V39Z"/><path d="M51 25h10l3 3h14v14H51V25Z"/><path d="M79 39h10l3 3h14v14H79V39Z"/><path d="M27 60h10l3 3h14v13H27V60Z"/><path d="M68 60h10l3 3h14v13H68V60Z"/>
-        </g>
-        <g stroke="#fff5c6" strokeWidth="2" strokeLinecap="round" opacity=".9"><path d="M25 46h15M56 32h17M84 46h16M32 66h16M73 66h16"/></g>
-        <path d="M64 65C53 76 50 88 52 103L43 110 57 107 64 116 71 107 85 110 76 103C78 88 75 76 64 65Z" fill={`url(#${id}-rocket)`} stroke="#123e72" strokeWidth="3.5" strokeLinejoin="round"/>
-        <circle cx="64" cy="86" r="6" fill="#e6faff" stroke="#144a81" strokeWidth="2.8"/>
-        <path d="M53 104c-4 7-8 13-6 22 7-3 11-7 13-13 0 7 2 12 4 16 4-5 6-10 6-16 3 6 7 10 13 13 2-9-3-15-7-22" fill={`url(#${id}-flame)`}/>
-        <path d="M61 107c-1 6 0 12 3 17 3-5 4-11 3-17" fill="#fff7bb" opacity=".94"/>
-    </svg>;
+    return <img src={treeRocketLogo} width={size} height={size} className="treeRocketMark" alt="" aria-hidden="true"/>;
 }
 
-function TreeRocketFolderNode({folder, root = false, loading, onOpen, onShowFiles, onAdd}: {
-    folder: TreeFolder; root?: boolean; loading: boolean;
+function TreeRocketFolderNode({folder, root = false, loading, added = false, managed = false, onOpen, onShowFiles, onAdd}: {
+    folder: TreeFolder; root?: boolean; loading: boolean; added?: boolean; managed?: boolean;
     onOpen: () => void; onShowFiles: () => void; onAdd: () => void;
 }) {
     return <article className={`treeRocketNode${root ? " treeRocketRootNode" : ""}`} data-graph-node>
         <span className="treeRocketFolderTab" aria-hidden="true"/>
         <button type="button" className="treeRocketNodeEnter" onClick={onOpen} disabled={loading} title={`Open ${folder.name}`} aria-label={`Open folder ${folder.name}`}>
             <span className="treeRocketNodeIcon">{folder.kind === "computer" ? <HardDrive size={21}/> : <FolderOpen size={21}/>}</span>
-            <strong>{folder.name}</strong>
+            <span className="treeRocketNodeTitle"><strong>{folder.name}</strong><small className="treeRocketNodeCount">{folder.directFileCount ?? "—"} files · {folder.directFolderCount ?? "—"} folders</small></span>
         </button>
         <div className="treeRocketNodeActions">
-            <button type="button" onClick={event => {event.stopPropagation(); onShowFiles();}} disabled={loading}><Files size={13}/><span>Show Files</span></button>
-            <button type="button" onClick={event => {event.stopPropagation(); onAdd();}}><FolderTree size={13}/><span>Add to Folder Management</span></button>
+            <button type="button" className="treeRocketShowFiles" onClick={event => {event.stopPropagation(); onShowFiles();}} disabled={loading}><Files size={13}/><span>Show Files</span></button>
+            <button type="button" className={managed ? "treeRocketAddedButton" : ""} onClick={event => {event.stopPropagation(); onAdd();}} disabled={managed} title={managed ? (added ? "Added to Folder Management" : "Already in Folder Management") : "Add to Folder Management"} aria-label={managed ? (added ? "Added to Folder Management" : "Already in Folder Management") : "Add to Folder Management"}>{managed ? <><Check size={14}/><span className="treeRocketVisuallyHidden">{added ? "Added to Folder Management" : "Already in Folder Management"}</span></> : <><FolderTree size={13}/><span>Add to Folder Management</span></>}</button>
         </div>
     </article>;
+}
+
+function InstalledApplicationIcon({application}: {application: InstalledApplication}) {
+    const [failedIconDataUrl, setFailedIconDataUrl] = useState("");
+    return <span className="treeRocketAppIcon">{application.iconDataUrl && failedIconDataUrl !== application.iconDataUrl ? <img src={application.iconDataUrl} alt="" aria-hidden="true" onError={() => setFailedIconDataUrl(application.iconDataUrl ?? "")}/> : <AppWindow size={23} aria-hidden="true"/>}</span>;
 }
 
 export default function TreeRocket({folders, onAddFolder, onClose}: Props) {
@@ -82,17 +69,29 @@ export default function TreeRocket({folders, onAddFolder, onClose}: Props) {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
-    const [zoom, setZoom] = useState(1);
     const [copied, setCopied] = useState(false);
     const [filesLoading, setFilesLoading] = useState(false);
     const [filesError, setFilesError] = useState("");
+    const [section, setSection] = useState<"folders" | "apps">("folders");
+    const [applications, setApplications] = useState<InstalledApplication[]>([]);
+    const [appsLoading, setAppsLoading] = useState(false);
+    const [appsError, setAppsError] = useState("");
+    const [openingAppId, setOpeningAppId] = useState("");
+    const [appsLoaded, setAppsLoaded] = useState(false);
+    const [appsRetry, setAppsRetry] = useState(0);
+    const [showAddFolders, setShowAddFolders] = useState(false);
+    const [selectedFolderPaths, setSelectedFolderPaths] = useState<string[]>([]);
+    const [addedFolderPaths, setAddedFolderPaths] = useState<string[]>([]);
+    const [addingFolders, setAddingFolders] = useState(false);
     const requestSequence = useRef(0);
     const fileController = useRef<AbortController | null>(null);
     const overlayRef = useRef<HTMLElement>(null);
     const graphRef = useRef<HTMLElement>(null);
+    const branchScrollRef = useRef<HTMLDivElement>(null);
     const searchController = useRef<AbortController | null>(null);
     const backHandler = useRef<() => void>(() => {});
     const cameraByPath = useRef(new Map<string, TreeCamera>());
+    const appsController = useRef<AbortController | null>(null);
 
     useEffect(() => {
         const previousOverflow = document.body.style.overflow;
@@ -113,8 +112,22 @@ export default function TreeRocket({folders, onAddFolder, onClose}: Props) {
                 if (!controller.signal.aborted) setHostRoots(Array.isArray(data.roots) ? data.roots : []);
             })
             .catch(reason => { if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Unable to load folder roots."); });
-        return () => { controller.abort(); searchController.current?.abort(); fileController.current?.abort(); };
+        return () => { controller.abort(); searchController.current?.abort(); fileController.current?.abort(); appsController.current?.abort(); };
     }, []);
+
+    useEffect(() => {
+        if (section !== "apps" || appsLoaded) return;
+        const controller = new AbortController(); appsController.current = controller;
+        void fetch(`${API_BASE_URL}/applications/catalog`, {credentials:"include", signal:controller.signal})
+            .then(async response => {
+                const data = await response.json().catch(() => ({})) as {applications?:InstalledApplication[];message?:string};
+                if (!response.ok) throw new Error(data.message || "Unable to read installed applications.");
+                if (!controller.signal.aborted) { setApplications(Array.isArray(data.applications) ? data.applications : []); setAppsLoaded(true); }
+            })
+            .catch(reason => { if (!controller.signal.aborted) setAppsError(reason instanceof Error ? reason.message : "Unable to read installed applications."); })
+            .finally(() => { if (!controller.signal.aborted) setAppsLoading(false); });
+        return () => controller.abort();
+    }, [section, appsLoaded, appsRetry]);
 
     const roots = useMemo(() => {
         const combined = [...linkedRoots, ...hostRoots];
@@ -130,18 +143,44 @@ export default function TreeRocket({folders, onAddFolder, onClose}: Props) {
     const currentChildren = currentFolder ? contents?.folders ?? [] : roots;
     const currentPath = currentFolder?.path ?? "";
 
+    useEffect(() => {
+        if (!filesView) return;
+        const dismissOutside = (event: PointerEvent) => {
+            const target = event.target;
+            if (!(target instanceof Element) || target.closest(".treeRocketFiles,.treeRocketShowFiles")) return;
+            fileController.current?.abort();
+            setFilesView(null); setFilesLoading(false); setFilesError("");
+        };
+        document.addEventListener("pointerdown", dismissOutside, true);
+        return () => document.removeEventListener("pointerdown", dismissOutside, true);
+    }, [filesView]);
+
+    useEffect(() => {
+        if (!showAddFolders) return;
+        const dismissOutside = (event: PointerEvent) => {
+            const target = event.target;
+            if (!(target instanceof Element) || target.closest(".treeRocketAddFoldersWrap")) return;
+            setShowAddFolders(false);
+        };
+        document.addEventListener("pointerdown", dismissOutside, true);
+        return () => document.removeEventListener("pointerdown", dismissOutside, true);
+    }, [showAddFolders]);
+
     function rememberCamera(path = currentPath) {
-        const graph = graphRef.current;
+        const graph = branchScrollRef.current ?? graphRef.current;
         const maxScroll = graph ? Math.max(0, graph.scrollHeight - graph.clientHeight) : 0;
-        cameraByPath.current.set(pathKey(path) || "__roots__", {zoom, scrollProgress: maxScroll ? (graph?.scrollTop ?? 0) / maxScroll : 0});
+        cameraByPath.current.set(pathKey(path) || "__roots__", {scrollProgress: maxScroll ? (graph?.scrollTop ?? 0) / maxScroll : 0});
     }
     function restoreCamera(path: string) {
-        const camera = cameraByPath.current.get(pathKey(path) || "__roots__") ?? {zoom: 1, scrollProgress: 0};
-        setZoom(camera.zoom);
+        const camera = cameraByPath.current.get(pathKey(path) || "__roots__") ?? {scrollProgress: 0};
+        requestAnimationFrame(() => {
+            const graph = branchScrollRef.current ?? graphRef.current;
+            if (graph) graph.scrollTop = (graph.scrollHeight - graph.clientHeight) * camera.scrollProgress;
+        });
     }
 
     useEffect(() => {
-        const graph = graphRef.current;
+        const graph = branchScrollRef.current ?? graphRef.current;
         if (!graph) return;
         const camera = cameraByPath.current.get(pathKey(currentPath) || "__roots__");
         const frame = requestAnimationFrame(() => {
@@ -152,13 +191,14 @@ export default function TreeRocket({folders, onAddFolder, onClose}: Props) {
     }, [currentPath, roots.length, contents?.folders.length, searchResults]);
 
     async function fetchFolderContents(folder: TreeFolder, includeFiles = false, trail?: TreeFolder[]) {
+        setShowAddFolders(false); setSelectedFolderPaths([]);
         rememberCamera();
         const requestId = ++requestSequence.current;
         setLoading(true); setError(""); setNotice("");
         try {
             const response = await fetch(`${API_BASE_URL}/filesystem/tree-children`, {
                 method: "POST", credentials: "include", headers: {"Content-Type": "application/json"},
-                body: JSON.stringify({path: folder.path, includeFiles})
+            body: JSON.stringify({path: folder.path, includeFiles, includeFolderFileCounts: true})
             });
             const data = await response.json().catch(() => ({})) as TreeContents & {message?: string};
             if (!response.ok) throw new Error(data.message || "This folder cannot be opened.");
@@ -174,11 +214,12 @@ export default function TreeRocket({folders, onAddFolder, onClose}: Props) {
     }
 
     async function refreshFolder(folder: TreeFolder, trail = pathStack, includeFiles = false): Promise<boolean> {
+        setShowAddFolders(false); setSelectedFolderPaths([]);
         rememberCamera();
         const requestId = ++requestSequence.current;
         setLoading(true); setError("");
         try {
-            const response = await fetch(`${API_BASE_URL}/filesystem/tree-children`, {method: "POST", credentials: "include", headers: {"Content-Type": "application/json"}, body: JSON.stringify({path: folder.path, includeFiles})});
+            const response = await fetch(`${API_BASE_URL}/filesystem/tree-children`, {method: "POST", credentials: "include", headers: {"Content-Type": "application/json"}, body: JSON.stringify({path: folder.path, includeFiles, includeFolderFileCounts: true})});
             const data = await response.json().catch(() => ({})) as TreeContents & {message?: string};
             if (requestId !== requestSequence.current) return false;
             if (!response.ok) throw new Error(data.message || "This folder cannot be opened.");
@@ -219,12 +260,12 @@ export default function TreeRocket({folders, onAddFolder, onClose}: Props) {
     }, []);
 
     function goRoots() {
+        setShowAddFolders(false); setSelectedFolderPaths([]);
         rememberCamera(); searchController.current?.abort(); fileController.current?.abort(); requestSequence.current += 1; setSearching(false);
         setLoading(false); setError(""); setNotice(""); setSearchText(""); setSearchResults(null);
-        const rootCamera = cameraByPath.current.get("__roots__") ?? {zoom: 1, scrollProgress: 0};
-        cameraByPath.current.set("__roots__", {...rootCamera, scrollProgress: 0});
+        cameraByPath.current.set("__roots__", {scrollProgress: 0});
         if (graphRef.current) graphRef.current.scrollTop = 0;
-        setPathStack([]); setContents(null); setFilesView(null); setFilesLoading(false); setFilesError(""); setZoom(rootCamera.zoom);
+        setPathStack([]); setContents(null); setFilesView(null); setFilesLoading(false); setFilesError("");
     }
 
     async function showFiles(folder: TreeFolder) {
@@ -243,14 +284,28 @@ export default function TreeRocket({folders, onAddFolder, onClose}: Props) {
 
     async function addFolder(folder: TreeFolder) {
         const existing = folders.find(item => item.storage !== "imaginary" && pathKey(item.path) === pathKey(folder.path));
+        if (addedFolderPaths.some(path => pathKey(path) === pathKey(folder.path))) return true;
         if (existing) { setError(`“${existing.name}” is already in Folder Management.`); return; }
         setError(""); setNotice("");
         try {
             const result = await onAddFolder(folder.path, folder.name);
             if (result === false) throw new Error(`Unable to add “${folder.name}”. Check whether it is already present.`);
-            setNotice(`“${folder.name}” added to Folder Management. Returning to folder management…`);
-            window.setTimeout(onClose, 650);
+            setAddedFolderPaths(current => current.some(path => pathKey(path) === pathKey(folder.path)) ? current : [...current, folder.path]);
+            setNotice(`“${folder.name}” added to Folder Management.`);
+            return true;
         } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to add this folder."); }
+        return false;
+    }
+
+    async function addSelectedFolders() {
+        if (addingFolders) return;
+        const selected = currentChildren.filter(folder => selectedFolderPaths.some(path => pathKey(path) === pathKey(folder.path)));
+        if (!selected.length) return;
+        setAddingFolders(true); setError(""); setNotice("");
+        let added = 0;
+        for (const folder of selected) if (await addFolder(folder)) added += 1;
+        setAddingFolders(false); setShowAddFolders(false); setSelectedFolderPaths([]);
+        if (added) setNotice(`${added} folder${added === 1 ? "" : "s"} added to Folder Management.`);
     }
 
     async function search() {
@@ -287,48 +342,80 @@ export default function TreeRocket({folders, onAddFolder, onClose}: Props) {
         catch { setError("Clipboard access is unavailable. Select and copy the path manually."); }
     }
 
+    async function openApplication(application: InstalledApplication) {
+        if (openingAppId) return;
+        setOpeningAppId(application.appId); setAppsError("");
+        try {
+            const response = await fetch(`${API_BASE_URL}/applications/open-installed`, {method:"POST", credentials:"include", headers:{"Content-Type":"application/json"}, body:JSON.stringify({appId:application.appId})});
+            const data = await response.json().catch(() => ({})) as {message?:string};
+            if (!response.ok) throw new Error(data.message || `Unable to open ${application.name}.`);
+        } catch (reason) { setAppsError(reason instanceof Error ? reason.message : `Unable to open ${application.name}.`); }
+        finally { setOpeningAppId(""); }
+    }
+
     const visibleSearchFolders = searchResults?.folders ?? [];
     const visibleSearchFiles = searchResults?.files ?? [];
+
+    const folderIsAdded = (folder: TreeFolder) => addedFolderPaths.some(path => pathKey(path) === pathKey(folder.path));
+    const folderIsManaged = (folder: TreeFolder) => folderIsAdded(folder) || folders.some(item => item.storage !== "imaginary" && pathKey(item.path) === pathKey(folder.path));
+    const currentFolderDisplay = currentFolder && contents?.path === currentFolder.path ? {...currentFolder, directFileCount: contents.directFileCount} : currentFolder;
 
     return createPortal(<section className="treeRocketOverlay" role="dialog" aria-modal="true" aria-labelledby="treeRocketTitle" ref={overlayRef} tabIndex={-1}>
         <div className="treeRocketWindow">
             <header className="treeRocketHeader">
-                <button type="button" className="treeRocketBack" onClick={back} disabled={!pathStack.length && !filesView && !searchResults && !searchText}><ArrowLeft size={16}/>Back</button>
-                <div className="treeRocketBrand"><span><strong id="treeRocketTitle">Tree Rocket</strong></span></div>
-                <button type="button" className="treeRocketClose" onClick={onClose} title="Return to Folder Management" aria-label="Return to Folder Management"><X size={19}/><span>Return to Folder Management</span></button>
+                <button type="button" className="treeRocketBack" onClick={onClose}><ArrowLeft size={16}/>Back to FolderRocket</button>
+                <div className="treeRocketBrand">
+                    <div className="treeRocketBrandTitle"><TreeRocketMark size={82}/><strong id="treeRocketTitle"><span>Tree</span><span>Rocket</span></strong></div>
+                    <div className="treeRocketTabs" role="tablist" aria-label="Tree Rocket view">
+                        <button type="button" role="tab" aria-selected={section === "folders"} className={section === "folders" ? "active" : ""} onClick={() => {setSection("folders"); setShowAddFolders(false);}}>Folder</button>
+                        <button type="button" role="tab" aria-selected={section === "apps"} className={section === "apps" ? "active" : ""} onClick={() => {if (!appsLoaded) {setAppsLoading(true);setAppsError("");} setSection("apps"); setShowAddFolders(false); setFilesView(null);}}>Apps</button>
+                    </div>
+                </div>
+                <div className="treeRocketHeaderTools">
+                    {section === "folders" && <form className="treeRocketSearch" onSubmit={event => {event.preventDefault(); void search();}}><Search size={14}/><input value={searchText} onChange={event => setSearchText(event.target.value)} placeholder="Search folders or files…" aria-label="Search folders and files"/><button type="submit" disabled={searching} aria-label="Search">{searching ? <LoaderCircle className="treeRocketSpinner" size={14}/> : "Search"}</button></form>}
+                    <div className="treeRocketAddFoldersWrap"><button type="button" className="treeRocketAddFoldersButton" onClick={() => {setSelectedFolderPaths([]); setShowAddFolders(value => !value);}} disabled={section !== "folders" || loading || !currentChildren.length} aria-expanded={showAddFolders}><FolderPlus size={15}/>Add folders</button>
+                    {showAddFolders && <div className="treeRocketAddFoldersMenu" role="dialog" aria-label="Add current folders to Folder Management">
+                        <strong>Add folders from this location</strong><div>{currentChildren.map(folder => <label key={folder.path}><input type="checkbox" disabled={folderIsManaged(folder)} checked={selectedFolderPaths.some(path => pathKey(path) === pathKey(folder.path))} onChange={event => setSelectedFolderPaths(current => event.target.checked ? [...current, folder.path] : current.filter(path => pathKey(path) !== pathKey(folder.path)))}/><span>{folder.name}</span><small>{folderIsManaged(folder) ? "Already added" : "Existing folder"}</small></label>)}</div>
+                        {contents?.folderCountsLimited && <small>File counts are limited to the first folders in this location to keep browsing responsive.</small>}
+                        <footer><button type="button" onClick={() => setShowAddFolders(false)}>Cancel</button><button type="button" onClick={() => void addSelectedFolders()} disabled={addingFolders || !selectedFolderPaths.length}>{addingFolders ? "Adding…" : `Add selected (${selectedFolderPaths.length})`}</button></footer>
+                    </div>}
+                    </div>
+                </div>
             </header>
-            <div className="treeRocketToolbar">
-                <button type="button" onClick={goRoots} disabled={!pathStack.length && !searchResults && !filesView}><Home size={14}/>Roots</button>
-                <nav className="treeRocketBreadcrumbs" aria-label="Folder path"><button type="button" onClick={goRoots} disabled={!pathStack.length}>Computer</button>{pathStack.map((folder, index) => <span key={`${folder.path}-${index}`}><i>›</i><button type="button" onClick={() => { const next = pathStack.slice(0, index + 1); setSearchResults(null); setSearchText(""); setFilesView(null); void refreshFolder(folder, next); }}>{folder.name}</button></span>)}</nav>
-                <form className="treeRocketSearch" onSubmit={event => {event.preventDefault(); void search();}}><Search size={14}/><input value={searchText} onChange={event => setSearchText(event.target.value)} placeholder="Search folders or files…" aria-label="Search folders and files"/><button type="submit" disabled={searching} aria-label="Search">{searching ? <LoaderCircle className="treeRocketSpinner" size={14}/> : "Search"}</button></form>
-                {currentPath && <button type="button" className="treeRocketCopyPath" onClick={() => void copyPath()} title="Copy the selected folder path"><Copy size={14}/>{copied ? "Copied" : "Copy path"}</button>}
-                <div className="treeRocketZoom" aria-label="Graph zoom"><button type="button" title="Zoom out" onClick={() => setZoom(value => Math.max(.55, Math.round((value - .1) * 10) / 10))} disabled={zoom <= .55}><Minus size={14}/></button><span>{Math.round(zoom * 100)}%</span><button type="button" title="Zoom in" onClick={() => setZoom(value => Math.min(1.5, Math.round((value + .1) * 10) / 10))} disabled={zoom >= 1.5}><Plus size={14}/></button></div>
-            </div>
+            {section === "folders" && <nav className="treeRocketToolbar" aria-label="Folder navigation"><div className="treeRocketBreadcrumbs"><button type="button" onClick={goRoots} disabled={!pathStack.length}>Computer</button>{pathStack.map((folder, index) => <span key={`${folder.path}-${index}`}><i>›</i><button type="button" onClick={() => { const next = pathStack.slice(0, index + 1); setSearchResults(null); setSearchText(""); setFilesView(null); void refreshFolder(folder, next); }}>{folder.name}</button></span>)}{currentPath && <button type="button" className="treeRocketCopyPath" onClick={() => void copyPath()} title="Copy the selected folder path"><Copy size={13}/>{copied ? "Copied" : "Copy path"}</button>}</div></nav>}
             {error && <p className="treeRocketError" role="alert">{error}</p>}{notice && <p className="treeRocketNotice" role="status"><Check size={13}/>{notice}</p>}
-            <div className="treeRocketBody">
-                <main className="treeRocketGraph" aria-label="Folder tree graph" ref={graphRef} onContextMenu={event => {const target = event.target as HTMLElement; if (target.closest("[data-graph-node],button,input")) return; event.preventDefault(); back();}}>
-                    <div className="treeRocketGraphCanvas" style={{zoom}}>
+            <div className={`treeRocketBody${section === "folders" && (filesView || searchResults) ? " withSidebar" : ""}`}>
+                {section === "apps" ? <main className="treeRocketAppsPanel" role="tabpanel" aria-label="Tree Rocket Apps"><header><div><AppWindow size={19}/><strong>Applications</strong><small>{appsLoading ? "Loading applications…" : `${applications.length} applications · Windows Start menu`}</small></div><button type="button" onClick={() => {setApplications([]);setAppsLoading(true);setAppsError("");setAppsLoaded(false);setAppsRetry(value => value + 1);}} disabled={appsLoading} title="Refresh installed applications">Refresh</button></header><div className="treeRocketAppsScroll">{appsLoading && <p className="treeRocketAppsLoading" role="status"><LoaderCircle className="treeRocketSpinner" size={16}/>Loading applications…</p>}{appsError && <p role="alert">{appsError}</p>}{!appsLoading && !appsError && <div className="treeRocketAppGrid">{applications.map(application => <button type="button" className="treeRocketAppCard" key={application.appId} onClick={() => void openApplication(application)} disabled={Boolean(openingAppId)} title={`Open ${application.name}`}><InstalledApplicationIcon application={application}/><strong>{application.name}</strong>{openingAppId === application.appId && <LoaderCircle className="treeRocketSpinner" size={14}/>}</button>)}{!applications.length && <p>No applications were found in the Windows Start menu.</p>}</div>}</div></main> : <main className={`treeRocketGraph${currentFolder ? " hasOpenBranch" : ""}`} aria-label="Folder tree graph" ref={graphRef} onContextMenu={event => {event.preventDefault(); back();}}>
+                    <div className="treeRocketGraphCanvas">
                         {searchResults ? <>
                             <div className="treeRocketGraphHeading"><span>RESULTS</span><strong>{visibleSearchFolders.length} folder{visibleSearchFolders.length === 1 ? "" : "s"}</strong></div>
-                            <div className="treeRocketSearchGraph">{visibleSearchFolders.map(folder => <TreeRocketFolderNode key={folder.path} folder={folder} loading={loading} onOpen={() => void openSearchFolder(folder)} onShowFiles={() => void showFiles(folder)} onAdd={() => void addFolder(folder)}/>)}{!visibleSearchFolders.length && <p className="treeRocketEmpty">No matching folders.</p>}</div>
-                        </> : <>
-                            {!currentFolder && <div className="treeRocketLogoProposal" title="Tree Rocket logo proposal"><TreeRocketMark size={44}/></div>}
-                            {currentFolder && <TreeRocketFolderNode folder={currentFolder} root loading={loading} onOpen={() => void fetchFolderContents(currentFolder, false, pathStack)} onShowFiles={() => void showFiles(currentFolder)} onAdd={() => void addFolder(currentFolder)}/>}
-                            {currentFolder && currentChildren.length > 0 && <div className="treeRocketChildrenHeading"><span>SUBFOLDERS</span><strong>{currentFolder.name}</strong><i>{currentChildren.length}</i></div>}
-                            <div className={`treeRocketChildren ${currentFolder ? "hasParent" : "rootNodes"} ${currentChildren.length === 0 ? "emptyChildren" : currentChildren.length === 1 ? "singleChild" : "multipleChildren"}`}>
-                                {currentChildren.map(folder => <TreeRocketFolderNode key={folder.path} folder={folder} loading={loading} onOpen={() => void fetchFolderContents(folder)} onShowFiles={() => void showFiles(folder)} onAdd={() => void addFolder(folder)}/>)}
-                                {!currentChildren.length && !loading && <p className="treeRocketEmpty">No subfolders at this level.</p>}
+                            <div className="treeRocketSearchGraph">{visibleSearchFolders.map(folder => <TreeRocketFolderNode key={folder.path} folder={folder} loading={loading} added={folderIsAdded(folder)} managed={folderIsManaged(folder)} onOpen={() => void openSearchFolder(folder)} onShowFiles={() => void showFiles(folder)} onAdd={() => void addFolder(folder)}/>)}{!visibleSearchFolders.length && <p className="treeRocketEmpty">No matching folders.</p>}</div>
+                        </> : currentFolderDisplay ? <div className="treeRocketGraphStage">
+                            <TreeRocketFolderNode folder={{...currentFolderDisplay, directFolderCount:currentChildren.length}} root loading={loading} added={folderIsAdded(currentFolderDisplay)} managed={folderIsManaged(currentFolderDisplay)} onOpen={() => void fetchFolderContents(currentFolderDisplay, false, pathStack)} onShowFiles={() => void showFiles(currentFolderDisplay)} onAdd={() => void addFolder(currentFolderDisplay)}/>
+                            <section className="treeRocketBranch" aria-label={`Subfolders of ${currentFolderDisplay.name}`}>
+                                <div className="treeRocketChildrenHeading"><span>SUBFOLDERS</span><strong>{currentFolderDisplay.name}</strong><i>{currentChildren.length}</i></div>
+                                <div ref={branchScrollRef} className={`treeRocketChildren hasParent${currentChildren.length === 0 ? " emptyChildren" : ""}`}>
+                                    {currentChildren.map(folder => <TreeRocketFolderNode key={folder.path} folder={folder} loading={loading} added={folderIsAdded(folder)} managed={folderIsManaged(folder)} onOpen={() => void fetchFolderContents(folder)} onShowFiles={() => void showFiles(folder)} onAdd={() => void addFolder(folder)}/>)}
+                                    {!currentChildren.length && !loading && <p className="treeRocketEmpty">No subfolders at this level.</p>}
+                                    {loading && <p className="treeRocketLoading" role="status"><LoaderCircle className="treeRocketSpinner" size={15}/> Reading folders…</p>}
+                                </div>
+                                {contents?.folderCountsLimited && <p className="treeRocketLimit">Direct file counts are limited to keep browsing responsive.</p>}
+                                {contents?.truncatedFolders && <p className="treeRocketLimit">Showing the first 250 folders. Open a subfolder to continue.</p>}
+                            </section>
+                        </div> : <>
+                            <div className="treeRocketGraphHeading"><span>FOLDERS</span><strong>{currentChildren.length} folders</strong></div>
+                            <div className={`treeRocketChildren rootNodes${currentChildren.length === 0 ? " emptyChildren" : ""}`}>
+                                {currentChildren.map(folder => <TreeRocketFolderNode key={folder.path} folder={folder} loading={loading} added={folderIsAdded(folder)} managed={folderIsManaged(folder)} onOpen={() => void fetchFolderContents(folder)} onShowFiles={() => void showFiles(folder)} onAdd={() => void addFolder(folder)}/>)}
+                                {!currentChildren.length && !loading && <p className="treeRocketEmpty">No folders are available.</p>}
                                 {loading && <p className="treeRocketLoading" role="status"><LoaderCircle className="treeRocketSpinner" size={15}/> Reading folders…</p>}
                             </div>
-                            {contents?.truncatedFolders && <p className="treeRocketLimit">Showing the first 250 folders. Open a subfolder to continue.</p>}
                         </>}
                     </div>
-                </main>
-                {(filesView || searchResults) && <aside className="treeRocketFiles" aria-label={filesView ? `Files in ${filesView.name}` : "Search results"}>
+                </main>}
+                {section === "folders" && (filesView || searchResults) && <aside className="treeRocketFiles" aria-label={filesView ? `Files in ${filesView.name}` : "Search results"}>
                     {filesView ? <><header><div><Files size={20}/><strong>Files in {filesView.name}</strong><small>{filesView.files.length} visible</small></div><button type="button" onClick={() => {fileController.current?.abort(); setFilesView(null);}} aria-label="Close file list"><X size={16}/></button></header><div className="treeRocketFileList">{filesLoading && <p role="status"><LoaderCircle className="treeRocketSpinner" size={16}/> Loading files…</p>}{!filesLoading && filesError && <p role="alert">{filesError}</p>}{!filesLoading && filesView.files.map(file => <div className="treeRocketFile" key={file.path}><FileKindIcon name={file.name} size={22}/><strong title={file.name}>{file.name}</strong><button type="button" onClick={() => void copyPath(file.path)} aria-label={`Copy path of ${file.name}`} title="Copy path"><Copy size={14}/></button></div>)}{!filesLoading && !filesView.files.length && !filesError && <p>This folder contains no visible files.</p>}{filesView.truncated && <small>Showing the first 200 files.</small>}</div></> : <><header><div><Search size={20}/><strong>Search results</strong><small>{searchResults?.scannedDirectories ?? 0} folders scanned</small></div><button type="button" onClick={() => setSearchResults(null)} aria-label="Close search results"><X size={16}/></button></header><div className="treeRocketFileList"><h3>Files · {visibleSearchFiles.length}</h3>{visibleSearchFiles.map(file => <button type="button" className="treeRocketFile searchHit" key={file.path} onClick={() => void openSearchFile(file)} title={file.path}><FileKindIcon name={file.name} size={22}/><strong>{file.name}</strong><small>{file.parentName}</small></button>)}{!visibleSearchFiles.length && <p>No matching files.</p>}{searchResults?.truncated && <small>Search was limited to keep browsing responsive. Refine the filename to find more results.</small>}</div></>}
                 </aside>}
             </div>
-            <footer><span>Click a folder to open · Right-click/Esc: back</span><span>View and zoom are saved for each folder</span></footer>
         </div>
     </section>, document.body);
 }

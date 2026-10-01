@@ -26,6 +26,7 @@ import ChangeWorld, {Planet as WorldPlanet} from "./components/ChangeWorld";
 import DiagnosticsCenter from "./components/DiagnosticsCenter";
 import {captureDiagnostic, setDiagnosticWorld} from "./diagnostics";
 import {activeWorldStorageScope, loadWorkspaceWorldState, worldsStorageKey, type WorldAssistantCapability, type WorldAssistantModel, type WorkspaceWorld} from "./worlds";
+import {readWorldActivitySnapshot, selectWorldActivitySnapshot} from "./worldActivitySnapshot";
 
 const DomainSourcePanel = lazy(() => import("./components/DomainSourcePanel"));
 const FolderManagement = lazy(() => import("./components/FolderManagement"));
@@ -49,6 +50,7 @@ const SOURCE_BLOCKS_KEY = "folderrocket-source-blocks";
 const RIGHT_SOURCE_BLOCKS_KEY = "folderrocket-right-source-blocks";
 const DASHBOARD_HEIGHT_KEY = "folderrocket-dashboard-height";
 const DASHBOARD_LAYOUT_KEY = "folderrocket-dashboard-layout";
+const EMPTY_ACTIVITY_NOTIFICATION_SOURCES: string[] = [];
 const AI_MODE_KEY = "folderrocket-ai-mode";
 const APP_ZOOM_KEY = "folderrocket-app-zoom";
 const FLOATING_TOOLS_SCALE_KEY = "folderrocket-floating-tools-scale";
@@ -248,6 +250,34 @@ function WorldWorkspace({user, onLogout, world, worldNames, onOpenWorlds, onWorl
         window.addEventListener("folderrocket-calendar-context",rememberCalendar);
         return()=>window.removeEventListener("folderrocket-calendar-context",rememberCalendar);
     },[workspaceScope]);
+    const selectedDigestSources = world.activityNotifications?.sources ?? EMPTY_ACTIVITY_NOTIFICATION_SOURCES;
+    useEffect(() => {
+        if (!world.activityNotifications?.enabled) return;
+        let timer = 0;
+        let interval = 0;
+        let active = true;
+        let inFlight = false;
+        const sync = () => {
+            window.clearTimeout(timer);
+            timer = window.setTimeout(() => {
+                if (!active || inFlight) return;
+                inFlight = true;
+                void fetch(`${API_BASE_URL}/settings/worlds/${encodeURIComponent(world.id)}/activity-snapshot`, {method:"POST", credentials:"include", keepalive:true, headers:{"Content-Type":"application/json"}, body:JSON.stringify({snapshot:selectWorldActivitySnapshot(readWorldActivitySnapshot(workspaceScope),selectedDigestSources)})})
+                    .catch(() => {})
+                    .finally(() => { inFlight = false; });
+            }, 350);
+        };
+        const onStorage = (event:StorageEvent) => {
+            if (event.key?.includes(workspaceScope) && (event.key.includes("daily-job") || event.key.includes("sticky-notes") || event.key.includes("daily-calendars"))) sync();
+        };
+        sync();
+        interval = window.setInterval(sync, 60_000);
+        window.addEventListener("folderrocket:daily-activity", sync);
+        window.addEventListener("folderrocket:sticky-notes-updated", sync);
+        window.addEventListener("folderrocket-calendar-context", sync);
+        window.addEventListener("storage", onStorage);
+        return () => { active = false; window.clearTimeout(timer); window.clearInterval(interval); window.removeEventListener("folderrocket:daily-activity", sync); window.removeEventListener("folderrocket:sticky-notes-updated", sync); window.removeEventListener("folderrocket-calendar-context", sync); window.removeEventListener("storage", onStorage); };
+    }, [world.activityNotifications?.enabled, selectedDigestSources, world.id, workspaceScope]);
     const previousUsbIds = useRef<string[]>([]);
     useEffect(() => {
         const drives = usbStatus.drives ?? [];
@@ -570,7 +600,6 @@ function WorldWorkspace({user, onLogout, world, worldNames, onOpenWorlds, onWorl
                 return <div className={group.members.length > 1 ? "dashboardProjectGroup linkedProject" : "dashboardProjectGroup"} key={group.key}>
                     {group.members.length > 1 && <div className="dashboardProjectLabel"><span>{group.symbol}</span><small>{groupName}</small></div>}
                     {group.members.map(folder => <div className={draggedFolderId === folder.id ? "folderOrderItem draggingFolder" : "folderOrderItem"} draggable onDragStart={event => { if (event.target !== event.currentTarget) return; setDraggedFolderId(folder.id); event.dataTransfer.effectAllowed = "move"; event.dataTransfer.setData("application/x-folderrocket-folder-order", folder.id); }} onDragOver={event => { if (event.dataTransfer.types.includes("application/x-folderrocket-folder-order")) event.preventDefault(); }} onDrop={event => { const sourceId = event.dataTransfer.getData("application/x-folderrocket-folder-order"); if (sourceId) { event.preventDefault(); event.stopPropagation(); moveFolder(sourceId, folder.id); } setDraggedFolderId(null); }} onDragEnd={() => setDraggedFolderId(null)} key={folder.id}>
-                        {dashboardLayout === "folders-top" && group.members.length > 1 && <span className="dashboardTopProjectTag" title={groupName} aria-hidden="true"><span>{group.symbol}</span><small>{groupName}</small></span>}
                         <FileDropZone id={folder.id} name={folder.name} pathValue={folder.path} hidePath imaginary={folder.storage === "imaginary"} selected={Boolean(folder.path) && searchFolderIds.includes(folder.id)} sourceFolderPaths={folders.filter(item => item.storage !== "imaginary" && Boolean(item.path)).map(item => item.path)} storageScope={workspaceScope} aiEnabled={aiEnabled} onVirtualFilesAdd={items => updateFolder(folder.id, {virtualFiles: [...(folder.virtualFiles ?? []), ...items.filter(item => !(folder.virtualFiles ?? []).some(file => file.path === item.path))]})} onPathChange={path => updateFolder(folder.id, {path, storage: "physical"})} />
                     </div>)}
                 </div>;
@@ -648,7 +677,8 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
             aiEnabled: false,
             agents: [],
             skills: [],
-            permissions: {schemaVersion: 1, configured: false}
+            permissions: {schemaVersion: 1, configured: false},
+            activityNotifications: {enabled:false,senderProvider:"",senderBlockId:"",recipient:"",everyDays:1,time:"08:00",timeZone:Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",calendarWindow:"today",sources:[]}
         };
         setWorlds(current => [...current, next]);
         return next;
@@ -715,7 +745,7 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     async function updateWorld(updated: WorkspaceWorld) {
         const previous = worlds.find(world => world.id === updated.id);
         if (previous) {
-            const response = await fetch(`${API_BASE_URL}/settings/worlds/${encodeURIComponent(updated.id)}`, {method:"PUT", credentials:"include", headers:{"Content-Type":"application/json"}, body:JSON.stringify({aiEnabled:updated.aiEnabled,agents:updated.agents,skills:updated.skills})});
+            const response = await fetch(`${API_BASE_URL}/settings/worlds/${encodeURIComponent(updated.id)}`, {method:"PUT", credentials:"include", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name:updated.name,aiEnabled:updated.aiEnabled,agents:updated.agents,skills:updated.skills,activityNotifications:updated.activityNotifications})});
             const data = await response.json().catch(() => ({})) as {message?:string};
             if (!response.ok) throw new Error(data.message || "Non è stato possibile salvare lo stato AI del pianeta.");
         }

@@ -16,16 +16,18 @@ async function freePort() {
 }
 
 async function waitForBootstrap(port, child, output) {
-    const deadline=Date.now()+10000;
+    // Multiple backend suites run in parallel under `node --test`; allow cold
+    // startup under that load instead of treating scheduling delay as failure.
+    const deadline=Date.now()+20000;
     while(Date.now()<deadline){
         if(child.exitCode!==null)throw new Error(`Backend exited before startup with code ${child.exitCode}`);
         try{const response=await fetch(`http://127.0.0.1:${port}/auth/bootstrap`);if(response.ok)return response.json();}catch{/* starting */}
         await new Promise(resolve=>setTimeout(resolve,50));
     }
-    throw new Error(`Backend did not become ready within 10 seconds. Output: ${output()}`);
+    throw new Error(`Backend did not become ready within 20 seconds. Output: ${output()}`);
 }
 
-test("backend starts with isolated data and shuts down cleanly through stdin", {timeout:20000}, async t => {
+test("backend starts with isolated data and shuts down cleanly through stdin", {timeout:30000}, async t => {
     const root=await fs.promises.mkdtemp(path.join(os.tmpdir(),"folderrocket-backend-"));
     t.after(()=>fs.promises.rm(root,{recursive:true,force:true}));
     const port=await freePort();

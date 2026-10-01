@@ -33,5 +33,6 @@ export function folderDescriptionGroups(folders: ManagedFolder[]) {
 }
 
 export function folderColourMap(folders: ManagedFolder[]) {
-    return new Map(folderProjectGroups(folders).flatMap(group => group.members.map(folder => [folder.id, group.colour] as const)));
+    const validColour = (value?: string) => value && /^#[a-f\d]{6}$/i.test(value) ? value : '';
+    return new Map(folderProjectGroups(folders).flatMap(group => group.members.map(folder => [folder.id, validColour(folder.appearance?.backgroundColor) || validColour(group.colour)] as const)));
 }

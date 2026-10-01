@@ -27,6 +27,21 @@ export interface WorldPermissionFoundation {
     configured: false;
 }
 
+export type WorldDigestProvider = "gmail" | "outlook" | "";
+export type WorldDigestSource = "dailyActivities" | "reminders" | "calendar" | "gmailAlerts" | "outlookAlerts" | "teams";
+export interface WorldActivityNotifications {
+    enabled: boolean;
+    senderProvider: WorldDigestProvider;
+    senderBlockId: string;
+    recipient: string;
+    everyDays: number;
+    time: string;
+    timeZone: string;
+    calendarWindow: "today" | "tomorrow" | "week";
+    sources: WorldDigestSource[];
+    anchorDate?: string;
+}
+
 export interface WorkspaceWorld {
     id: string;
     name: string;
@@ -36,6 +51,7 @@ export interface WorkspaceWorld {
     agents: WorldAgentProfile[];
     skills: WorldSkillProfile[];
     permissions: WorldPermissionFoundation;
+    activityNotifications?: WorldActivityNotifications;
 }
 
 export interface WorkspaceWorldState {
@@ -100,9 +116,29 @@ function normalizeWorlds(value: unknown): WorkspaceWorld[] | null {
                 capabilities: Array.isArray(skill.capabilities) ? skill.capabilities.filter((capability): capability is WorldAssistantCapability => ["search-files", "draft-post-it"].includes(capability)) : []
             })) : [],
             // Reserved, inert schema. Permission semantics are intentionally deferred.
-            permissions: {schemaVersion: 1, configured: false}
+            permissions: {schemaVersion: 1, configured: false},
+            activityNotifications: normalizeActivityNotifications(world.activityNotifications)
         };
     });
+}
+
+export function normalizeActivityNotifications(value: unknown): WorldActivityNotifications {
+    const config = value && typeof value === "object" ? value as Partial<WorldActivityNotifications> : {};
+    const validSources: WorldDigestSource[] = ["dailyActivities", "reminders", "calendar", "gmailAlerts", "outlookAlerts", "teams"];
+    const localTimeZone = typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC";
+    const timeZone = typeof config.timeZone === "string" && config.timeZone.length <= 80 && config.timeZone ? config.timeZone : localTimeZone || "UTC";
+    return {
+        enabled: config.enabled === true,
+        senderProvider: config.senderProvider === "gmail" || config.senderProvider === "outlook" ? config.senderProvider : "",
+        senderBlockId: typeof config.senderBlockId === "string" && /^[a-zA-Z0-9_-]{1,120}$/.test(config.senderBlockId) ? config.senderBlockId : "",
+        recipient: typeof config.recipient === "string" ? config.recipient.trim().slice(0, 254) : "",
+        everyDays: Number.isFinite(config.everyDays) ? Math.max(1, Math.min(30, Math.round(Number(config.everyDays)))) : 1,
+        time: typeof config.time === "string" && /^([01]\d|2[0-3]):[0-5]\d$/.test(config.time) ? config.time : "08:00",
+        timeZone,
+        calendarWindow: config.calendarWindow === "tomorrow" || config.calendarWindow === "week" ? config.calendarWindow : "today",
+        sources: Array.isArray(config.sources) ? [...new Set(config.sources.filter((source): source is WorldDigestSource => validSources.includes(source as WorldDigestSource)))] : [],
+        anchorDate: typeof config.anchorDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(config.anchorDate) ? config.anchorDate : undefined
+    };
 }
 
 function migrateLegacyWorkspacePreferences(userId: string) {

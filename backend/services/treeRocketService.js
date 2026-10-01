@@ -5,6 +5,8 @@ const {execFile} = require("node:child_process");
 
 const MAX_TREE_FOLDERS = 250;
 const MAX_TREE_FILES = 200;
+const MAX_TREE_FOLDER_COUNTS = 80;
+const TREE_FOLDER_COUNT_CONCURRENCY = 8;
 const MAX_SEARCH_DIRECTORIES = 1500;
 const MAX_SEARCH_DEPTH = 8;
 const MAX_SEARCH_RESULTS = 100;
@@ -56,27 +58,49 @@ async function listTreeRoots({workspacePath, administrator = false, platform = p
     return roots;
 }
 
-async function listTreeDirectory(directoryPath, {includeFiles = false} = {}) {
+async function listTreeDirectory(directoryPath, {includeFiles = false, includeFolderFileCounts = false} = {}) {
     const stats = await fs.stat(directoryPath);
     if (!stats.isDirectory()) throw new Error("The selected path is not a folder.");
     const entries = await fs.readdir(directoryPath, {withFileTypes: true});
     const directories = [];
     const files = [];
+    let directFileCount = 0;
     for (const entry of entries) {
         const entryPath = path.join(directoryPath, entry.name);
         // Do not follow symlinks/junctions from tree nodes. This prevents cycles
         // and keeps each navigation step within the selected directory tree.
         if (entry.isDirectory()) directories.push({name: entry.name, path: entryPath});
-        else if (includeFiles && entry.isFile()) files.push({name: entry.name, path: entryPath});
+        else if (entry.isFile()) {
+            directFileCount += 1;
+            if (includeFiles) files.push({name: entry.name, path: entryPath});
+        }
     }
     directories.sort((left, right) => left.name.localeCompare(right.name, undefined, {numeric: true, sensitivity: "base"}));
     files.sort((left, right) => left.name.localeCompare(right.name, undefined, {numeric: true, sensitivity: "base"}));
+    const visibleDirectories = directories.slice(0, MAX_TREE_FOLDERS);
+    if (includeFolderFileCounts) {
+        const countDirectories = visibleDirectories.slice(0, MAX_TREE_FOLDER_COUNTS);
+        for (let index = 0; index < countDirectories.length; index += TREE_FOLDER_COUNT_CONCURRENCY) {
+            const batch = countDirectories.slice(index, index + TREE_FOLDER_COUNT_CONCURRENCY);
+            const counts = await Promise.all(batch.map(async folder => {
+                try {
+                    const childEntries = await fs.readdir(folder.path, {withFileTypes: true});
+                    return {files:childEntries.reduce((count, entry) => count + (entry.isFile() ? 1 : 0), 0), folders:childEntries.reduce((count, entry) => count + (entry.isDirectory() ? 1 : 0), 0)};
+                } catch { return undefined; }
+            }));
+            counts.forEach((count, offset) => {
+                if (count !== undefined) { batch[offset].directFileCount = count.files; batch[offset].directFolderCount = count.folders; }
+            });
+        }
+    }
     return {
         path: directoryPath,
-        folders: directories.slice(0, MAX_TREE_FOLDERS),
+        folders: visibleDirectories,
         files: includeFiles ? files.slice(0, MAX_TREE_FILES) : [],
+        directFileCount,
         truncatedFolders: directories.length > MAX_TREE_FOLDERS,
-        truncatedFiles: includeFiles && files.length > MAX_TREE_FILES
+        truncatedFiles: includeFiles && files.length > MAX_TREE_FILES,
+        folderCountsLimited: includeFolderFileCounts && visibleDirectories.length > MAX_TREE_FOLDER_COUNTS
     };
 }
 
@@ -120,4 +144,4 @@ async function searchTreeRoots(roots, query, {maxDirectories = MAX_SEARCH_DIRECT
     return {folders, files, scannedDirectories, truncated};
 }
 
-module.exports = {listTreeDirectory, listTreeRoots, searchTreeRoots, MAX_TREE_FILES, MAX_TREE_FOLDERS, MAX_SEARCH_DIRECTORIES, MAX_SEARCH_DEPTH, MAX_SEARCH_RESULTS};
+module.exports = {listTreeDirectory, listTreeRoots, searchTreeRoots, MAX_TREE_FILES, MAX_TREE_FOLDERS, MAX_TREE_FOLDER_COUNTS, MAX_SEARCH_DIRECTORIES, MAX_SEARCH_DEPTH, MAX_SEARCH_RESULTS};
