@@ -11,6 +11,7 @@ let scenario = 2;
 const children = (count: number) => Array.from({length: count}, (_, index) => ({name: `Project ${index + 1}`, path: `${rootPath}\\Project-${index + 1}`}));
 window.fetch = async (input, init) => {
     const url = new URL(String(input), location.href);
+    if (url.pathname === '/applications/catalog') return Response.json({applications: ['SolidWorks', 'Visual Studio Code', 'Word', 'Excel', 'PowerPoint', 'Inkscape', 'Blender', 'Photos', 'Calculator', 'Notepad', 'Paint', 'Teams'].map((name, index) => ({name, appId: `fixture-${index + 1}`}))});
     if (url.pathname === '/filesystem/tree-roots') return Response.json({roots: [{name: 'Fixture', path: rootPath, kind: 'computer', directFileCount: 3}]});
     if (url.pathname === '/filesystem/tree-children') {
         const body = JSON.parse(String(init?.body || '{}'));
@@ -49,7 +50,7 @@ export default function Fixture() {
             <section className="dashboardColumn sourcesColumn" style={{minHeight: 100}}>Sources</section>
             <FolderScrollFrame layout={layout} itemCount={entries.length}>
                 <div className="foldersContainer">{groups.map(group => <div key={group.key} className={`dashboardProjectGroup${group.members.length > 1 ? ' linkedProject' : ''}`}>
-                    {group.members.length > 1 && <div className="dashboardProjectLabel"><span>{group.symbol}</span><small>{group.members[0].description}</small></div>}
+                    {group.members.length > 1 && <div className="dashboardProjectLabel"><span>{group.symbol}</span><small>{group.members[0].description || 'Other folders'}</small></div>}
                     {group.members.map(entry => <div key={entry.path} className="folderOrderItem" style={{height: 94, border: '1px solid #bccfdc', borderRadius: 9, background: '#f6fbff', padding: 8, boxSizing: 'border-box'}}>
                         <strong>{entry.name}</strong><small>{entry.description || 'No project description'}</small>
                     </div>)}

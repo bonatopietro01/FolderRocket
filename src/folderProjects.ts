@@ -26,9 +26,13 @@ export function folderProjectGroups(folders: ManagedFolder[]) {
 }
 
 export function folderDescriptionGroups(folders: ManagedFolder[]) {
+    let unassignedIndex = 0;
     return buildFolderGroups(folders, folder => {
         const description = folder.description.trim().toLocaleLowerCase();
-        return description ? `description:${description}` : '';
+        if (description) return `description:${description}`;
+        const pairIndex = Math.floor(unassignedIndex / 2);
+        unassignedIndex += 1;
+        return `unassigned:${pairIndex}`;
     });
 }
 

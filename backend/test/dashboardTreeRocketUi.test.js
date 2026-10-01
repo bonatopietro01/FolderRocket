@@ -40,7 +40,8 @@ test("Tree Rocket is mounted from Folder Management and navigates without readin
     assert.match(tree, /aria-label="Tree Rocket view"/);
     assert.match(tree, />Folder<\/button>/);
     assert.match(tree, />Apps<\/button>/);
-    assert.match(tree, /<strong>Applications<\/strong>/);
+    assert.match(tree, /className="treeRocketAppsRefresh"/);
+    assert.match(tree, /className="treeRocketAppsMeta" aria-live="polite"/);
     assert.match(tree, /Windows Start menu/);
     assert.match(tree, /\/applications\/catalog/);
     assert.match(tree, /\/applications\/open-installed/);
@@ -73,6 +74,11 @@ test("Tree Rocket is mounted from Folder Management and navigates without readin
     assert.match(tree, /iconDataUrl\?: string/);
     assert.match(tree, /InstalledApplicationIcon application=\{application\}/);
     assert.match(tree, /className="treeRocketAppsScroll"/);
+    assert.match(tree, /installedApplicationsCache: InstalledApplication\[\]\ \|\ null/);
+    assert.match(tree, /installedApplicationsCache = nextApplications/);
+    assert.doesNotMatch(tree, /setApplications\(\[\]\)/);
+    assert.match(tree, /The last available catalog is still shown; refresh to retry\./);
+    assert.match(tree, /<RefreshCw className=\{appsLoading \? "treeRocketSpinner" : ""\}/);
     assert.match(tree, /className="treeRocketGraphStage"/);
     assert.match(tree, /className="treeRocketBranch"/);
     assert.doesNotMatch(tree, /treeRocketZoom|style=\{\{zoom\}\}|Open Applications workspace|<footer><span>Click a folder/);
@@ -119,13 +125,20 @@ test("Tree Rocket uses app icons, shared zoom, a fixed root branch and no bottom
     assert.match(script, /iconDataUrl/);
     assert.match(script, /catch \{\s*return \$null\s*\}/);
     const refined = css.slice(css.lastIndexOf("/* Tree Rocket shares the workspace zoom"));
-    assert.match(refined, /\.treeRocketBrandTitle \.treeRocketMark \{ width:82px; height:82px;/);
+    assert.match(refined, /\.treeRocketBrandTitle \.treeRocketMark \{ width:104px; height:104px;/);
+    assert.match(refined, /\.treeRocketBrandTitle \{ display:flex; min-width:0; align-items:center; gap:12px; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none;/);
+    assert.match(refined, /\.treeRocketBrand \{ display:flex; width:auto; min-width:0; flex-direction:row; align-items:center; justify-self:center; justify-content:center;/);
     assert.match(refined, /\.treeRocketBrandTitle > strong span:last-child \{ color:#087ed8;/);
+    assert.match(refined, /\.treeRocketTabs \.treeRocketAppsRefresh \{ display:grid; width:34px; min-height:34px;/);
     assert.match(refined, /\.treeRocketHeaderTools \{ display:flex/);
-    assert.match(refined, /\.treeRocketGraphStage \{ display:grid;[^}]*grid-template-columns:minmax\(225px,260px\) minmax\(0,1fr\)/);
+    assert.match(refined, /\.treeRocketGraphStage \{ display:flex;[^}]*flex-direction:column; align-items:center/);
     assert.match(refined, /\.treeRocketChildren \{[^}]*overflow:auto/);
     assert.match(refined, /\.treeRocketChildrenHeading > i \{ display:grid; width:25px; height:25px;[^}]*place-items:center/);
-    assert.match(refined, /\.treeRocketAppIcon img \{ display:block; width:30px; height:30px;/);
+    assert.match(refined, /\.treeRocketAppIcon img \{ display:block; width:40px; height:40px;/);
+    assert.match(refined, /\.treeRocketAppsPanel \{[^}]*height:100%/);
+    assert.match(refined, /\.treeRocketAppsPanel > \.treeRocketAppsScroll \{[^}]*background:transparent[^}]*overflow:auto[^}]*scrollbar-width:none/);
+    assert.match(refined, /\.treeRocketAppsPanel > \.treeRocketAppsScroll > \.treeRocketAppGrid \{ justify-items:stretch; \}/);
+    assert.match(refined, /\.treeRocketAppsScroll::-webkit-scrollbar \{ display:none/);
     assert.doesNotMatch(refined, /treeRocketWindow.?footer|treeRocketZoom|treeRocketAppsWorkspaceLink/);
 });
 
@@ -177,6 +190,10 @@ test("Folder Management reorder and add controls use a compact toolbar above the
     assert.match(manager, /<div className="folderTable" role="table">/);
     assert.match(css, /\.folderTable \{ min-width:0!important; overflow-x:hidden!important;/);
     assert.match(css, /\.folderTableRow,\.folderTableRow\.orderingFolder,\.folderTableRow\.orderingHead \{ width:100%; min-width:0!important;/);
+    assert.match(css, /\.folderTableHead \{ color:#52667d; font-size:15px; font-weight:800; text-transform:uppercase; \}/);
+    assert.match(css, /\.folderTableRow input \{ font-size:14px; font-weight:700; \}/);
+    assert.match(css, /\.folderTableToolbar > strong \{ margin-right:auto; color:#344e63; font-size:15px; font-weight:900/);
+    assert.match(css, /\.recentSourceCard \.usbFileList::-webkit-scrollbar \{ width:2px; height:2px; \}/);
 });
 
 test("Application filters can be composed and reset, and account integration descriptions remain under their titles", () => {

@@ -5947,15 +5947,21 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 
 /* Tree Rocket shares the workspace zoom and keeps its app and folder lists reachable. */
 .treeRocketWindow { display:flex; flex-direction:column; }
-.treeRocketHeader { display:grid; width:min(1180px,calc(100% - clamp(32px,6vw,76px))); grid-template-columns:minmax(160px,1fr) minmax(0,auto) minmax(300px,1fr); min-height:116px; align-items:center; gap:clamp(12px,2vw,28px); margin:0 auto; padding:10px 0; box-sizing:border-box; background:transparent; border:0; }
+.treeRocketHeader { display:grid; width:min(1180px,calc(100% - clamp(32px,6vw,76px))); grid-template-columns:minmax(0,1fr) minmax(0,auto) minmax(0,1fr); min-height:126px; align-items:center; gap:clamp(12px,2vw,28px); margin:0 auto; padding:10px 0; box-sizing:border-box; background:transparent; border:0; }
 .treeRocketBack { justify-self:start; }
-.treeRocketBrand { display:flex; width:auto; min-width:0; align-items:center; justify-self:center; justify-content:center; gap:clamp(10px,1.4vw,20px); }
-.treeRocketBrandTitle { display:flex; align-items:center; gap:9px; padding:5px 13px 5px 5px; border:1px solid #ffffffc9; border-radius:15px; background:linear-gradient(110deg,#fffdf3f5,#eaf5fff5); box-shadow:0 8px 24px #02091266,inset 0 1px #fff; }
-.treeRocketBrandTitle .treeRocketMark { width:82px; height:82px; object-fit:contain; filter:drop-shadow(0 3px 4px #18304a30); }
-.treeRocketBrandTitle > strong { display:flex; gap:7px; color:#10243c; font-family:inherit; font-size:clamp(25px,2.3vw,34px); font-style:italic; font-weight:950; letter-spacing:-.055em; white-space:nowrap; }
+.treeRocketBrand { display:flex; width:auto; min-width:0; flex-direction:row; align-items:center; justify-self:center; justify-content:center; gap:clamp(10px,1.4vw,18px); }
+.treeRocketBrandTitle { display:flex; min-width:0; align-items:center; gap:12px; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; }
+.treeRocketBrandTitle .treeRocketMark { width:104px; height:104px; object-fit:contain; filter:drop-shadow(0 4px 6px #020a18a8); }
+.treeRocketBrandTitle > strong { display:flex; gap:5px; color:#10243c; font-family:inherit; font-size:clamp(29px,2.7vw,40px); font-style:italic; font-weight:950; letter-spacing:-.055em; white-space:nowrap; text-shadow:0 1px 0 #ffffffd9,0 0 10px #ffffffa8; }
 .treeRocketBrandTitle > strong span:last-child { color:#087ed8; }
 .treeRocketTabs { display:flex; flex:0 0 auto; gap:4px; padding:3px; border:1px solid #a4d5f055; border-radius:9px; background:#07182db3; }
-.treeRocketTabs button { min-height:31px; padding:4px 12px; font-size:11px; }
+.treeRocketTabs button { min-height:34px; padding:5px 13px; font-size:12px; }
+.treeRocketTabs .treeRocketAppsRefresh { display:grid; width:34px; min-height:34px; place-items:center; padding:0; border-color:#4b9bc3; background:#227ba4; color:#fff; }
+.treeRocketTabs .treeRocketAppsRefresh svg { color:currentColor; }
+.treeRocketTabs .treeRocketAppsRefresh:disabled { opacity:.7; cursor:wait; }
+.treeRocketBack,.treeRocketAddFoldersButton { display:inline-flex; min-height:38px; width:max-content; align-items:center; justify-content:center; gap:7px; padding:0 12px; border:1px solid rgba(177,210,241,.36); border-radius:9px; background:rgba(18,39,66,.77); color:#e2f1ff; cursor:pointer; font-size:12px; font-weight:750; backdrop-filter:blur(8px); }
+.treeRocketBack:hover,.treeRocketAddFoldersButton:hover { border-color:#87c6f7; background:rgba(31,68,105,.86); }
+.treeRocketAddFoldersButton { border-color:rgba(100,191,255,.48); background:linear-gradient(180deg,rgba(31,115,177,.9),rgba(25,82,143,.9)); }
 .treeRocketHeaderTools { display:flex; min-width:0; align-items:center; justify-content:flex-end; gap:8px; }
 .treeRocketSearch { width:auto; min-width:0; max-width:340px; flex:1 1 210px; }
 .treeRocketAddFoldersWrap { display:flex; flex:0 0 auto; flex-direction:column; align-items:flex-end; gap:8px; }
@@ -5963,28 +5969,30 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .treeRocketBreadcrumbs { width:100%; max-width:100%; flex:1 1 auto; }
 .treeRocketBreadcrumbs button { max-width:min(200px,25vw); }
 .treeRocketBreadcrumbs .treeRocketCopyPath { min-height:24px; padding:3px 7px; font-size:9px; }
-.treeRocketBody { min-height:0; flex:1 1 0; }
+.treeRocketBody { width:min(1180px,calc(100% - clamp(32px,6vw,76px))); min-width:0; min-height:0; flex:1 1 0; margin:0 auto; }
 .treeRocketBody.withSidebar { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr); }
 .treeRocketGraph { overflow-x:hidden; overscroll-behavior:contain; }
 .treeRocketGraph.hasOpenBranch { overflow:hidden; }
-.treeRocketGraphCanvas { width:100%; min-width:0; min-height:100%; padding:26px clamp(18px,4vw,60px); box-sizing:border-box; transform:none; transition:none; }
+.treeRocketGraphCanvas { width:100%; min-width:0; min-height:100%; padding:24px clamp(12px,2vw,26px); box-sizing:border-box; transform:none; transition:none; }
 .treeRocketGraph.hasOpenBranch .treeRocketGraphCanvas { height:100%; }
 .treeRocketGraphCanvas:has(.rootNodes) { display:block; }
-.treeRocketGraphCanvas:has(.rootNodes) .treeRocketChildren.rootNodes { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(230px,100%),260px)); justify-content:center; align-items:stretch; gap:18px; padding:14px 0 26px; }
+.treeRocketGraphCanvas:has(.rootNodes) .treeRocketChildren.rootNodes { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),260px)); justify-content:center; align-items:stretch; gap:18px; padding:14px 0 26px; }
 .treeRocketGraphHeading { display:flex; align-items:center; gap:10px; margin:0 0 8px; }
 .treeRocketGraphHeading strong { color:#eff8ff; }
-.treeRocketGraphStage { display:grid; width:100%; height:100%; min-height:0; grid-template-columns:minmax(225px,260px) minmax(0,1fr); align-items:center; gap:clamp(24px,4vw,54px); }
-.treeRocketGraphStage > .treeRocketRootNode { width:100%; max-width:260px; justify-self:center; }
-.treeRocketGraphStage > .treeRocketRootNode::after { position:absolute; top:50%; left:100%; width:clamp(25px,4vw,54px); border-top:2px solid #b5ddf188; content:""; }
-.treeRocketBranch { position:relative; display:grid; height:100%; min-width:0; min-height:0; grid-template-rows:auto minmax(0,1fr) auto; align-content:center; padding-left:24px; }
-.treeRocketBranch::before { position:absolute; top:42px; bottom:24px; left:8px; border-left:2px solid #b5ddf177; content:""; }
-.treeRocketBranch::after { position:absolute; top:41px; left:-32px; width:42px; border-top:2px solid #b5ddf177; content:""; }
-.treeRocketChildrenHeading { display:flex; min-width:0; align-items:center; justify-content:flex-start; gap:8px; margin:0; padding:13px 8px 8px 0; }
+.treeRocketGraphStage { display:flex; width:100%; height:100%; min-height:0; flex-direction:column; align-items:center; justify-content:center; gap:18px; }
+.treeRocketGraphStage > .treeRocketRootNode { width:min(260px,100%); max-width:260px; flex:0 0 auto; align-self:center; }
+.treeRocketGraphStage > .treeRocketRootNode::after { position:absolute; top:100%; left:50%; width:0; height:18px; border-left:2px solid #b5ddf188; content:""; }
+.treeRocketBranch { position:relative; display:grid; width:100%; height:100%; min-width:0; min-height:0; flex:1 1 0; grid-template-rows:auto minmax(0,1fr) auto; align-content:stretch; padding:14px 0 0; }
+.treeRocketBranch::before { position:absolute; top:-18px; left:50%; height:18px; border-left:2px solid #b5ddf177; content:""; }
+.treeRocketBranch::after { display:none; }
+.treeRocketChildrenHeading { display:flex; min-width:0; align-items:center; justify-content:center; gap:8px; margin:0; padding:8px 8px 10px; }
 .treeRocketChildrenHeading > i { display:grid; width:25px; height:25px; flex:0 0 25px; place-items:center; box-sizing:border-box; border:1px solid #94c9e686; border-radius:50%; background:#102b46; color:#eff8ff; font-size:11px; font-style:normal; font-weight:850; line-height:1; text-align:center; }
-.treeRocketChildren { width:100%; min-width:0; min-height:0; max-height:100%; grid-template-columns:repeat(auto-fill,minmax(min(230px,100%),260px)); align-content:start; justify-content:start; align-items:start; gap:18px 16px; padding:20px 8px 24px 18px; box-sizing:border-box; overflow:auto; }
-.treeRocketChildren.hasParent::before,.treeRocketChildren.hasParent::after { display:none; }
-.treeRocketChildren.hasParent .treeRocketNode::before { position:absolute; top:50%; left:-19px; width:18px; height:0; border:0; border-top:2px solid #b5ddf188; content:""; }
-.treeRocketChildren.singleChild { grid-template-columns:repeat(auto-fill,minmax(min(230px,100%),260px)); justify-content:start; }
+.treeRocketChildren { width:100%; min-width:0; min-height:0; max-height:100%; grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),260px)); align-content:start; justify-content:center; align-items:start; gap:18px; padding:20px 8px 24px; box-sizing:border-box; overflow:auto; }
+.treeRocketChildren.hasParent::before { position:absolute; top:8px; left:12%; right:12%; border-top:2px solid #b5ddf177; content:""; }
+.treeRocketChildren.hasParent::after { position:absolute; top:-10px; left:50%; height:18px; border-left:2px solid #b5ddf177; content:""; }
+.treeRocketChildren.hasParent .treeRocketNode::before { display:none; }
+.treeRocketChildren.hasParent > .treeRocketNode:nth-child(-n+4)::before { position:absolute; top:-14px; left:50%; height:14px; border-left:2px solid #b5ddf188; content:""; }
+.treeRocketChildren.singleChild { grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),260px)); justify-content:center; }
 .treeRocketChildren.emptyChildren { align-content:center; }
 .treeRocketNode { width:100%; max-width:260px; min-height:145px; margin:0; }
 .treeRocketNodeEnter { padding:21px 10px 48px; }
@@ -5992,29 +6000,27 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .treeRocketNodeEnter .treeRocketNodeCount { font-size:10px; }
 .treeRocketNodeActions button { min-height:33px; font-size:10px; }
 .treeRocketFiles { position:absolute; top:14px; left:clamp(10px,2vw,28px); width:min(350px,calc(100% - 20px)); height:min(72vh,640px); }
-.treeRocketAppsPanel { display:flex; min-width:0; min-height:0; flex:1 1 0; flex-direction:column; align-items:center; gap:12px; padding:16px clamp(14px,4vw,60px); overflow:hidden; }
-.treeRocketAppsPanel > header { display:flex; width:min(1200px,100%); min-height:46px; flex:0 0 auto; align-items:center; justify-content:space-between; gap:12px; padding:8px 12px; box-sizing:border-box; border:1px solid #a4d5f044; border-radius:10px; background:#0b2038c7; }
-.treeRocketAppsPanel > header > div { display:grid; grid-template-columns:22px minmax(0,1fr); align-items:center; gap:2px 8px; }
-.treeRocketAppsPanel > header > div svg { grid-row:span 2; color:#95d4f4; }
-.treeRocketAppsPanel > header strong { color:#f1f8ff; font-size:13px; }
-.treeRocketAppsPanel > header small { color:#bfd1e0; font-size:10px; }
-.treeRocketAppsPanel > header button { min-height:29px; padding:5px 9px; border:1px solid #4b9bc3; border-radius:6px; background:#227ba4; color:#fff; cursor:pointer; font-size:10px; font-weight:800; }
-.treeRocketAppsScroll { width:min(1200px,100%); min-height:0; flex:1 1 0; overflow:auto; }
+.treeRocketAppsPanel { display:flex; width:100%; height:100%; min-width:0; min-height:0; flex:0 0 auto; flex-direction:column; align-items:center; gap:14px; padding:16px 0; box-sizing:border-box; overflow:hidden; }
+.treeRocketAppsMeta { width:100%; flex:0 0 auto; margin:0; color:#bfd1e0; font-size:11px; text-align:center; }
+.treeRocketAppsPanel > .treeRocketAppsScroll { display:block; width:100%; min-width:0; min-height:0; flex:1 1 0; justify-items:initial; gap:0; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; color:inherit; text-align:left; overflow:auto; scrollbar-width:none; }
+.treeRocketAppsPanel > .treeRocketAppsScroll > .treeRocketAppGrid { justify-items:stretch; }
+.treeRocketAppsScroll::-webkit-scrollbar { display:none; width:0; height:0; }
 .treeRocketAppsLoading { display:flex; align-items:center; justify-content:center; gap:8px; min-height:52px; margin:0; color:#d4e6f2; font-size:11px; }
-.treeRocketAppsPanel [role="alert"] { margin:8px; color:#ffe0d7; font-size:11px; }
-.treeRocketAppGrid { display:grid; width:100%; grid-template-columns:repeat(auto-fill,minmax(min(190px,100%),1fr)); gap:10px; padding:2px 2px 18px; box-sizing:border-box; }
+.treeRocketAppsError,.treeRocketAppsEmpty { margin:8px 0; color:#ffe0d7; font-size:12px; text-align:center; }
+.treeRocketAppsEmpty { color:#d4e6f2; }
+.treeRocketAppGrid { display:grid; width:100%; grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),260px)); justify-content:center; align-content:start; gap:14px; padding:4px 0 24px; box-sizing:border-box; }
 .treeRocketAppGrid > p { grid-column:1/-1; color:#d4e6f2; text-align:center; }
-.treeRocketAppCard { display:grid; min-width:0; min-height:76px; grid-template-columns:42px minmax(0,1fr) auto; align-items:center; gap:9px; padding:9px 11px; border:1px solid #b8d5e65f; border-radius:11px; background:#0b2038d9; color:#eaf5ff; cursor:pointer; text-align:left; }
-.treeRocketAppIcon { display:grid; width:38px; height:38px; place-items:center; overflow:hidden; border:1px solid #a9d7ef55; border-radius:9px; background:#e9f5ff; color:#267baa; }
-.treeRocketAppIcon img { display:block; width:30px; height:30px; object-fit:contain; }
-.treeRocketAppCard strong { overflow:hidden; font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+.treeRocketAppCard { display:grid; min-width:0; min-height:104px; grid-template-columns:54px minmax(0,1fr) auto; align-items:center; gap:12px; padding:13px 14px; border:1px solid #b8d5e65f; border-radius:13px; background:linear-gradient(145deg,#102944e8,#0b2038d9); color:#eaf5ff; cursor:pointer; text-align:left; }
+.treeRocketAppIcon { display:grid; width:50px; height:50px; place-items:center; overflow:hidden; border:1px solid #a9d7ef55; border-radius:11px; background:#e9f5ff; color:#267baa; }
+.treeRocketAppIcon img { display:block; width:40px; height:40px; object-fit:contain; }
+.treeRocketAppCard strong { overflow:hidden; font-size:14px; text-overflow:ellipsis; white-space:normal; overflow-wrap:anywhere; }
 .treeRocketAppCard:hover { border-color:#83cae9; background:#143656eb; }
 
 @media (max-width:1100px) {
   .treeRocketHeader { grid-template-columns:minmax(0,1fr) minmax(0,auto) minmax(0,1fr); gap:10px; padding-inline:0; }
   .treeRocketBrand { gap:8px; }
-  .treeRocketBrandTitle { gap:5px; padding-right:9px; }
-  .treeRocketBrandTitle .treeRocketMark { width:70px; height:70px; }
+  .treeRocketBrandTitle { gap:7px; padding:0; }
+  .treeRocketBrandTitle .treeRocketMark { width:84px; height:84px; }
   .treeRocketTabs button { min-height:29px; padding-inline:9px; }
   .treeRocketHeaderTools { flex-wrap:wrap; gap:5px; }
   .treeRocketSearch { flex-basis:170px; }
@@ -6025,16 +6031,17 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
   .treeRocketBack { grid-column:1; grid-row:1; }
   .treeRocketHeaderTools { grid-column:2; grid-row:1; justify-self:end; }
   .treeRocketBrand { grid-column:1/-1; grid-row:2; }
-  .treeRocketGraphStage { grid-template-columns:minmax(190px,230px) minmax(0,1fr); gap:24px; }
-  .treeRocketGraphStage > .treeRocketRootNode { max-width:230px; }
-  .treeRocketChildren { grid-template-columns:repeat(auto-fill,minmax(min(210px,100%),240px)); }
+  .treeRocketBrandTitle .treeRocketMark { width:76px; height:76px; }
+  .treeRocketGraphStage { gap:14px; }
+  .treeRocketChildren { grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),250px)); }
 }
 @media (max-width:600px) {
   .treeRocketHeader { grid-template-columns:minmax(0,1fr) minmax(0,1fr); grid-template-rows:auto auto auto; gap:7px; padding:8px 0; }
-  .treeRocketHeader .treeRocketBack { grid-column:1; grid-row:1; gap:5px; padding:4px 8px; font-size:10px; }
+  .treeRocketHeader .treeRocketBack { grid-column:1/-1; grid-row:1; justify-self:start; }
   .treeRocketBrand { grid-column:1/-1; grid-row:2; gap:7px; }
-  .treeRocketBrandTitle .treeRocketMark { width:60px; height:60px; }
-  .treeRocketBrandTitle > strong { gap:5px; font-size:23px; }
+  .treeRocketBrand { gap:7px; }
+  .treeRocketBrandTitle .treeRocketMark { width:62px; height:62px; }
+  .treeRocketBrandTitle > strong { gap:3px; font-size:clamp(20px,6vw,25px); }
   .treeRocketTabs button { min-height:27px; padding-inline:8px; font-size:10px; }
   .treeRocketHeaderTools { grid-column:1/-1; grid-row:3; width:100%; justify-self:stretch; }
   .treeRocketSearch { flex-basis:150px; }
@@ -6043,48 +6050,65 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
   .treeRocketToolbar { padding-inline:0; }
   .treeRocketGraph.hasOpenBranch { overflow:hidden; }
   .treeRocketGraphCanvas { padding:12px; }
-  .treeRocketGraphStage { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); gap:10px; }
-  .treeRocketGraphStage > .treeRocketRootNode { max-width:260px; }
-  .treeRocketGraphStage > .treeRocketRootNode::after,.treeRocketBranch::after { display:none; }
-  .treeRocketBranch { padding-left:14px; }
-  .treeRocketBranch::before { top:34px; left:3px; }
-  .treeRocketChildren { grid-template-columns:repeat(auto-fill,minmax(min(190px,100%),220px)); gap:12px; padding:12px 4px 16px 15px; }
-  .treeRocketChildren.hasParent .treeRocketNode::before { left:-14px; width:13px; }
-  .treeRocketAppsPanel { padding:10px; }
-  .treeRocketAppGrid { grid-template-columns:repeat(auto-fill,minmax(min(150px,100%),1fr)); }
+  .treeRocketGraphStage { gap:12px; }
+  .treeRocketGraphStage > .treeRocketRootNode { max-width:250px; }
+  .treeRocketBranch { padding-top:12px; }
+  .treeRocketChildren { grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),220px)); gap:12px; padding:18px 4px 16px; }
+  .treeRocketChildren.hasParent::before { left:10%; right:10%; }
+  .treeRocketAppsPanel { padding:10px 0; }
+  .treeRocketAppGrid { grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),240px)); gap:10px; }
 }
 
 /* Folders on Top is capped at two tile rows; a busy project scrolls inside its white group. */
 .dashboardFoldersTop > .foldersColumn { height:min(252px,34vh); max-height:min(252px,34vh); min-height:0; overflow:hidden; }
 .dashboardFoldersTop .foldersScrollRegion { height:100%; min-height:0; overflow-x:auto; overflow-y:hidden; scrollbar-gutter:auto; overscroll-behavior-x:contain; }
-.dashboardFoldersTop .foldersContainer { width:max-content; min-width:100%; height:100%; align-items:stretch; padding:5px 18px; }
+.dashboardFoldersTop .foldersContainer { width:max-content; min-width:100%; height:100%; align-items:stretch; padding:3px 10px; }
 .dashboardFoldersTop .dashboardProjectGroup,
-.dashboardFoldersTop .dashboardProjectGroup.linkedProject { height:100%; min-height:0; background:#fff; border-color:#e1e8ee; }
-.dashboardFoldersTop .dashboardProjectLabel { background:#fff; border-bottom-color:#e8edf1; }
+.dashboardFoldersTop .dashboardProjectGroup.linkedProject { height:100%; min-height:0; padding:2px 0; overflow-y:auto; border:0; border-radius:0; background:transparent; }
+.dashboardFoldersTop .dashboardProjectLabel { justify-content:center; min-height:25px; flex-basis:25px; margin:0 0 2px; padding:1px 4px; border:0; background:transparent; text-align:center; }
 .dashboardFoldersTop .dashboardProjectLabel > span { border-color:#c5d2dc; box-shadow:0 1px 4px #35597420; }
+.dashboardFoldersTop .dashboardProjectLabel small { text-align:center; }
 .dashboardFoldersTop .dashboardProjectGroup.linkedProject .folderOrderItem { width:100%; min-width:0; margin-left:0; }
 .dashboardFoldersTop .dashboardProjectGroup .folderOrderItem { flex:0 0 auto; }
-.dashboardFoldersTop .dashboardProjectGroup .folderDropZone { min-height:100px!important; }
+.dashboardFoldersTop .dashboardProjectGroup .folderDropZone { min-height:100px!important; padding:5px 34px 5px 8px!important; }
+.dashboardFoldersTop .dashboardProjectGroup::-webkit-scrollbar { width:2px; }
+.dashboardFoldersTop .foldersColumn::before,.dashboardFoldersTop .foldersColumn::after { width:10px; }
+.dashboardFoldersTop .foldersColumn::before { background:linear-gradient(90deg,#f5f8fb,transparent); }
+.dashboardFoldersTop .foldersColumn::after { background:linear-gradient(270deg,#f5f8fb,transparent); }
 
 /* Folder Management toolbar and fields shrink to their panel rather than creating a second scrollbar. */
 .folderTableToolbar { display:flex; min-width:0; justify-content:space-between; align-items:center; gap:8px; }
-.folderTableToolbar > strong { margin-right:auto; color:#344e63; font-size:14px; }
+.folderTableToolbar > strong { margin-right:auto; color:#344e63; font-size:15px; font-weight:900; letter-spacing:.01em; }
 .folderTableToolbarActions { display:flex; flex:0 0 auto; align-items:center; gap:5px; }
 .folderTable { min-width:0!important; overflow-x:hidden!important; }
-.folderTableRow,.folderTableRow.orderingFolder,.folderTableRow.orderingHead { width:100%; min-width:0!important; grid-template-columns:24px minmax(65px,1fr) minmax(80px,1.15fr) minmax(65px,.9fr) 54px; gap:3px; padding-inline:2px; }
-.folderTableRow.orderingFolder,.folderTableRow.orderingHead { grid-template-columns:17px 22px minmax(65px,1fr) minmax(80px,1.15fr) minmax(65px,.9fr) 54px; }
+.folderTableRow,.folderTableRow.orderingFolder,.folderTableRow.orderingHead { width:100%; min-width:0!important; grid-template-columns:24px minmax(78px,1fr) minmax(62px,.9fr) minmax(92px,1.2fr) 54px; gap:4px; padding-inline:3px; }
+.folderTableRow.orderingFolder,.folderTableRow.orderingHead { grid-template-columns:17px 22px minmax(78px,1fr) minmax(62px,.9fr) minmax(92px,1.2fr) 54px; }
+.folderTableHead { color:#52667d; font-size:15px; font-weight:800; text-transform:uppercase; }
+.folderTableHead > span:not([aria-label]) { min-width:0; font-weight:900; }
+.folderTableRow input { font-size:14px; font-weight:700; }
+.folderTableRow .pathSplitControl { min-width:0; grid-template-columns:minmax(0,1fr) 24px; }
+.folderTableRow .pathInsertButton { min-width:0; padding-inline:5px; }
+.folderInspector .inspectorFileName { font-size:14px; }
+.folderInspector .inspectorFileName strong { font-size:inherit; }
 .dashboardBrowserFiles > div { min-height:29px; gap:5px; padding:3px 5px; }
 .dashboardBrowserFiles > div span { width:23px; height:23px; }
 .dashboardBrowserFiles strong { font-size:9px; }
 .dashboardBrowserFiles small { font-size:8px; }
 
 @media (max-width:900px) {
-  .folderTableRow,.folderTableRow.orderingFolder,.folderTableRow.orderingHead { grid-template-columns:22px minmax(55px,1fr) minmax(70px,1.1fr) minmax(55px,.8fr) 48px; }
-  .folderTableRow.orderingFolder,.folderTableRow.orderingHead { grid-template-columns:16px 20px minmax(55px,1fr) minmax(70px,1.1fr) minmax(55px,.8fr) 48px; }
+  .folderTableRow,.folderTableRow.orderingFolder,.folderTableRow.orderingHead { grid-template-columns:22px minmax(62px,1fr) minmax(56px,.9fr) minmax(72px,1.15fr) 48px; }
+  .folderTableRow.orderingFolder,.folderTableRow.orderingHead { grid-template-columns:16px 20px minmax(62px,1fr) minmax(56px,.9fr) minmax(72px,1.15fr) 48px; }
 }
 @media (max-width:650px) {
-  .folderTableToolbar > strong { font-size:12px; }
+  .folderTableToolbar > strong { font-size:14px; }
   .folderTableToolbarActions .orderFoldersButton span,.folderTableToolbarActions .addFolder span { display:none; }
-  .folderTableRow,.folderTableRow.orderingFolder { grid-template-columns:22px minmax(0,1fr) minmax(0,1.2fr) 54px; grid-template-rows:auto auto; }
-  .folderTableRow.orderingFolder { grid-template-columns:16px 22px minmax(0,1fr) minmax(0,1.2fr) 54px; }
+  .folderTableRow,.folderTableRow.orderingFolder { grid-template-columns:22px minmax(0,1.15fr) minmax(0,.9fr) 54px; grid-template-rows:auto auto; }
+  .folderTableRow.orderingFolder { grid-template-columns:16px 22px minmax(0,1.15fr) minmax(0,.9fr) 54px; }
 }
+
+/* Recent Files keeps native scrolling while making its scrollbar unobtrusive. */
+.recentSourceCard .usbFileList { width:100%; min-width:0; scrollbar-width:thin; scrollbar-color:#718ca355 transparent; }
+.recentSourceCard .usbFileList::-webkit-scrollbar { width:2px; height:2px; }
+.recentSourceCard .usbFileList::-webkit-scrollbar-track { background:transparent; }
+.recentSourceCard .usbFileList::-webkit-scrollbar-thumb { border-radius:3px; background:#718ca344; }
+.recentSourceCard .usbFileList:hover::-webkit-scrollbar-thumb,.recentSourceCard .usbFileList:focus-within::-webkit-scrollbar-thumb { background:#718ca399; }

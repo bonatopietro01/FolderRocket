@@ -1,6 +1,6 @@
 import {useEffect, useMemo, useRef, useState} from "react";
 import {createPortal} from "react-dom";
-import {AppWindow, ArrowLeft, Check, Copy, Files, FolderOpen, FolderPlus, FolderTree, HardDrive, LoaderCircle, Search, X} from "lucide-react";
+import {AppWindow, ArrowLeft, Check, Copy, Files, FolderOpen, FolderPlus, FolderTree, HardDrive, LoaderCircle, RefreshCw, Search, X} from "lucide-react";
 import {API_BASE_URL} from "../api";
 import treeRocketLogo from "../assets/tree-rocket-logo.png";
 import FileKindIcon from "./FileKindIcon";
@@ -16,6 +16,8 @@ interface TreeSearchResults { folders: SearchFolder[]; files: SearchFile[]; scan
 interface FileView { path: string; name: string; files: TreeFile[]; truncated: boolean; }
 interface TreeCamera { scrollProgress: number; }
 interface Props { folders: LinkedFolder[]; onAddFolder: (path: string, name: string) => boolean | void | Promise<boolean | void>; onClose: () => void; }
+
+let installedApplicationsCache: InstalledApplication[] | null = null;
 
 function pathKey(value: string) { return value.replaceAll("/", "\\").replace(/[\\]+$/, "").toLowerCase(); }
 function pathTrail(rootPath: string, rootName: string, targetPath: string): TreeFolder[] {
@@ -73,11 +75,11 @@ export default function TreeRocket({folders, onAddFolder, onClose}: Props) {
     const [filesLoading, setFilesLoading] = useState(false);
     const [filesError, setFilesError] = useState("");
     const [section, setSection] = useState<"folders" | "apps">("folders");
-    const [applications, setApplications] = useState<InstalledApplication[]>([]);
+    const [applications, setApplications] = useState<InstalledApplication[]>(() => installedApplicationsCache ?? []);
     const [appsLoading, setAppsLoading] = useState(false);
     const [appsError, setAppsError] = useState("");
     const [openingAppId, setOpeningAppId] = useState("");
-    const [appsLoaded, setAppsLoaded] = useState(false);
+    const [appsLoaded, setAppsLoaded] = useState(() => installedApplicationsCache !== null);
     const [appsRetry, setAppsRetry] = useState(0);
     const [showAddFolders, setShowAddFolders] = useState(false);
     const [selectedFolderPaths, setSelectedFolderPaths] = useState<string[]>([]);
@@ -122,9 +124,14 @@ export default function TreeRocket({folders, onAddFolder, onClose}: Props) {
             .then(async response => {
                 const data = await response.json().catch(() => ({})) as {applications?:InstalledApplication[];message?:string};
                 if (!response.ok) throw new Error(data.message || "Unable to read installed applications.");
-                if (!controller.signal.aborted) { setApplications(Array.isArray(data.applications) ? data.applications : []); setAppsLoaded(true); }
+                if (!controller.signal.aborted) {
+                    const nextApplications = Array.isArray(data.applications) ? data.applications : [];
+                    installedApplicationsCache = nextApplications;
+                    setApplications(nextApplications);
+                    setAppsLoaded(true);
+                }
             })
-            .catch(reason => { if (!controller.signal.aborted) setAppsError(reason instanceof Error ? reason.message : "Unable to read installed applications."); })
+            .catch(reason => { if (!controller.signal.aborted) { setAppsError(reason instanceof Error ? reason.message : "Unable to read installed applications."); setAppsLoaded(true); } })
             .finally(() => { if (!controller.signal.aborted) setAppsLoading(false); });
         return () => controller.abort();
     }, [section, appsLoaded, appsRetry]);
@@ -365,11 +372,12 @@ export default function TreeRocket({folders, onAddFolder, onClose}: Props) {
             <header className="treeRocketHeader">
                 <button type="button" className="treeRocketBack" onClick={onClose}><ArrowLeft size={16}/>Back to FolderRocket</button>
                 <div className="treeRocketBrand">
-                    <div className="treeRocketBrandTitle"><TreeRocketMark size={82}/><strong id="treeRocketTitle"><span>Tree</span><span>Rocket</span></strong></div>
                     <div className="treeRocketTabs" role="tablist" aria-label="Tree Rocket view">
                         <button type="button" role="tab" aria-selected={section === "folders"} className={section === "folders" ? "active" : ""} onClick={() => {setSection("folders"); setShowAddFolders(false);}}>Folder</button>
                         <button type="button" role="tab" aria-selected={section === "apps"} className={section === "apps" ? "active" : ""} onClick={() => {if (!appsLoaded) {setAppsLoading(true);setAppsError("");} setSection("apps"); setShowAddFolders(false); setFilesView(null);}}>Apps</button>
+                        {section === "apps" && <button type="button" className="treeRocketAppsRefresh" onClick={() => {setAppsLoading(true);setAppsError("");setAppsLoaded(false);setAppsRetry(value => value + 1);}} disabled={appsLoading} title="Refresh installed applications" aria-label="Refresh installed applications"><RefreshCw className={appsLoading ? "treeRocketSpinner" : ""} size={14}/></button>}
                     </div>
+                    <div className="treeRocketBrandTitle"><TreeRocketMark size={82}/><strong id="treeRocketTitle"><span>Tree</span><span>Rocket</span></strong></div>
                 </div>
                 <div className="treeRocketHeaderTools">
                     {section === "folders" && <form className="treeRocketSearch" onSubmit={event => {event.preventDefault(); void search();}}><Search size={14}/><input value={searchText} onChange={event => setSearchText(event.target.value)} placeholder="Search folders or files…" aria-label="Search folders and files"/><button type="submit" disabled={searching} aria-label="Search">{searching ? <LoaderCircle className="treeRocketSpinner" size={14}/> : "Search"}</button></form>}
@@ -385,7 +393,15 @@ export default function TreeRocket({folders, onAddFolder, onClose}: Props) {
             {section === "folders" && <nav className="treeRocketToolbar" aria-label="Folder navigation"><div className="treeRocketBreadcrumbs"><button type="button" onClick={goRoots} disabled={!pathStack.length}>Computer</button>{pathStack.map((folder, index) => <span key={`${folder.path}-${index}`}><i>›</i><button type="button" onClick={() => { const next = pathStack.slice(0, index + 1); setSearchResults(null); setSearchText(""); setFilesView(null); void refreshFolder(folder, next); }}>{folder.name}</button></span>)}{currentPath && <button type="button" className="treeRocketCopyPath" onClick={() => void copyPath()} title="Copy the selected folder path"><Copy size={13}/>{copied ? "Copied" : "Copy path"}</button>}</div></nav>}
             {error && <p className="treeRocketError" role="alert">{error}</p>}{notice && <p className="treeRocketNotice" role="status"><Check size={13}/>{notice}</p>}
             <div className={`treeRocketBody${section === "folders" && (filesView || searchResults) ? " withSidebar" : ""}`}>
-                {section === "apps" ? <main className="treeRocketAppsPanel" role="tabpanel" aria-label="Tree Rocket Apps"><header><div><AppWindow size={19}/><strong>Applications</strong><small>{appsLoading ? "Loading applications…" : `${applications.length} applications · Windows Start menu`}</small></div><button type="button" onClick={() => {setApplications([]);setAppsLoading(true);setAppsError("");setAppsLoaded(false);setAppsRetry(value => value + 1);}} disabled={appsLoading} title="Refresh installed applications">Refresh</button></header><div className="treeRocketAppsScroll">{appsLoading && <p className="treeRocketAppsLoading" role="status"><LoaderCircle className="treeRocketSpinner" size={16}/>Loading applications…</p>}{appsError && <p role="alert">{appsError}</p>}{!appsLoading && !appsError && <div className="treeRocketAppGrid">{applications.map(application => <button type="button" className="treeRocketAppCard" key={application.appId} onClick={() => void openApplication(application)} disabled={Boolean(openingAppId)} title={`Open ${application.name}`}><InstalledApplicationIcon application={application}/><strong>{application.name}</strong>{openingAppId === application.appId && <LoaderCircle className="treeRocketSpinner" size={14}/>}</button>)}{!applications.length && <p>No applications were found in the Windows Start menu.</p>}</div>}</div></main> : <main className={`treeRocketGraph${currentFolder ? " hasOpenBranch" : ""}`} aria-label="Folder tree graph" ref={graphRef} onContextMenu={event => {event.preventDefault(); back();}}>
+                {section === "apps" ? <main className="treeRocketAppsPanel" role="tabpanel" aria-label="Tree Rocket Apps">
+                    <p className="treeRocketAppsMeta" aria-live="polite">{appsLoading ? applications.length ? "Refreshing applications…" : "Loading applications…" : `${applications.length} applications · Windows Start menu`}</p>
+                    <div className="treeRocketAppsScroll">
+                        {appsLoading && !applications.length && <p className="treeRocketAppsLoading" role="status"><LoaderCircle className="treeRocketSpinner" size={16}/>Loading applications…</p>}
+                        {appsError && <p className="treeRocketAppsError" role="alert">{appsError} {applications.length ? "The last available catalog is still shown; refresh to retry." : "Use Refresh to try again."}</p>}
+                        {applications.length > 0 && <div className="treeRocketAppGrid">{applications.map(application => <button type="button" className="treeRocketAppCard" key={application.appId} onClick={() => void openApplication(application)} disabled={Boolean(openingAppId)} title={`Open ${application.name}`}><InstalledApplicationIcon application={application}/><strong>{application.name}</strong>{openingAppId === application.appId && <LoaderCircle className="treeRocketSpinner" size={14}/>}</button>)}</div>}
+                        {!appsLoading && !appsError && !applications.length && <p className="treeRocketAppsEmpty">No applications were found in the Windows Start menu.</p>}
+                    </div>
+                </main> : <main className={`treeRocketGraph${currentFolder ? " hasOpenBranch" : ""}`} aria-label="Folder tree graph" ref={graphRef} onContextMenu={event => {event.preventDefault(); back();}}>
                     <div className="treeRocketGraphCanvas">
                         {searchResults ? <>
                             <div className="treeRocketGraphHeading"><span>RESULTS</span><strong>{visibleSearchFolders.length} folder{visibleSearchFolders.length === 1 ? "" : "s"}</strong></div>

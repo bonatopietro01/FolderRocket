@@ -46,7 +46,7 @@ test('description projects share colour and explicit work groups override descri
     assert.deepEqual(groups[0].members.map(folder=>folder.id),['a','b','d']);
     assert.equal(groups[0].colour,'#ddeeff');assert.equal(groups[1].members.length,1);
 });
-test('Folders on Top groups non-empty descriptions and keeps empty descriptions independent',()=>{
+test('Folders on Top groups matching descriptions and pairs unassigned folders',()=>{
     const groups=folderDescriptionGroups([
         {id:'a',name:'Alpha',path:'',description:' Work '},
         {id:'b',name:'Beta',path:'',description:'work',appearance:{workGroup:'Different custom group'}},
@@ -54,10 +54,16 @@ test('Folders on Top groups non-empty descriptions and keeps empty descriptions 
         {id:'d',name:'Delta',path:'',description:''},
         {id:'e',name:'Echo',path:'',description:'  '}
     ]);
-    assert.deepEqual(groups.map(group=>group.members.map(folder=>folder.id)),[['a','b'],['c'],['d'],['e']]);
+    assert.deepEqual(groups.map(group=>group.members.map(folder=>folder.id)),[['a','b'],['c'],['d','e']]);
     assert.equal(groups[0].key,'description:work');
     assert.ok(groups[0].colour);
-    assert.notEqual(groups[2].key,groups[3].key);
+    assert.equal(groups[2].key,'unassigned:0');
+    assert.equal(groups[2].members.length,2);
+    assert.deepEqual(folderDescriptionGroups([
+        {id:'x',name:'X',path:'',description:''},
+        {id:'y',name:'Y',path:'',description:''},
+        {id:'z',name:'Z',path:'',description:''}
+    ]).map(group=>group.members.map(folder=>folder.id)),[['x','y'],['z']]);
     assert.deepEqual(folderProjectGroups([
         {id:'a',name:'Alpha',path:'',description:'Work',appearance:{workGroup:'Custom'}},
         {id:'b',name:'Beta',path:'',description:'Work'}
