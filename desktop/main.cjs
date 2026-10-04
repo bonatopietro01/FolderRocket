@@ -5,6 +5,7 @@ const net = require("node:net");
 const path = require("node:path");
 const {spawn} = require("node:child_process");
 const crypto = require("node:crypto");
+const {resolveManagedObsidianVault} = require("./obsidianVaultProtocol.cjs");
 
 const FOLDERROCKET_PROTOCOL = "folderrocket";
 
@@ -137,6 +138,19 @@ app.on("child-process-gone", (_event, details) => {
 
 ipcMain.handle("folderrocket:diagnostics:list-electron", event => event.sender.getURL().startsWith(APP_ORIGIN) ? readElectronDiagnostics() : []);
 ipcMain.handle("folderrocket:diagnostics:clear-electron", event => event.sender.getURL().startsWith(APP_ORIGIN) ? clearElectronDiagnostics() : false);
+ipcMain.handle("folderrocket:open-obsidian-vault", async (event, payload) => {
+    if (event.sender.getURL().startsWith(APP_ORIGIN) === false) return {opened:false,message:"Unavailable outside FolderRocket."};
+    const worldId=typeof payload?.worldId==="string"?payload.worldId:"";
+    try {
+        const realVault=await resolveManagedObsidianVault({vaultPath:payload?.vaultPath,worldId,dataDirectory:path.join(app.getPath("userData"),"data")});
+        const target=new URL("obsidian://open");
+        target.searchParams.set("path",realVault);
+        await shell.openExternal(target.toString());
+        return {opened:true};
+    } catch(error) {
+        return {opened:false,message:error?.code==="ENOENT"?"Create or sync this planet's vault before opening it.":"Obsidian could not open this vault. Check that Obsidian is installed."};
+    }
+});
 
 function focusFolderRocket() {
     if (!mainWindow || mainWindow.isDestroyed()) return;
@@ -150,7 +164,12 @@ function handleFolderRocketProtocol(url) {
         const target = new URL(url);
         if (target.protocol !== `${FOLDERROCKET_PROTOCOL}:`) return;
         focusFolderRocket();
-        mainWindow?.webContents.send("folderrocket:oauth-complete", target.searchParams.get("provider") || "");
+        if(target.hostname==="obsidian"&&(target.pathname==="/sync"||target.pathname==="/open")) {
+            const worldId=target.searchParams.get("worldId")||"";
+            if(/^[a-zA-Z0-9_-]{1,80}$/.test(worldId)&&!["__proto__","prototype","constructor"].includes(worldId))mainWindow?.webContents.send("folderrocket:obsidian-command",{action:target.pathname==="/sync"?"sync":"open",worldId});
+            return;
+        }
+        if(target.hostname==="oauth"&&target.pathname==="/connected")mainWindow?.webContents.send("folderrocket:oauth-complete", target.searchParams.get("provider") || "");
     } catch { /* Ignore malformed external protocol calls. */ }
 }
 

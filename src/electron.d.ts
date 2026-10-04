@@ -26,6 +26,8 @@ interface Window {
     folderRocketDesktop?: {
         getPathForFile: (file: File) => string;
         openExternal: (url: string) => Promise<boolean>;
+        openObsidianVault: (request: {worldId: string; vaultPath: string}) => Promise<{opened:boolean;message?:string}>;
+        onObsidianCommand: (callback: (command: {action: "sync" | "open"; worldId: string}) => void) => () => void;
         saveDownload: (payload: {suggestedName: string; bytes: Uint8Array}) => Promise<{saved: boolean; canceled?: boolean; path?: string; message?: string}>;
         listDisplaySources: () => Promise<FolderRocketDisplaySource[]>;
         selectDisplaySource: (sourceId: string) => Promise<boolean>;

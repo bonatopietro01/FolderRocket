@@ -85,7 +85,7 @@ export default function Fixture() {
                     : <div className="foldersContainer fixtureRoot"><FileDropZone id="fixture-mother" name="Mother folder" pathValue={'C:\\Fixture'} hidePath storageScope={scope} aiEnabled/></div>}
             </div>
         </div>
-        <p id="app-launch-result">No launch requested</p><ApplicationsWorkspace storageScope={scope}/>
+        <p id="app-launch-result">No launch requested</p><ApplicationsWorkspace storageScope={scope} folders={[]} onVirtualFilesAdd={() => {}}/>
     </>;
 }
 const fixtureRoot = createRoot(document.getElementById('root')!);

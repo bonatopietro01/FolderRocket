@@ -4,6 +4,7 @@ import {ArrowLeft, ChevronDown, ChevronRight, ExternalLink, Flame, FolderClosed,
 import {API_BASE_URL} from "../api";
 import FireMountain from "./FireMountain";
 import TreeRocket, {TreeRocketMark} from "./TreeRocket";
+import type {WorldTreeRootMode} from "../worlds";
 import FileKindIcon from "./FileKindIcon";
 
 export interface VirtualFile { name: string; path: string; createdAt?: string; size?: number; }
@@ -13,7 +14,7 @@ interface FileEntry extends VirtualFile { matches?: string[]; }
 interface DirectoryEntry { name: string; path: string; createdAt?: string; }
 interface DirectoryContents { files: FileEntry[]; folders: DirectoryEntry[]; }
 interface TransferDestination { folderId: string; name: string; path: string; storage: "physical" | "imaginary"; }
-interface Props { folders: ManagedFolder[]; onAdd: (path?: string, name?: string) => boolean | void; onUpdate: (id: string, change: Partial<ManagedFolder>) => void; onDelete: (id: string) => void; onReorder: (sourceId: string, targetId: string, placement: "before" | "after") => void; aiEnabled: boolean; }
+interface Props { folders: ManagedFolder[]; onAdd: (path?: string, name?: string) => boolean | void; onUpdate: (id: string, change: Partial<ManagedFolder>) => void; onDelete: (id: string) => void; onReorder: (sourceId: string, targetId: string, placement: "before" | "after") => void; aiEnabled: boolean; worldId:string; treeRootMode:WorldTreeRootMode; onTreeRootModeChange:(mode:WorldTreeRootMode)=>Promise<void>; }
 
 function comparablePath(value: string) { return value.trim().replace(/\//g, "\\").replace(/[\\/]+$/, "").toLowerCase(); }
 function isChildOfFolder(folderPath: string, candidatePath: string) {
@@ -34,7 +35,7 @@ function FolderQuickPreview({file, slot}: {file: FileEntry | null; slot: number}
     return <article className="folderQuickPreviewSlot"><div className="folderQuickPreviewVisual">{preview?.kind === "loading" && <p>Loading…</p>}{preview?.kind === "text" && <pre>{preview.text || "No readable text."}</pre>}{preview?.kind === "image" && preview.url && <img src={`${API_BASE_URL}${preview.url}`} alt={`Preview of ${file.name}`}/>} {preview?.kind === "pdf" && preview.url && <iframe src={`${API_BASE_URL}${preview.url}`} title={`Preview of ${file.name}`}/>} {preview?.kind === "unavailable" && <p>{preview.message || "Preview unavailable."}</p>}</div><div className="folderQuickPreviewName"><FileKindIcon name={file.name}/><strong title={file.name}>{file.name}</strong></div></article>;
 }
 
-export default function FolderManagement({folders, onAdd, onUpdate, onDelete, onReorder, aiEnabled}: Props) {
+export default function FolderManagement({folders, onAdd, onUpdate, onDelete, onReorder, aiEnabled, worldId, treeRootMode, onTreeRootModeChange}: Props) {
     const [treeRocketOpen, setTreeRocketOpen] = useState(false);
     const [openedFolderIds, setOpenedFolderIds] = useState<string[]>([]);
     const [primaryOpenedId, setPrimaryOpenedId] = useState<string | null>(null);
@@ -554,7 +555,7 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
     }
 
     return <main className="folderManagementPage">
-        {treeRocketOpen && <TreeRocket folders={folders} onAddFolder={(path, name) => onAdd(path, name)} onClose={() => setTreeRocketOpen(false)}/>}
+        {treeRocketOpen && <TreeRocket folders={folders} worldId={worldId} treeRootMode={treeRootMode} onTreeRootModeChange={onTreeRootModeChange} onAddFolder={(path, name) => onAdd(path, name)} onClose={() => setTreeRocketOpen(false)}/>}
         {newFolder && <dialog ref={newFolderDialog} className="createFolderDialog" onCancel={event => { event.preventDefault(); if (!creatingFolder) setNewFolder(null); }} aria-labelledby="createFolderTitle">
             <form onSubmit={event => { event.preventDefault(); void createAndLinkFolder(); }}>
                 <h2 id="createFolderTitle">New folder</h2>

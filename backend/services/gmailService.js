@@ -693,8 +693,10 @@ async function listInboxMessages(filters = {}, {includeText = true} = {}, userId
             const message = await messageResponse.json();
             const inboxMessage = {
                 id: message.id,
+                threadId: message.threadId || "",
                 sender: getHeader(message.payload?.headers, "From"),
                 subject: getHeader(message.payload?.headers, "Subject"),
+                messageId: getHeader(message.payload?.headers, "Message-ID"),
                 receivedAt: message.internalDate ? new Date(Number(message.internalDate)).toISOString() : "",
                 text: includeText ? extractMessageText(message.payload).slice(0, 1600) : ""
             };
@@ -708,6 +710,55 @@ async function listInboxMessages(filters = {}, {includeText = true} = {}, userId
         .map(reference => messagesById.get(reference.id))
         .filter(message => message && matchesMessageWindow(message.receivedAt, filters));
 
+}
+
+async function listInboxThreads({pageToken = "", maxResults = 50} = {}, userId, blockId = "") {
+    const limit = Math.max(1, Math.min(100, Math.floor(Number(maxResults) || 50)));
+    const parameters = new URLSearchParams({q:"in:inbox", maxResults:String(limit)});
+    if (typeof pageToken === "string" && pageToken.length <= 2048) parameters.set("pageToken", pageToken);
+    const response = await gmailFetch(userId, `/messages?${parameters}`, blockId);
+    const listed = await response.json();
+    const references = Array.isArray(listed.messages) ? listed.messages.slice(0, limit) : [];
+    const messages = [];
+    for (let index=0; index<references.length; index+=8) {
+        const batch = references.slice(index,index+8);
+        const details = await Promise.all(batch.map(async reference => {
+            const result=await gmailFetch(userId,`/messages/${encodeURIComponent(reference.id)}?format=metadata&metadataHeaders=From&metadataHeaders=Subject&metadataHeaders=Message-ID`,blockId);
+            const item=await result.json();
+            return {id:item.id,threadId:item.threadId || "",messageId:getHeader(item.payload?.headers,"Message-ID"),sender:getHeader(item.payload?.headers,"From"),subject:getHeader(item.payload?.headers,"Subject"),receivedAt:item.internalDate?new Date(Number(item.internalDate)).toISOString():"",snippet:String(item.snippet || "").slice(0,240)};
+        }));
+        messages.push(...details);
+    }
+    const byThread=new Map();
+    for (const message of messages) {
+        if (!message.threadId) continue;
+        const item=byThread.get(message.threadId) || {id:message.threadId,subject:message.subject,snippet:message.snippet,updatedAt:message.receivedAt,messageCount:0,messages:[]};
+        item.messageCount+=1;
+        item.messages.push(message);
+        if (message.receivedAt > item.updatedAt) {item.updatedAt=message.receivedAt;item.snippet=message.snippet || item.snippet;}
+        if (!item.subject && message.subject) item.subject=message.subject;
+        byThread.set(message.threadId,item);
+    }
+    const threads=[...byThread.values()].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt)));
+    return {threads,nextPageToken:typeof listed.nextPageToken === "string" ? listed.nextPageToken : ""};
+}
+
+function findMessageAttachments(part, output = []) {
+    if (!part) return output;
+    if (part.filename && part.body?.attachmentId) output.push({id:part.body.attachmentId,name:String(part.filename).slice(0,240),mimeType:String(part.mimeType || "application/octet-stream").slice(0,120),size:Math.max(0,Number(part.body.size)||0)});
+    for (const child of part.parts || []) findMessageAttachments(child,output);
+    return output;
+}
+
+async function getThread(threadId,userId,blockId="") {
+    const response=await gmailFetch(userId,`/threads/${encodeURIComponent(threadId)}?format=full`,blockId);
+    const thread=await response.json();
+    const messages=(thread.messages || []).map(message=>{
+        const headers=message.payload?.headers || [];
+        const get=(name)=>getHeader(headers,name);
+        return {id:message.id,threadId:message.threadId || thread.id || threadId,messageId:get("Message-ID"),inReplyTo:get("In-Reply-To"),references:get("References"),from:get("From"),replyTo:get("Reply-To"),to:get("To"),cc:get("Cc"),subject:get("Subject"),date:get("Date"),receivedAt:message.internalDate?new Date(Number(message.internalDate)).toISOString():"",text:extractMessageText(message.payload),attachments:findMessageAttachments(message.payload)};
+    }).sort((a,b)=>String(a.receivedAt).localeCompare(String(b.receivedAt)));
+    return {id:thread.id || threadId,messages};
 }
 
 
@@ -834,6 +885,51 @@ async function sendEmail({to, subject, text}, userId, blockId = "") {
     return response.json();
 }
 
+async function formatDraftAttachments(attachments, boundary) {
+    const parts = [];
+    for (const attachment of attachments) {
+        const content = await fs.promises.readFile(attachment.path);
+        parts.push(
+            "--" + boundary,
+            "Content-Type: " + cleanHeader(attachment.mimeType || "application/octet-stream"),
+            "Content-Disposition: attachment; filename=\"" + cleanHeader(path.basename(attachment.name)) + "\"",
+            "Content-Transfer-Encoding: base64",
+            "",
+            content.toString("base64").replace(/.{1,76}/g, "$&\r\n").trim()
+        );
+    }
+    return parts;
+}
+
+async function buildReplyRaw({to,subject,text,attachments=[],originalMessageId="",references=""}) {
+    const recipient=cleanHeader(to);
+    if (!recipient || !/^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(recipient)) throw new Error("Add a valid reply address.");
+    const original=cleanHeader(originalMessageId);
+    if (!original || !/^<[^<>\s]+>$/.test(original)) throw new Error("The source email has no valid Message-ID; a safe threaded reply cannot be created.");
+    const previous=cleanHeader(references).slice(0,4000);
+    const replyReferences=[previous,original].filter(Boolean).join(" ").split(/\s+/).filter(value=>/^<[^<>\s]+>$/.test(value));
+    const headers=[`To: ${recipient}`,`Subject: ${cleanHeader(subject).startsWith("Re:")?cleanHeader(subject):`Re: ${cleanHeader(subject) || "(no subject)"}`}`,`In-Reply-To: ${original}`,...(replyReferences.length?[`References: ${[...new Set(replyReferences)].join(" ")}`]:[]),"MIME-Version: 1.0"];
+    const body=String(text ?? "").slice(0,12000);
+    if (!attachments.length) return {raw:[...headers,"Content-Type: text/plain; charset=UTF-8","Content-Transfer-Encoding: 8bit","",body].join("\r\n")};
+    const boundary=`folderrocket-${crypto.randomBytes(12).toString("hex")}`;
+    const raw=[...headers,`Content-Type: multipart/mixed; boundary="${boundary}"`,"",`--${boundary}`,"Content-Type: text/plain; charset=UTF-8","Content-Transfer-Encoding: 8bit","",body,...await formatDraftAttachments(attachments,boundary),`--${boundary}--`].join("\r\n");
+    return {raw};
+}
+
+async function sendReply({threadId,to,subject,text,attachments=[],originalMessageId,references},userId,blockId="") {
+    if (!threadId || String(threadId).length > 200) throw new Error("A valid Gmail thread is required.");
+    const built=await buildReplyRaw({to,subject,text,attachments,originalMessageId,references});
+    const response=await gmailFetch(userId,"/messages/send",blockId,2,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({threadId,raw:Buffer.from(built.raw,"utf8").toString("base64url")})});
+    return response.json();
+}
+
+async function createReplyDraft({threadId,to,subject,text,attachments=[],originalMessageId,references},userId,blockId="") {
+    if (!threadId || String(threadId).length > 200) throw new Error("A valid Gmail thread is required.");
+    const built=await buildReplyRaw({to,subject,text,attachments,originalMessageId,references});
+    const response=await gmailFetch(userId,"/drafts",blockId,2,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({message:{threadId,raw:Buffer.from(built.raw,"utf8").toString("base64url")}})});
+    return response.json();
+}
+
 async function createDraft({to, subject, text, attachments = []}, userId, blockId = "") {
     const recipient = cleanHeader(to);
     if (!recipient) throw new Error("Add at least one recipient.");
@@ -849,7 +945,7 @@ async function createDraft({to, subject, text, attachments = []}, userId, blockI
         "Content-Transfer-Encoding: 8bit",
         "",
         String(text ?? ""),
-        ...attachments.flatMap(attachment => [`--${boundary}`, "Content-Type: application/octet-stream", `Content-Disposition: attachment; filename="${cleanHeader(path.basename(attachment.name))}"`, "Content-Transfer-Encoding: base64", "", fs.readFileSync(attachment.path).toString("base64").replace(/.{1,76}/g, "$&\r\n").trim()]),
+        ...await formatDraftAttachments(attachments, boundary),
         `--${boundary}--`
     ].join("\r\n") : [
         `To: ${recipient}`, `Subject: ${cleanHeader(subject) || "FolderRocket draft"}`, "MIME-Version: 1.0", "Content-Type: text/plain; charset=UTF-8", "", String(text ?? "")
@@ -874,6 +970,11 @@ module.exports = {
     getStatus,
     listAttachments,
     listConnectedAccounts,
+    listInboxThreads,
     listInboxMessages,
-    sendEmail
+    getThread,
+    sendEmail,
+    sendReply,
+    createReplyDraft,
+    buildReplyRaw
 };

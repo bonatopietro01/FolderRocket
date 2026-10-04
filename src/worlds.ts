@@ -27,6 +27,20 @@ export interface WorldPermissionFoundation {
     configured: false;
 }
 
+export type WorldEmailProvider = "gmail" | "outlook";
+export interface WorldEmailAccount {
+    provider: WorldEmailProvider;
+    blockId: string;
+    email?: string;
+}
+export interface WorldObsidianSettings {
+    enabled: boolean;
+    vaultPath: string;
+    lastSyncAt?: string;
+    status?: string;
+}
+export type WorldTreeRootMode = "computer" | "desktop";
+
 export type WorldDigestProvider = "gmail" | "outlook" | "";
 export type WorldDigestSource = "dailyActivities" | "reminders" | "calendar" | "gmailAlerts" | "outlookAlerts" | "teams";
 export interface WorldActivityNotifications {
@@ -48,6 +62,10 @@ export interface WorkspaceWorld {
     color: string;
     style: WorldPlanetStyle;
     aiEnabled: boolean;
+    graphEnabled: boolean;
+    emailAccount?: WorldEmailAccount | null;
+    treeRootMode?: WorldTreeRootMode;
+    obsidian?: WorldObsidianSettings;
     agents: WorldAgentProfile[];
     skills: WorldSkillProfile[];
     permissions: WorldPermissionFoundation;
@@ -71,8 +89,8 @@ export function activeWorldStorageScope(userId: string, worldId: string) {
 
 export function createDefaultWorlds(): WorkspaceWorld[] {
     return [
-        {id: "work", name: "Lavoro", color: "#5dbdff", style: "ringed", aiEnabled: false, agents: [], skills: [], permissions: {schemaVersion: 1, configured: false}},
-        {id: "personal", name: "Personale", color: "#c28cff", style: "glowing", aiEnabled: false, agents: [], skills: [], permissions: {schemaVersion: 1, configured: false}}
+        {id: "work", name: "Lavoro", color: "#5dbdff", style: "ringed", aiEnabled: false, graphEnabled: false, emailAccount: null, treeRootMode: "computer", obsidian: {enabled: false, vaultPath: ""}, agents: [], skills: [], permissions: {schemaVersion: 1, configured: false}},
+        {id: "personal", name: "Personale", color: "#c28cff", style: "glowing", aiEnabled: false, graphEnabled: false, emailAccount: null, treeRootMode: "computer", obsidian: {enabled: false, vaultPath: ""}, agents: [], skills: [], permissions: {schemaVersion: 1, configured: false}}
     ];
 }
 
@@ -97,6 +115,16 @@ function normalizeWorlds(value: unknown): WorkspaceWorld[] | null {
             color: world.color,
             style: world.style,
             aiEnabled: Boolean(world.aiEnabled),
+            graphEnabled: world.graphEnabled === true,
+            emailAccount: Object.hasOwn(world, "emailAccount")
+                ? world.emailAccount && (world.emailAccount.provider === "gmail" || world.emailAccount.provider === "outlook") && typeof world.emailAccount.blockId === "string" && /^[a-zA-Z0-9_-]{1,120}$/.test(world.emailAccount.blockId)
+                    ? {provider: world.emailAccount.provider, blockId: world.emailAccount.blockId, ...(typeof world.emailAccount.email === "string" ? {email: world.emailAccount.email.slice(0, 254)} : {})}
+                    : null
+                : undefined,
+            treeRootMode: world.treeRootMode === "desktop" ? "desktop" : "computer",
+            obsidian: world.obsidian && typeof world.obsidian === "object"
+                ? {enabled: world.obsidian.enabled === true, vaultPath: typeof world.obsidian.vaultPath === "string" ? world.obsidian.vaultPath.slice(0, 1024) : "", ...(typeof world.obsidian.lastSyncAt === "string" ? {lastSyncAt: world.obsidian.lastSyncAt.slice(0, 40)} : {}), ...(typeof world.obsidian.status === "string" ? {status: world.obsidian.status.slice(0, 200)} : {})}
+                : {enabled: false, vaultPath: ""},
             agents: Array.isArray(world.agents) ? world.agents.filter(agent => agent && typeof agent.id === "string" && typeof agent.name === "string").map(agent => ({
                 id: agent.id,
                 name: agent.name.trim().slice(0, 60) || "Agente",

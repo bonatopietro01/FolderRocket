@@ -1,9 +1,9 @@
 import {memo, useCallback, useEffect, useState, type CSSProperties} from "react";
-import {ArrowLeft, BellRing, CalendarDays, Check, CirclePlus, Clock3, LoaderCircle, Mail, Orbit, Pencil, Plus, Send, Sparkles, Trash2, X} from "lucide-react";
-import type {WorldActivityNotifications, WorldAgentProfile, WorldAssistantCapability, WorldAssistantModel, WorkspaceWorld, WorldPlanetStyle, WorldSkillProfile, WorldDigestSource} from "../worlds";
+import {ArrowLeft, BellRing, CalendarDays, Check, CirclePlus, Clock3, LoaderCircle, Mail, Orbit, Pencil, Plus, Send, Sparkles, Trash2, X, Network, BookOpen, FolderOpen, RefreshCw} from "lucide-react";
+import type {WorldActivityNotifications, WorldAgentProfile, WorldAssistantCapability, WorldAssistantModel, WorkspaceWorld, WorldPlanetStyle, WorldSkillProfile, WorldDigestSource, WorldObsidianSettings} from "../worlds";
 import {normalizeActivityNotifications} from "../worlds";
 import {API_BASE_URL} from "../api";
-import {readWorldActivitySnapshot, selectWorldActivitySnapshot} from "../worldActivitySnapshot";
+import {buildWorldObsidianClientRecords, readWorldActivitySnapshot, selectWorldActivitySnapshot} from "../worldActivitySnapshot";
 import "../worlds.css";
 
 interface Props {
@@ -11,6 +11,7 @@ interface Props {
     activeWorldId: string;
     storageScope: string;
     onSelect: (worldId: string) => Promise<void>;
+    onViewGraph: (world: WorkspaceWorld) => void;
     onInvokeAssistant: (worldId: string, profileId: string, kind: "agent" | "skill", name: string, instructions: string, prompt: string, model: WorldAssistantModel, capabilities: WorldAssistantCapability[]) => Promise<string>;
     switchError: string;
     onBack: () => void;
@@ -21,6 +22,7 @@ interface Props {
 
 const PLANET_COLORS = ["#5dbdff", "#c28cff", "#ff967d", "#f4c95d", "#79d7a3", "#f17db2", "#8c9dff", "#72d6d1"];
 interface DigestAccount {blockId:string; email:string; label:string; canSend:boolean;}
+type WorldEmailCatalog = {gmail:Array<{blockId:string;email?:string}>;outlook:Array<{blockId:string;email?:string}>};
 interface DigestHistoryEntry {at:string;kind:"scheduled"|"test";status:string;error?:string;}
 interface DigestRuntime {lastSentAt?:string;lastStatus?:string;lastError?:string;nextDigestAt?:string|null;history?:DigestHistoryEntry[];}
 const DIGEST_SOURCE_OPTIONS: Array<{id:WorldDigestSource; label:string; detail:string}> = [
@@ -42,9 +44,10 @@ interface WorldGridProps {
     switchingWorldId: string | null;
     onEditWorld: (world: WorkspaceWorld) => void;
     onSelectWorld: (worldId: string) => void;
+    onViewGraph: (world: WorkspaceWorld) => void;
 }
 
-const WorldGrid = memo(function WorldGrid({worlds, activeWorldId, switchingWorldId, onEditWorld, onSelectWorld}: WorldGridProps) {
+const WorldGrid = memo(function WorldGrid({worlds, activeWorldId, switchingWorldId, onEditWorld, onSelectWorld, onViewGraph}: WorldGridProps) {
     return <section className="worldGrid" aria-label="Pianeti disponibili">
         {worlds.map(world => {
             const active = world.id === activeWorldId;
@@ -53,16 +56,21 @@ const WorldGrid = memo(function WorldGrid({worlds, activeWorldId, switchingWorld
                 <Planet world={world} large/>
                 <h2>{world.name}</h2>
                 <div className="worldCardMeta"><span><Sparkles size={12}/>{world.aiEnabled ? "AI disponibile" : "AI disattivata"}</span><span>{world.agents.filter(agent => agent.enabled).length + world.skills.filter(skill => skill.enabled).length} agenti/skill</span></div>
-                <button type="button" className="worldSelectButton" onClick={() => onSelectWorld(world.id)} disabled={Boolean(switchingWorldId)}>{switchingWorldId === world.id ? <><LoaderCircle className="worldInlineSpinner" size={15}/>Preparazione…</> : active ? <><Check size={15}/>Sei qui</> : <>Entra nel pianeta <span>→</span></>}</button>
+                <div className="worldCardActions"><button type="button" className="worldSelectButton" onClick={() => onSelectWorld(world.id)} disabled={Boolean(switchingWorldId)}>{switchingWorldId === world.id ? <><LoaderCircle className="worldInlineSpinner" size={15}/>Preparazione…</> : active ? <><Check size={15}/>Sei qui</> : <>Enter planet <span>→</span></>}</button><button type="button" className="worldGraphButton" onClick={() => onViewGraph(world)} title={`View ${world.name} graph`}><Network size={15}/>View graph</button></div>
             </article>;
         })}
     </section>;
 });
 
-export default function ChangeWorld({worlds, activeWorldId, storageScope, onSelect, onInvokeAssistant, switchError, onBack, onAdd, onUpdate, onDelete}: Props) {
+export default function ChangeWorld({worlds, activeWorldId, storageScope, onSelect, onViewGraph, onInvokeAssistant, switchError, onBack, onAdd, onUpdate, onDelete}: Props) {
     const [editingWorld, setEditingWorld] = useState<WorkspaceWorld | null>(null);
     const [digestAccounts, setDigestAccounts] = useState<{gmail:DigestAccount[];outlook:DigestAccount[]}>({gmail:[],outlook:[]});
     const [digestAccountsBusy, setDigestAccountsBusy] = useState(false);
+    const [emailAccountConflict, setEmailAccountConflict] = useState(false);
+    const [worldEmailAccounts, setWorldEmailAccounts] = useState<WorldEmailCatalog>({gmail:[],outlook:[]});
+    const [emailProviderChoice, setEmailProviderChoice] = useState<"gmail"|"outlook"|"">("");
+    const [obsidianSyncBusy, setObsidianSyncBusy] = useState(false);
+    const [obsidianStatus, setObsidianStatus] = useState("");
     const [digestRuntime, setDigestRuntime] = useState<DigestRuntime>({});
     const [digestPreview, setDigestPreview] = useState("");
     const [digestPreviewBusy, setDigestPreviewBusy] = useState(false);
@@ -79,7 +87,7 @@ export default function ChangeWorld({worlds, activeWorldId, storageScope, onSele
     const [postItSaved, setPostItSaved] = useState(false);
     const [saveError, setSaveError] = useState("");
 
-    const beginEditWorld = useCallback((world: WorkspaceWorld) => {setDigestAccountsBusy(true);setDigestRuntime({});setDigestPreview("");setEditingWorld({...world, activityNotifications:normalizeActivityNotifications(world.activityNotifications)});}, []);
+    const beginEditWorld = useCallback((world: WorkspaceWorld) => {setDigestAccountsBusy(true);setEmailAccountConflict(false);setEmailProviderChoice(world.emailAccount?.provider||"");setDigestRuntime({});setDigestPreview("");setObsidianStatus("");setEditingWorld({...world, activityNotifications:normalizeActivityNotifications(world.activityNotifications)});}, []);
     const digestEditingWorldId = editingWorld?.id;
 
     useEffect(() => {
@@ -89,12 +97,22 @@ export default function ChangeWorld({worlds, activeWorldId, storageScope, onSele
         void Promise.all([
             fetch(`${API_BASE_URL}/email/gmail/accounts`, {credentials:"include", signal:controller.signal}).then(async response => response.ok ? (await response.json() as {accounts?:DigestAccount[]}).accounts || [] : []),
             fetch(`${API_BASE_URL}/email/outlook/accounts`, {credentials:"include", signal:controller.signal}).then(async response => response.ok ? (await response.json() as {accounts?:DigestAccount[]}).accounts || [] : []),
-            fetch(`${API_BASE_URL}/settings/worlds/${encodeURIComponent(worldId)}/activity-notifications`, {credentials:"include", signal:controller.signal}).then(async response => response.ok ? await response.json() as {runtime?:DigestRuntime;config?:WorldActivityNotifications;nextDigestAt?:string|null} : {})
-        ]).then(([gmail,outlook,status]) => {
+            fetch(`${API_BASE_URL}/settings/worlds/${encodeURIComponent(worldId)}/activity-notifications`, {credentials:"include", signal:controller.signal}).then(async response => response.ok ? await response.json() as {runtime?:DigestRuntime;config?:WorldActivityNotifications;nextDigestAt?:string|null} : {}),
+            fetch(`${API_BASE_URL}/settings/worlds/${encodeURIComponent(worldId)}`, {credentials:"include", signal:controller.signal}).then(async response => response.ok ? await response.json() as {world?:Partial<WorkspaceWorld>;emailAccountConflict?:boolean;emailAccounts?:WorldEmailCatalog} : {}),
+            fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(worldId)}/obsidian`, {credentials:"include", signal:controller.signal}).then(async response => response.ok ? await response.json() as {config?:WorldObsidianSettings;openSupported?:boolean;uri?:string;status?:string} : {})
+        ]).then(([gmail,outlook,status,worldData,obsidianData]) => {
             if (controller.signal.aborted) return;
             setDigestAccounts({gmail:Array.isArray(gmail)?gmail:[],outlook:Array.isArray(outlook)?outlook:[]});
             setDigestRuntime({...status.runtime,nextDigestAt:status.nextDigestAt});
             if (status.config) setEditingWorld(current => current?.id === worldId ? {...current, activityNotifications:normalizeActivityNotifications(status.config)} : current);
+            if(worldData.world){
+                setEmailAccountConflict(worldData.emailAccountConflict===true);
+                setWorldEmailAccounts({gmail:Array.isArray(worldData.emailAccounts?.gmail)?worldData.emailAccounts.gmail:[],outlook:Array.isArray(worldData.emailAccounts?.outlook)?worldData.emailAccounts.outlook:[]});
+                if(worldData.world.emailAccount!==undefined)setEmailProviderChoice(worldData.world.emailAccount?.provider||"");
+                setEditingWorld(current=>current?.id===worldId?{...current,...(worldData.world?.emailAccount!==undefined?{emailAccount:worldData.world.emailAccount}:{}),...(worldData.world?.treeRootMode?{treeRootMode:worldData.world.treeRootMode}:{}),...(worldData.world?.obsidian?{obsidian:worldData.world.obsidian}:{})}:current);
+            }
+            if(obsidianData.config){setObsidianStatus(obsidianData.status||obsidianData.config.status||"");setEditingWorld(current=>current?.id===worldId?{...current,obsidian:obsidianData.config}:current);}
+            setDigestAccountsBusy(false);
         }).catch(() => { if (!controller.signal.aborted) setDigestAccounts({gmail:[],outlook:[]}); }).finally(() => { if (!controller.signal.aborted) setDigestAccountsBusy(false); });
         return () => controller.abort();
     }, [digestEditingWorldId]);
@@ -118,6 +136,51 @@ export default function ChangeWorld({worlds, activeWorldId, storageScope, onSele
 
     function updateDigest(changes: Partial<WorldActivityNotifications>) {
         setEditingWorld(current => current ? {...current, activityNotifications:{...normalizeActivityNotifications(current.activityNotifications), ...changes}} : current);
+    }
+
+    function chooseWorldEmailAccount(provider: "gmail" | "outlook", blockId: string) {
+        if (!editingWorld) return;
+        if (!blockId) {setEditingWorld({...editingWorld,emailAccount:null});setEmailAccountConflict(false);return;}
+        const account = worldEmailAccounts[provider].find(item=>item.blockId===blockId);
+        if (!account) return;
+        setEditingWorld({...editingWorld,emailAccount:{provider,blockId,email:account.email}});
+        setEmailAccountConflict(false);
+    }
+
+    function updateObsidian(changes: Partial<WorldObsidianSettings>) {
+        setEditingWorld(current => current ? {...current,obsidian:{enabled:false,vaultPath:"",...current.obsidian,...changes}} : current);
+    }
+
+    async function syncObsidianVault() {
+        if (!editingWorld || obsidianSyncBusy) return;
+        setObsidianSyncBusy(true);setObsidianStatus("Syncing vault…");setSaveError("");
+        try {
+            const saveResponse=await fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(editingWorld.id)}/obsidian`,{method:"PUT",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify(editingWorld.obsidian||{enabled:true,vaultPath:""})});
+            const saveData=await saveResponse.json().catch(()=>({})) as {message?:string};
+            if(!saveResponse.ok)throw new Error(saveData.message||"Obsidian settings could not be saved.");
+            const records=buildWorldObsidianClientRecords(storageScope);
+            const response=await fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(editingWorld.id)}/obsidian/sync`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({records})});
+            const data=await response.json().catch(()=>({})) as {config?:WorldObsidianSettings;result?:{status?:string;written?:number;unchanged?:number;conflicts?:number;warnings?:string[]};message?:string};
+            if(!response.ok)throw new Error(data.message||"The vault could not be synchronized.");
+            if(data.config){setEditingWorld(current=>current?.id===editingWorld.id?{...current,obsidian:data.config}:current);}
+            const result=data.result;
+            setObsidianStatus(result?.warnings?.length ? `${result.status||"Synced"}: ${result.written||0} written, ${result.unchanged||0} unchanged, ${result.conflicts||0} conflicts. ${result.warnings.join(" ")}` : `${result?.status||"Vault synchronized"}: ${result?.written||0} written, ${result?.unchanged||0} unchanged, ${result?.conflicts||0} conflicts.`);
+        } catch(error) {const message=error instanceof Error?error.message:"The vault could not be synchronized.";setObsidianStatus(message);setSaveError(message);}
+        finally {setObsidianSyncBusy(false);}
+    }
+
+    async function openObsidianVault() {
+        if (!editingWorld?.obsidian?.vaultPath.trim()) return;
+        if(window.folderRocketDesktop?.openObsidianVault){
+            const opened=await window.folderRocketDesktop.openObsidianVault({worldId:editingWorld.id,vaultPath:editingWorld.obsidian.vaultPath.trim()});
+            if(!opened.opened)setObsidianStatus(opened.message||"Obsidian could not be opened. Check that it is installed and the vault path is valid.");
+            return;
+        }
+        const response=await fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(editingWorld.id)}/obsidian`,{credentials:"include"});
+        const data=await response.json().catch(()=>({})) as {uri?:string;openSupported?:boolean;message?:string};
+        if(!response.ok||!data.uri){setObsidianStatus(data.message||"Opening this vault is not supported here. Use the Obsidian desktop app to open its folder.");return;}
+        if(window.folderRocketDesktop){const opened=await window.folderRocketDesktop.openExternal(data.uri);if(!opened)setObsidianStatus("Obsidian did not accept the vault link.");}
+        else window.location.href=data.uri;
     }
 
     async function previewActivityDigest() {
@@ -231,7 +294,7 @@ export default function ChangeWorld({worlds, activeWorldId, storageScope, onSele
         </header>
 
         {switchError && <p className="worldSwitchError" role="alert">{switchError} Puoi riprovare selezionando di nuovo il pianeta.</p>}
-        <WorldGrid worlds={worlds} activeWorldId={activeWorldId} switchingWorldId={switchingWorldId} onEditWorld={beginEditWorld} onSelectWorld={selectPlanet}/>
+        <WorldGrid worlds={worlds} activeWorldId={activeWorldId} switchingWorldId={switchingWorldId} onEditWorld={beginEditWorld} onSelectWorld={selectPlanet} onViewGraph={onViewGraph}/>
         <p className="worldPrivacyNote">Cartelle, preferenze email, impostazioni AI e profili vengono salvati separatamente. I token restano nel sistema di autenticazione esistente e non vengono copiati nelle impostazioni dei pianeti.</p>
 
         {editingWorld && <div className="worldEditorScrim" onMouseDown={event => {if (event.target === event.currentTarget) setEditingWorld(null);}}>
@@ -243,6 +306,18 @@ export default function ChangeWorld({worlds, activeWorldId, storageScope, onSele
                     <fieldset className="worldColorChoices"><legend>Colore</legend><div>{PLANET_COLORS.map(color => <button type="button" key={color} className={editingWorld.color === color ? "active" : ""} style={{"--swatch": color} as CSSProperties} onClick={() => setEditingWorld({...editingWorld, color})} aria-label={`Colore ${color}`} aria-pressed={editingWorld.color === color}/>)}</div><label>Personalizzato<input type="color" value={editingWorld.color} onChange={event => setEditingWorld({...editingWorld, color: event.target.value})}/></label></fieldset>
                     <fieldset className="worldStyleChoices"><legend>Stile del pianeta</legend><div>{(["rocky", "ringed", "glowing"] as WorldPlanetStyle[]).map(style => <button type="button" key={style} className={editingWorld.style === style ? "active" : ""} onClick={() => setEditingWorld({...editingWorld, style})}><Planet world={{...editingWorld, style}}/><span>{style === "rocky" ? "Roccioso" : style === "ringed" ? "Con anelli" : "Luminoso"}</span></button>)}</div></fieldset>
                     <p className="worldAiAccountNote"><Sparkles size={15}/>Per attivare o disattivare l’AI per questo pianeta, entra nell’ambiente e usa AI On/Off nel menu Account.</p>
+                    <label className="worldGraphEnable"><input type="checkbox" checked={editingWorld.graphEnabled === true} onChange={event => setEditingWorld({...editingWorld, graphEnabled:event.target.checked})}/><span><strong>Create planet graph</strong><small>Build a local, searchable map from this planet’s configured folders, selected email source, calendar, reminders and workspace activity. Message and document bodies are not indexed.</small></span></label>
+                    <section className="worldEmailAccountEditor">
+                        <div><h3><Mail size={15}/>Email account for this planet</h3><p>Choose one connected account. Dashboard and Conversation will use it automatically.</p></div>
+                        {emailAccountConflict&&<p className="worldEmailConflict" role="alert">This planet has multiple legacy email selections. Choose the account you want to keep; no account was selected automatically.</p>}
+                        <div className="worldEmailAccountFields"><label>Provider<select value={emailProviderChoice} onChange={event=>{const provider=event.target.value as "gmail"|"outlook"|"";setEmailProviderChoice(provider);if(!provider)setEditingWorld({...editingWorld,emailAccount:null});else if(editingWorld.emailAccount?.provider!==provider)setEditingWorld({...editingWorld,emailAccount:null});}}><option value="">No account selected</option><option value="gmail">Gmail</option><option value="outlook">Outlook</option></select></label><label>Connected account<select value={editingWorld.emailAccount?.provider===emailProviderChoice?editingWorld.emailAccount?.blockId||"":""} disabled={!emailProviderChoice||digestAccountsBusy} onChange={event=>emailProviderChoice&&chooseWorldEmailAccount(emailProviderChoice,event.target.value)}><option value="">{digestAccountsBusy?"Loading accounts…":"Choose an account"}</option>{(emailProviderChoice?worldEmailAccounts[emailProviderChoice]:[]).map(account=><option key={account.blockId} value={account.blockId}>{account.email||account.blockId}</option>)}</select></label></div>
+                        {editingWorld.emailAccount&&<small className="worldEmailAccountActive">Active in this planet: {editingWorld.emailAccount.email||editingWorld.emailAccount.blockId} · {editingWorld.emailAccount.provider}</small>}
+                    </section>
+                    <section className="worldObsidianEditor">
+                        <div className="worldObsidianHeading"><span><BookOpen size={16}/></span><div><h3>Obsidian vault</h3><p>Create and synchronize local Markdown notes for this planet.</p></div><label className="worldDigestEnable"><input type="checkbox" checked={editingWorld.obsidian?.enabled===true} onChange={event=>updateObsidian({enabled:event.target.checked})}/>Enable</label></div>
+                        <label className="worldObsidianPath">Vault folder path<input value={editingWorld.obsidian?.vaultPath||""} maxLength={1024} onChange={event=>updateObsidian({vaultPath:event.target.value})} placeholder="Leave blank for the automatic vault location"/><small>Use a folder inside FolderRocket’s protected local workspace. Leave blank to let FolderRocket create the planet vault automatically.</small></label>
+                        <div className="worldObsidianActions"><button type="button" onClick={()=>void syncObsidianVault()} disabled={!editingWorld.obsidian?.enabled||obsidianSyncBusy}><RefreshCw className={obsidianSyncBusy?"worldInlineSpinner":""} size={14}/>{obsidianSyncBusy?"Syncing…":"Sync now"}</button><button type="button" onClick={()=>void openObsidianVault()} disabled={!editingWorld.obsidian?.vaultPath.trim()}><FolderOpen size={14}/>Open in Obsidian</button><span>{obsidianStatus|| (editingWorld.obsidian?.lastSyncAt?`Last sync: ${new Date(editingWorld.obsidian.lastSyncAt).toLocaleString()}`:"Not synchronized yet")}</span></div>
+                    </section>
                     <section className="worldAgentsEditor"><div className="worldAgentsHeading"><div><h3>Agenti del pianeta</h3><p>Profili richiamabili tramite la connessione AI condivisa.</p></div><span>{editingWorld.agents.length}</span></div>
                         <div className="worldAgentCreate"><input value={agentName} maxLength={60} onChange={event => setAgentName(event.target.value)} onKeyDown={event => {if(event.key === "Enter"){event.preventDefault();addAgent();}}} placeholder="Nome del nuovo agente"/><button type="button" onClick={addAgent} disabled={!agentName.trim()}><Plus size={14}/>Aggiungi</button></div>
                         <div className="worldAgentList">{editingWorld.agents.map(agent => <article key={agent.id}><div className="worldAgentTitle"><label><input type="checkbox" checked={agent.enabled} onChange={event => updateAgent(agent.id, {enabled: event.target.checked})}/><input aria-label="Nome agente" value={agent.name} onChange={event => updateAgent(agent.id, {name: event.target.value})}/></label><button type="button" title={`Rimuovi ${agent.name}`} aria-label={`Rimuovi ${agent.name}`} onClick={() => setEditingWorld({...editingWorld, agents: editingWorld.agents.filter(item => item.id !== agent.id)})}><Trash2 size={14}/></button></div><input className="worldProfileDescription" aria-label={`Descrizione agente ${agent.name}`} value={agent.description} maxLength={240} onChange={event => updateAgent(agent.id, {description: event.target.value})} placeholder="Descrizione breve"/><textarea value={agent.instructions} maxLength={2000} onChange={event => updateAgent(agent.id, {instructions: event.target.value})} placeholder="Descrivi ruolo, obiettivi e istruzioni dell’agente…"/><div className="worldAssistantOptions"><label>Modello condiviso<select value={agent.model||"gpt-4.1-mini"} onChange={event=>updateAgent(agent.id,{model:event.target.value as WorldAssistantModel})}><option value="gpt-4.1-mini">GPT-4.1 mini · rapido</option><option value="gpt-4.1">GPT-4.1 · avanzato</option></select></label><label><input type="checkbox" checked={(agent.capabilities||[]).includes("search-files")} onChange={event=>updateAgent(agent.id,{capabilities:event.target.checked?[...new Set([...(agent.capabilities||[]),"search-files" as const])]:agent.capabilities.filter(item=>item!=="search-files")})}/>Cerca nomi file nelle cartelle di questo pianeta</label><label><input type="checkbox" checked={(agent.capabilities||[]).includes("draft-post-it")} onChange={event=>updateAgent(agent.id,{capabilities:event.target.checked?[...new Set([...(agent.capabilities||[]),"draft-post-it" as const])]:agent.capabilities.filter(item=>item!=="draft-post-it")})}/>Consenti di salvare la risposta come post-it (con conferma)</label></div><button type="button" className="worldInvokeButton" disabled={!canInvoke(editingWorld.id, agent.enabled) || !editingWorld.aiEnabled} title={activeWorldId !== editingWorld.id ? "Entra in questo pianeta prima di richiamare l’agente" : undefined} onClick={() => {setInvoking({worldId:editingWorld.id,profileId:agent.id,kind:"agent",name:agent.name,instructions:agent.instructions,model:agent.model||"gpt-4.1-mini",capabilities:agent.capabilities||[]});setInvokePrompt("");setInvokeResult("");setInvokeError("");}}>Richiama con AI</button></article>)}{!editingWorld.agents.length && <p className="worldAgentsEmpty">Non hai ancora aggiunto agenti a questo pianeta.</p>}</div>

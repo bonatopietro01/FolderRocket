@@ -8,11 +8,14 @@ import '../../src/App.css';
 
 const rootPath = 'C:\\Fixture';
 let scenario = 2;
+let rootMode: 'computer' | 'desktop' = 'computer';
+const rootRequests: string[] = [];
 const children = (count: number) => Array.from({length: count}, (_, index) => ({name: `Project ${index + 1}`, path: `${rootPath}\\Project-${index + 1}`}));
 window.fetch = async (input, init) => {
     const url = new URL(String(input), location.href);
     if (url.pathname === '/applications/catalog') return Response.json({applications: ['SolidWorks', 'Visual Studio Code', 'Word', 'Excel', 'PowerPoint', 'Inkscape', 'Blender', 'Photos', 'Calculator', 'Notepad', 'Paint', 'Teams'].map((name, index) => ({name, appId: `fixture-${index + 1}`}))});
-    if (url.pathname === '/filesystem/tree-roots') return Response.json({roots: [{name: 'Fixture', path: rootPath, kind: 'computer', directFileCount: 3}]});
+    if (url.pathname === '/applications/open-installed') return Response.json({opened: true});
+    if (url.pathname === '/filesystem/tree-roots') { rootRequests.push(url.searchParams.get('mode') || ''); return Response.json({roots: [{name: rootMode === 'desktop' ? 'Desktop fixture' : 'Fixture', path: rootPath, kind: 'computer', directFileCount: 3}]}); }
     if (url.pathname === '/filesystem/tree-children') {
         const body = JSON.parse(String(init?.body || '{}'));
         const isRoot = body.path === rootPath;
@@ -58,7 +61,7 @@ export default function Fixture() {
             </FolderScrollFrame>
             <section className="dashboardColumn rightSourcesColumn" style={{minHeight: 100}}>Sources</section>
         </div>
-        {open && <TreeRocket key={revision} folders={[]} onClose={() => setOpen(false)} onAddFolder={(path, name) => {setResult(`${name}: ${path}`); return true;}}/>}
+        {open && <><label>Fixture root mode<select aria-label="Fixture root mode" value={rootMode} onChange={event=>{rootMode=event.target.value as 'computer'|'desktop';setRevision(current=>current+1);}}><option value="computer">Computer</option><option value="desktop">Desktop</option></select></label><span aria-label="Root query history">{rootRequests.join(',')}</span><TreeRocket key={revision} folders={[]} worldId="fixture-world" treeRootMode={rootMode} onTreeRootModeChange={async mode=>{rootMode=mode;setRevision(current=>current+1);}} onClose={() => setOpen(false)} onAddFolder={(path, name) => {setResult(`${name}: ${path}`); return true;}}/></>}
     </>;
 }
 

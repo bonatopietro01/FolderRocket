@@ -40,7 +40,8 @@ test("Tree Rocket is mounted from Folder Management and navigates without readin
     assert.match(tree, /aria-label="Tree Rocket view"/);
     assert.match(tree, />Folder<\/button>/);
     assert.match(tree, />Apps<\/button>/);
-    assert.match(tree, /className="treeRocketAppsRefresh"/);
+    assert.match(tree, /treeRocketAppsRefresh\$\{section === "folders" \? " reserved" : ""\}/);
+    assert.match(tree, /className="treeRocketSearch" onSubmit=\{event => \{event\.preventDefault\(\); if \(section === "apps"\) setSection\("folders"\); void search\(\);\}\}/);
     assert.match(tree, /className="treeRocketAppsMeta" aria-live="polite"/);
     assert.match(tree, /Windows Start menu/);
     assert.match(tree, /\/applications\/catalog/);
@@ -128,13 +129,16 @@ test("Tree Rocket uses app icons, shared zoom, a fixed root branch and no bottom
     assert.match(refined, /\.treeRocketBrandTitle \.treeRocketMark \{ width:104px; height:104px;/);
     assert.match(refined, /\.treeRocketBrandTitle \{ display:flex; min-width:0; align-items:center; gap:12px; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none;/);
     assert.match(refined, /\.treeRocketBrand \{ display:flex; width:auto; min-width:0; flex-direction:row; align-items:center; justify-self:center; justify-content:center;/);
-    assert.match(refined, /\.treeRocketBrandTitle > strong span:last-child \{ color:#087ed8;/);
+    assert.match(refined, /\.treeRocketBrandTitle > strong span:last-child \{ background:linear-gradient\(180deg,#25b8f3,#0872d3\)/);
     assert.match(refined, /\.treeRocketTabs \.treeRocketAppsRefresh \{ display:grid; width:34px; min-height:34px;/);
     assert.match(refined, /\.treeRocketHeaderTools \{ display:flex/);
     assert.match(refined, /\.treeRocketGraphStage \{ display:flex;[^}]*flex-direction:column; align-items:center/);
     assert.match(refined, /\.treeRocketChildren \{[^}]*overflow:auto/);
     assert.match(refined, /\.treeRocketChildrenHeading > i \{ display:grid; width:25px; height:25px;[^}]*place-items:center/);
-    assert.match(refined, /\.treeRocketAppIcon img \{ display:block; width:40px; height:40px;/);
+    assert.match(refined, /\.treeRocketAppIcon img \{ display:block; width:74px; height:74px;/);
+    assert.match(refined, /\.treeRocketAppsPanel \.treeRocketAppCard \{ display:flex;[^}]*flex-direction:column; align-items:center/);
+    assert.match(tree, /aria-busy=\{openingAppId === application\.appId\}/);
+    assert.match(tree, /<InstalledApplicationIcon application=\{application\}\/><strong>\{application\.name\}<\/strong>/);
     assert.match(refined, /\.treeRocketAppsPanel \{[^}]*height:100%/);
     assert.match(refined, /\.treeRocketAppsPanel > \.treeRocketAppsScroll \{[^}]*background:transparent[^}]*overflow:auto[^}]*scrollbar-width:none/);
     assert.match(refined, /\.treeRocketAppsPanel > \.treeRocketAppsScroll > \.treeRocketAppGrid \{ justify-items:stretch; \}/);

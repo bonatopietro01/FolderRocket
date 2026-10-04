@@ -33,6 +33,15 @@ For browser development, copy `backend/.env.example` to local `backend/.env`; it
 
 For a significant cross-module change or refactor, use `npm run graph:build` if the local graph is missing or stale, then query only relevant relationships as described in `docs/GRAPHIFY.md`. All coding roles may use Graphify; confirm its static findings in source and tests. For complex multi-area work, follow `PLANS.md` and maintain one ExecPlan under `docs/plans/`. When independent work warrants delegation, the coordinator may assign frontend, backend/Electron, and quality/Graphify specialists; give each a narrow scope and one writer per file.
 
+Use the project agents according to this explicit workflow:
+
+- For a request to create or refine an implementation prompt, use `prompt_agent` only; it is read-only and must not implement the request.
+- For a coding request, use `analyzer` for read-only discovery and a compact TaskState, then `writer` for the scoped implementation. The coordinator may do straightforward work directly when delegation would add no value.
+- Use `reviewer` only when the user explicitly asks for a review or invokes Reviewer. Do not trigger it automatically because a change is large or risky.
+- Use the existing `debugger` only after an explicitly requested Reviewer pass identifies a concrete defect that needs diagnosis. Do not call it for speculative risks, standalone debugging, or routinely alongside Analyzer/Writer; the coordinator sends a confirmed diagnosis to Writer for any fix.
+
+Keep delegated tasks narrow, avoid parallel agents editing the same file, and skip delegation for obvious small edits. The active project agents are `analyzer`, `prompt_agent`, `writer`, `reviewer`, and `debugger`; use them only according to the routing rules above.
+
 ## Git and review
 
 `docs/DEVELOPMENT_AND_RELEASES.md` describes `feature/<short-description>` branches, tested `main`, semantic versions, and release tags. Pull-request conventions are **Not specified in the repository**. Do not create a commit or push unless the task requests it. In reviews, check that planet-specific state stays with the intended planet and that file-transfer changes preserve the requested copy or move behavior; use the current implementation and tests as evidence rather than relying on roadmap text.

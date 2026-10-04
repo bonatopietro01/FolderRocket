@@ -128,7 +128,9 @@ test("planet editor keeps the card grid stable and uses contained modal scrollin
     assert.match(screen,/const WorldGrid = memo\(function WorldGrid/);
     assert.match(screen,/const beginEditWorld = useCallback/);
     assert.match(screen,/const selectPlanet = useCallback[\s\S]*?\}, \[onSelect, switchingWorldId\]\)/);
-    assert.match(screen,/<WorldGrid worlds=\{worlds\} activeWorldId=\{activeWorldId\} switchingWorldId=\{switchingWorldId\} onEditWorld=\{beginEditWorld\} onSelectWorld=\{selectPlanet\}\/>/);
+    assert.match(screen,/<WorldGrid worlds=\{worlds\} activeWorldId=\{activeWorldId\} switchingWorldId=\{switchingWorldId\} onEditWorld=\{beginEditWorld\} onSelectWorld=\{selectPlanet\} onViewGraph=\{onViewGraph\}\/>/);
+    assert.match(screen,/onClick=\{\(\) => onViewGraph\(world\)\}[^>]*>[\s\S]*?View graph/);
+    assert.match(screen,/checked=\{editingWorld\.graphEnabled === true\}/);
     const cardStyles = css.match(/\.worldCard \{([^}]*)\}/)?.[1] || "";
     assert.doesNotMatch(cardStyles,/backdrop-filter/);
     const editorScrollStyles = css.match(/\.worldEditorBody \{([^}]*)\}/)?.[1] || "";

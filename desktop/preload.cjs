@@ -3,6 +3,7 @@ const {contextBridge, ipcRenderer, webUtils} = require("electron");
 contextBridge.exposeInMainWorld("folderRocketDesktop", {
     getPathForFile: file => webUtils.getPathForFile(file),
     openExternal: url => ipcRenderer.invoke("folderrocket:open-external", url),
+    openObsidianVault: payload => ipcRenderer.invoke("folderrocket:open-obsidian-vault", payload),
     saveDownload: payload => ipcRenderer.invoke("folderrocket:save-download", payload),
     listDisplaySources: () => ipcRenderer.invoke("folderrocket:list-display-sources"),
     selectDisplaySource: sourceId => ipcRenderer.invoke("folderrocket:select-display-source", sourceId),
@@ -38,6 +39,11 @@ contextBridge.exposeInMainWorld("folderRocketDesktop", {
         const listener = (_event, provider) => callback(String(provider || ""));
         ipcRenderer.on("folderrocket:oauth-complete", listener);
         return () => ipcRenderer.removeListener("folderrocket:oauth-complete", listener);
+    },
+    onObsidianCommand: callback => {
+        const listener=(_event,command)=>callback(command);
+        ipcRenderer.on("folderrocket:obsidian-command",listener);
+        return () => ipcRenderer.removeListener("folderrocket:obsidian-command",listener);
     },
     listElectronDiagnostics: () => ipcRenderer.invoke("folderrocket:diagnostics:list-electron"),
     clearElectronDiagnostics: () => ipcRenderer.invoke("folderrocket:diagnostics:clear-electron"),

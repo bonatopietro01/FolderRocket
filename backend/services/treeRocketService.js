@@ -29,13 +29,28 @@ async function directoryExists(candidate) {
     catch { return false; }
 }
 
-async function listTreeRoots({workspacePath, administrator = false, platform = process.platform, home = os.homedir(), driveRoots} = {}) {
+function resolveDesktopRoot({platform = process.platform, home = os.homedir(), environment = process.env, execFileImpl = execFile} = {}) {
+    if (platform !== "win32") return Promise.resolve(path.join(home, "Desktop"));
+    return new Promise(resolve => {
+        const script = "[Environment]::GetFolderPath([Environment+SpecialFolder]::Desktop)";
+        execFileImpl("powershell.exe", ["-NoProfile", "-NonInteractive", "-Command", script], {windowsHide:true, timeout:5000, maxBuffer:16*1024}, (_error, stdout) => {
+            const resolved = String(stdout || "").trim();
+            if (resolved && path.isAbsolute(resolved)) return resolve(path.resolve(resolved));
+            const fallback = environment.OneDrive ? path.join(environment.OneDrive, "Desktop") : path.join(home, "Desktop");
+            resolve(path.resolve(fallback));
+        });
+    });
+}
+
+async function listTreeRoots({workspacePath, administrator = false, platform = process.platform, home = os.homedir(), driveRoots, mode, desktopRoot} = {}) {
     const candidates = [];
     const add = (candidate, name, kind) => {
         if (typeof candidate === "string" && candidate.trim()) candidates.push({path: path.resolve(candidate), name, kind});
     };
 
-    if (!administrator) {
+    if (mode === "desktop") {
+        add(desktopRoot || path.join(home, "Desktop"), "Desktop", "desktop");
+    } else if (!administrator) {
         add(workspacePath, "FolderRocket workspace", "workspace");
     } else {
         const drives = driveRoots ?? (platform === "win32" ? await getWindowsDriveRoots() : [path.parse(home).root || "/"]);
@@ -144,4 +159,4 @@ async function searchTreeRoots(roots, query, {maxDirectories = MAX_SEARCH_DIRECT
     return {folders, files, scannedDirectories, truncated};
 }
 
-module.exports = {listTreeDirectory, listTreeRoots, searchTreeRoots, MAX_TREE_FILES, MAX_TREE_FOLDERS, MAX_TREE_FOLDER_COUNTS, MAX_SEARCH_DIRECTORIES, MAX_SEARCH_DEPTH, MAX_SEARCH_RESULTS};
+module.exports = {listTreeDirectory, listTreeRoots, resolveDesktopRoot, searchTreeRoots, MAX_TREE_FILES, MAX_TREE_FOLDERS, MAX_TREE_FOLDER_COUNTS, MAX_SEARCH_DIRECTORIES, MAX_SEARCH_DEPTH, MAX_SEARCH_RESULTS};

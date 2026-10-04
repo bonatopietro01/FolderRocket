@@ -46,21 +46,24 @@ async function searchFiles(folders, query, options = {}) {
     const visitedFolders = new Set();
     const maximumFilesToInspect = 1200;
 
-    function listFilesRecursively(folder) {
+    async function listFilesRecursively(folder) {
         const pending = [folder];
         const discovered = [];
+        let inspectedEntries = 0;
         while (pending.length && discovered.length < maximumFilesToInspect) {
             const current = pending.pop();
             const resolved = path.resolve(current);
             if (visitedFolders.has(resolved)) continue;
             visitedFolders.add(resolved);
             let entries;
-            try { entries = fs.readdirSync(current, {withFileTypes: true}); }
+            try { entries = await fs.promises.readdir(current, {withFileTypes: true}); }
             catch { continue; }
             for (const entry of entries) {
                 const fullPath = path.join(current, entry.name);
                 if (entry.isDirectory()) pending.push(fullPath);
                 else if (entry.isFile()) discovered.push(fullPath);
+                inspectedEntries += 1;
+                if (inspectedEntries % 250 === 0) await new Promise(resolve => setImmediate(resolve));
                 if (discovered.length >= maximumFilesToInspect) break;
             }
         }
@@ -68,8 +71,12 @@ async function searchFiles(folders, query, options = {}) {
     }
 
     for (const folder of folders ?? []) {
-        if (!folder || !fs.existsSync(folder) || !fs.statSync(folder).isDirectory()) continue;
-        for (const fullPath of listFilesRecursively(folder)) {
+        if (!folder) continue;
+        let folderInfo;
+        try { folderInfo = await fs.promises.stat(folder); }
+        catch { continue; }
+        if (!folderInfo.isDirectory()) continue;
+        for (const fullPath of await listFilesRecursively(folder)) {
             const name = path.basename(fullPath);
             if (["archivio.xlsx", "scadenze.xlsx"].includes(name.toLowerCase())) continue;
             const lowered = name.toLowerCase();
@@ -82,7 +89,12 @@ async function searchFiles(folders, query, options = {}) {
                 } catch { contentMatches = []; }
             }
             const matches = [...new Set([...nameMatches, ...contentMatches])];
-            if (matches.length) results.push({name, path: fullPath, matches, size: fs.statSync(fullPath).size});
+            if (matches.length) {
+                try {
+                    const fileInfo = await fs.promises.stat(fullPath);
+                    results.push({name, path: fullPath, matches, size: fileInfo.size});
+                } catch { /* A file can disappear while a search is running. */ }
+            }
         }
     }
     return results.slice(0, 100);

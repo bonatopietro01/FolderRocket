@@ -41,7 +41,7 @@ const performanceSampleTimes = new Map<string, number>();
 function storageKey(userId: string) { return `folderrocket-diagnostics-v1-${userId}`; }
 
 function safeText(value: unknown, max = 260) {
-    return String(value ?? "").replace(/\bBearer\s+\S+/gi, "Bearer [redacted]").replace(/\b(access[_-]?token|refresh[_-]?token|api[_-]?key|password)\s*[:=]\s*\S+/gi, "$1=[redacted]").replace(/\bsk-[A-Za-z0-9_-]{16,}\b/g, "[redacted key]").replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]").replace(/(?:[A-Z]:\\|\\\\|\/Users\/|\/home\/)[^\s"']+/gi, "[local path]").replace(/[\r\n\t]+/g, " ").slice(0, max);
+    return String(value ?? "").replace(/\bBearer\s+\S+/gi, "Bearer [redacted]").replace(/\b(access[_-]?token|refresh[_-]?token|api[_-]?key|password)\s*[:=]\s*\S+/gi, "$1=[redacted]").replace(/\bsk-[A-Za-z0-9_-]{16,}\b/g, "[redacted key]").replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[email]").replace(/(?:[A-Z]:\\|\\\\|\/Users\/|\/home\/)[^\r\n"'<>(),;]+/gi, match => "[local path]" + (match.match(/\s+$/)?.[0] || "")).replace(/[\r\n\t]+/g, " ").slice(0, max);
 }
 
 function normalizeEntry(value: Partial<DiagnosticEvent>): DiagnosticEvent {

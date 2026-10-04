@@ -1,5 +1,5 @@
 import {lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode} from "react";
-import {BriefcaseBusiness, FolderCog, GripHorizontal, LayoutDashboard, Orbit, Plus, Rocket, RotateCcw, Shapes, WandSparkles} from "lucide-react";
+import {BriefcaseBusiness, FolderCog, GripHorizontal, LayoutDashboard, Orbit, Plus, Rocket, RotateCcw, Shapes, WandSparkles, Mail} from "lucide-react";
 import {AccountMenu, type FolderRocketUser} from "./components/AuthGate";
 import {API_BASE_URL} from "./api";
 import "./App.css";
@@ -25,8 +25,10 @@ import DailyAgendaRail from "./components/DailyAgendaRail";
 import ChangeWorld, {Planet as WorldPlanet} from "./components/ChangeWorld";
 import DiagnosticsCenter from "./components/DiagnosticsCenter";
 import {captureDiagnostic, setDiagnosticWorld} from "./diagnostics";
-import {activeWorldStorageScope, loadWorkspaceWorldState, worldsStorageKey, type WorldAssistantCapability, type WorldAssistantModel, type WorkspaceWorld} from "./worlds";
-import {readWorldActivitySnapshot, selectWorldActivitySnapshot} from "./worldActivitySnapshot";
+import {activeWorldStorageScope, loadWorkspaceWorldState, worldsStorageKey, type WorldAssistantCapability, type WorldAssistantModel, type WorkspaceWorld, type WorldTreeRootMode} from "./worlds";
+import {buildWorldObsidianClientRecords, readWorldActivitySnapshot, selectWorldActivitySnapshot} from "./worldActivitySnapshot";
+import PlanetGraph from "./components/PlanetGraph";
+import EmailConversations from "./components/EmailConversations";
 
 const DomainSourcePanel = lazy(() => import("./components/DomainSourcePanel"));
 const FolderManagement = lazy(() => import("./components/FolderManagement"));
@@ -175,7 +177,7 @@ function migrateDefaultWorldZoom(userId: string, worlds: WorkspaceWorld[]) {
     } catch { /* A storage restriction must not prevent FolderRocket from opening. */ }
 }
 
-function WorldWorkspace({user, onLogout, world, worldNames, onOpenWorlds, onWorldAiModeChange, settingsPreloaded}: {user: FolderRocketUser; onLogout: () => Promise<void>; world: WorkspaceWorld; worldNames: Record<string, string>; onOpenWorlds: () => void; onWorldAiModeChange: (enabled: boolean) => Promise<void>; settingsPreloaded: boolean}) {
+function WorldWorkspace({user, onLogout, world, worlds, worldNames, onOpenWorlds, onViewGraph, onWorldAiModeChange, onTreeRootModeChange, settingsPreloaded}: {user: FolderRocketUser; onLogout: () => Promise<void>; world: WorkspaceWorld; worlds: WorkspaceWorld[]; worldNames: Record<string, string>; onOpenWorlds: () => void; onViewGraph: (world:WorkspaceWorld,threadId?:string)=>void; onWorldAiModeChange: (enabled: boolean) => Promise<void>; onTreeRootModeChange: (mode:WorldTreeRootMode)=>Promise<void>; settingsPreloaded: boolean}) {
     const workspaceScope = activeWorldStorageScope(user.id, world.id);
     const foldersStorageKey = `${FOLDERS_KEY}-${workspaceScope}`;
     const widthsStorageKey = `${DASHBOARD_WIDTHS_KEY}-${workspaceScope}`;
@@ -191,17 +193,30 @@ function WorldWorkspace({user, onLogout, world, worldNames, onOpenWorlds, onWorl
     const dashboardSettingsUrl = `${API_BASE_URL}/settings/dashboard?worldId=${encodeURIComponent(world.id)}`;
     const settingsPreloadedRef = useRef(settingsPreloaded);
     const isCargoShipWindow = new URLSearchParams(window.location.search).has("folderrocketCargoShip");
-    const [page, setPage] = useState<"dashboard" | "folders" | "processing" | "applications" | "daily">("dashboard");
+    const [page, setPage] = useState<"dashboard" | "folders" | "processing" | "applications" | "daily" | "email">(() => sessionStorage.getItem(`folderrocket-obsidian-open-email-${user.id}`) === world.id ? "email" : "dashboard");
+    const [emailFocusThreadId,setEmailFocusThreadId]=useState("");
+    const [logoLaunching,setLogoLaunching]=useState(false);
+    const logoLaunchTimer=useRef<number|null>(null);
+    const logoLaunchLocked=useRef(false);
     const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
     const [applicationChecking, setApplicationChecking] = useState(false);
     const [dashboardSaveError, setDashboardSaveError] = useState("");
     const [folderPathNotice, setFolderPathNotice] = useState("");
     const [folders, setFolders] = useState<Folder[]>(() => readFolders(foldersStorageKey, user.workspacePath, user.role === "admin"));
 
-    const navigate=useCallback((next: "dashboard" | "folders" | "processing" | "applications" | "daily") => {
+    const navigate=useCallback((next: "dashboard" | "folders" | "processing" | "applications" | "daily" | "email") => {
         if (next !== page && page === "applications" && applicationChecking && !window.confirm("A file check is still running. Leaving Applications will stop it, and you will need to press Continue checking when you return. Leave Applications?")) return;
         setPage(next);
     },[applicationChecking,page]);
+    useEffect(()=>()=>{if(logoLaunchTimer.current!==null)window.clearTimeout(logoLaunchTimer.current);},[]);
+    const launchConversation=useCallback(()=>{
+        if(logoLaunchLocked.current)return;
+        if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){navigate("email");return;}
+        logoLaunchLocked.current=true;setLogoLaunching(true);
+        logoLaunchTimer.current=window.setTimeout(()=>{navigate("email");setLogoLaunching(false);logoLaunchLocked.current=false;logoLaunchTimer.current=null;},390);
+    },[navigate]);
+    useEffect(()=>{const pendingKey=`folderrocket-obsidian-open-email-${user.id}`;if(sessionStorage.getItem(pendingKey)===world.id)sessionStorage.removeItem(pendingKey);},[user.id,world.id]);
+    useEffect(()=>{const open=(event:Event)=>{const detail=(event as CustomEvent<{worldId?:string;threadId?:string}>).detail;if(detail?.worldId!==world.id)return;setEmailFocusThreadId(detail.threadId||"");setPage("email");};window.addEventListener("folderrocket-open-email-thread",open);return()=>window.removeEventListener("folderrocket-open-email-thread",open);},[world.id]);
     const [dashboardWidths, setDashboardWidths] = useState<DashboardWidths | null>(() => readDashboardWidths(widthsStorageKey));
     const [dashboardHeight, setDashboardHeight] = useState<number | null>(() => readDashboardHeight(heightStorageKey));
     const [dashboardLayout, setDashboardLayout] = useState<"three-column" | "folders-top">(() => localStorage.getItem(`${DASHBOARD_LAYOUT_KEY}-${workspaceScope}`) === "folders-top" ? "folders-top" : "three-column");
@@ -278,6 +293,38 @@ function WorldWorkspace({user, onLogout, world, worldNames, onOpenWorlds, onWorl
         window.addEventListener("storage", onStorage);
         return () => { active = false; window.clearTimeout(timer); window.clearInterval(interval); window.removeEventListener("folderrocket:daily-activity", sync); window.removeEventListener("folderrocket:sticky-notes-updated", sync); window.removeEventListener("folderrocket-calendar-context", sync); window.removeEventListener("storage", onStorage); };
     }, [world.activityNotifications?.enabled, selectedDigestSources, world.id, workspaceScope]);
+    useEffect(() => {
+        if (!world.graphEnabled) return;
+        let timer=0;
+        let interval=0;
+        let active=true;
+        let inFlight=false;
+        const uploadSnapshot=()=>{
+            window.clearTimeout(timer);
+            timer=window.setTimeout(()=>{
+                if(!active||inFlight)return;
+                inFlight=true;
+                void fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(world.id)}/graph/snapshot`,{method:"POST",credentials:"include",keepalive:true,headers:{"Content-Type":"application/json"},body:JSON.stringify({snapshot:readWorldActivitySnapshot(workspaceScope)})})
+                    .catch(()=>{})
+                    .finally(()=>{inFlight=false;});
+            },300);
+        };
+        const uploadActivity=(event:Event)=>{
+            const activity=(event as CustomEvent<{kind?:string;summary?:string}>).detail;
+            if(!activity||typeof activity.kind!=="string"||typeof activity.summary!=="string"||!activity.summary.trim())return;
+            const operationId=typeof crypto.randomUUID==="function"?crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            void fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(world.id)}/graph/activity`,{method:"POST",credentials:"include",keepalive:true,headers:{"Content-Type":"application/json"},body:JSON.stringify({activity:{worldId:world.id,operationId,at:new Date().toISOString(),kind:activity.kind.slice(0,48),summary:activity.summary.slice(0,240)}})}).catch(()=>{});
+            uploadSnapshot();
+        };
+        const onStorage=(event:StorageEvent)=>{if(event.key?.includes(workspaceScope)&&(event.key.includes("daily-job")||event.key.includes("sticky-notes")||event.key.includes("daily-calendars")))uploadSnapshot();};
+        uploadSnapshot();
+        interval=window.setInterval(uploadSnapshot,60_000);
+        window.addEventListener("folderrocket:daily-activity",uploadActivity);
+        window.addEventListener("folderrocket:sticky-notes-updated",uploadSnapshot);
+        window.addEventListener("folderrocket-calendar-context",uploadSnapshot);
+        window.addEventListener("storage",onStorage);
+        return()=>{active=false;window.clearTimeout(timer);window.clearInterval(interval);window.removeEventListener("folderrocket:daily-activity",uploadActivity);window.removeEventListener("folderrocket:sticky-notes-updated",uploadSnapshot);window.removeEventListener("folderrocket-calendar-context",uploadSnapshot);window.removeEventListener("storage",onStorage);};
+    },[world.graphEnabled,world.id,workspaceScope]);
     const previousUsbIds = useRef<string[]>([]);
     useEffect(() => {
         const drives = usbStatus.drives ?? [];
@@ -538,8 +585,8 @@ function WorldWorkspace({user, onLogout, world, worldNames, onOpenWorlds, onWorl
 
     function renderSourceBlock(column: "left" | "right", block: DashboardSourceBlockData) {
         const deferred = (content: ReactNode) => <Suspense fallback={<p className="sourceLoading">Loading…</p>}>{content}</Suspense>;
-        if (block.type === "gmail") return <GmailSourcePanel key={`${world.id}-${block.id}-${block.accountBlockId === null ? "none" : block.accountBlockId || "default"}`} storageScope={`${workspaceScope}-${block.id}`} alertBlockId={block.id} accountBlockId={block.accountBlockId} onAccountBlockIdChange={accountBlockId => updateSourceBlock(column, block.id, {accountBlockId})} accountCatalogKey={user.id} worldId={world.id} worldName={world.name} worldNames={worldNames} aiEnabled={aiEnabled} />;
-        if (block.type === "outlook") return <OutlookSourcePanel storageScope={`${workspaceScope}-${block.id}`} alertBlockId={block.id} accountBlockId={block.accountBlockId ?? undefined} onAccountBlockIdChange={accountBlockId => updateSourceBlock(column, block.id, {accountBlockId})} accountCatalogKey={user.id} worldId={world.id} aiEnabled={aiEnabled} />;
+        if (block.type === "gmail") return <GmailSourcePanel key={`${world.id}-${block.id}-${world.emailAccount?.provider === "gmail" ? world.emailAccount.blockId : "none"}`} storageScope={`${workspaceScope}-${block.id}`} alertBlockId={block.id} accountBlockId={world.emailAccount?.provider === "gmail" ? world.emailAccount.blockId : null} accountCatalogKey={user.id} worldId={world.id} worldName={world.name} worldNames={worldNames} aiEnabled={aiEnabled} worldAccountLocked worldAccountEmail={world.emailAccount?.provider === "gmail" ? world.emailAccount.email || "" : ""} onManageWorldAccount={onOpenWorlds} />;
+        if (block.type === "outlook") return <OutlookSourcePanel key={`${world.id}-${block.id}-${world.emailAccount?.provider === "outlook" ? world.emailAccount.blockId : "none"}`} storageScope={`${workspaceScope}-${block.id}`} alertBlockId={block.id} accountBlockId={world.emailAccount?.provider === "outlook" ? world.emailAccount.blockId : null} accountCatalogKey={user.id} worldId={world.id} aiEnabled={aiEnabled} worldAccountLocked worldAccountEmail={world.emailAccount?.provider === "outlook" ? world.emailAccount.email || "" : ""} onManageWorldAccount={onOpenWorlds} />;
         if (block.type === "teams") return deferred(<TeamsSourcePanel key={`${world.id}-${block.id}-${block.accountBlockId === null ? "none" : block.accountBlockId || "default"}`} blockId={block.id} accountBlockId={block.accountBlockId} onAccountBlockIdChange={accountBlockId => updateSourceBlock(column, block.id, {accountBlockId})} />);
         if (block.type === "calendar") return deferred(<GoogleCalendarSourcePanel storageScope={workspaceScope} alertBlockId={block.id} weekStart={block.calendarWeekStart} onWeekStartChange={calendarWeekStart => updateSourceBlock(column, block.id, {calendarWeekStart})} />);
         if (block.type === "recent") return deferred(<RecentFilesSourcePanel folders={folders.filter(folder => folder.storage !== "imaginary" && folder.path).map(folder => folder.path)} hours={block.recentHours} extraPaths={block.recentPaths} onSettings={(recentHours, recentPaths) => updateSourceBlock(column, block.id, {recentHours, recentPaths})}/>);
@@ -575,7 +622,7 @@ function WorldWorkspace({user, onLogout, world, worldNames, onOpenWorlds, onWorl
     if (isCargoShipWindow) return <CargoShip {...cargoShipProps} standalone />;
     return <div className="app" style={{"--nav-column-width":dashboardWidths?`${dashboardWidths.left}px`:"calc((min(100vw - 56px, 1420px) - 24px) / 3)"} as CSSProperties}><FolderAppearanceStyles folders={folders}/>
         <header className="appHeader">
-            <img className="appLogo" src={folderRocketWordmark} alt="FolderRocket" />
+            <button type="button" className={`appLogoButton${logoLaunching?" isLaunching":""}`} onClick={launchConversation} title="Launch Conversation" aria-label="Launch Conversation" aria-busy={logoLaunching}><img className="appLogo" src={folderRocketWordmark} alt="FolderRocket"/></button>
             <div className="appWorldIdentity" role="img" aria-label={`Pianeta attivo: ${world.name}`} title={`Pianeta attivo: ${world.name}`}><WorldPlanet world={world}/><span>{world.name}</span></div>
             <div className={aiEnabled ? "appAiStatus active" : "appAiStatus inactive"} role="status" aria-live="polite"><span className="appAiStatusDot"/>{aiEnabled ? "AI ON" : "AI OFF"}</div>
             <nav className="appNavigation">
@@ -587,6 +634,7 @@ function WorldWorkspace({user, onLogout, world, worldNames, onOpenWorlds, onWorl
                     <button className={page === "processing" ? "active" : ""} type="button" onClick={() => navigate("processing")}><WandSparkles size={15}/>File Studio</button>
                     <button className={page === "applications" ? "active" : ""} type="button" onClick={() => navigate("applications")}><Shapes size={15}/>Applications</button>
                     <button className={page === "daily" ? "active" : ""} type="button" onClick={() => navigate("daily")}><BriefcaseBusiness size={15}/>Daily Job</button>
+                    <button className={page === "email" ? "active" : ""} type="button" onClick={() => navigate("email")}><Mail size={15}/>Conversations</button>
                 </div></div>
                 {page === "dashboard" && <button type="button" className="dashboardResetButton" onClick={resetDashboardLayout} title="Restore default dashboard size" aria-label="Restore default dashboard size"><RotateCcw size={14} /></button>}
             </nav>
@@ -607,7 +655,7 @@ function WorldWorkspace({user, onLogout, world, worldNames, onOpenWorlds, onWorl
             <div className="dashboardResizer" role="separator" aria-label="Resize center and right columns" onPointerDown={event => startColumnResize("right", event)} />
             <DashboardSourceColumn className="rightSourcesColumn" title="Sources" blocks={rightSourceBlocks} onAdd={type => addSourceBlock("right", type)} onDelete={id => deleteSourceBlock("right", id)} onMove={(id, direction) => moveSourceBlock("right", id, direction)} onResize={(id, height) => updateSourceBlock("right", id, {height})} renderBlock={block => renderSourceBlock("right", block)} />
             <button type="button" className="dashboardHeightResizer" onPointerDown={startDashboardHeightResize} title="Drag to set dashboard height" aria-label="Set dashboard height"><GripHorizontal size={15} /></button>
-        </main>{page === "folders" && <div className="folderPage"><Suspense fallback={<p className="sourceLoading">Loading folders…</p>}><FolderManagement folders={folders} onAdd={addFolder} onUpdate={updateFolder} onDelete={deleteFolder} onReorder={moveFolder} aiEnabled={aiEnabled} /></Suspense></div>}{page === "processing" && <div className="processingView"><Suspense fallback={<p className="sourceLoading">Loading File Studio…</p>}><ProcessingWorkspace folders={folders} onUpdate={updateFolder} storageScope={workspaceScope} /></Suspense></div>}{page === "applications" && <div className="applicationsView"><Suspense fallback={<p className="sourceLoading">Loading applications…</p>}><ApplicationsWorkspace storageScope={workspaceScope} folders={folders} onScanningChange={setApplicationChecking} onVirtualFilesAdd={(folderId,items)=>updateFolder(folderId,{virtualFiles:[...(folders.find(folder=>folder.id===folderId)?.virtualFiles??[]),...items.filter(item=>!(folders.find(folder=>folder.id===folderId)?.virtualFiles??[]).some(existing=>existing.path===item.path))]})}/></Suspense></div>}{page === "daily" && <Suspense fallback={<p className="sourceLoading">Loading Daily Job…</p>}><DailyJob storageScope={workspaceScope} worldId={world.id} onOpenWorkspace={kind=>navigate(kind==="studio"?"processing":kind==="applications"?"applications":"dashboard")}/></Suspense>}</div>
+        </main>{page === "folders" && <div className="folderPage"><Suspense fallback={<p className="sourceLoading">Loading folders…</p>}><FolderManagement folders={folders} onAdd={addFolder} onUpdate={updateFolder} onDelete={deleteFolder} onReorder={moveFolder} aiEnabled={aiEnabled} worldId={world.id} treeRootMode={world.treeRootMode||"computer"} onTreeRootModeChange={onTreeRootModeChange} /></Suspense></div>}{page === "processing" && <div className="processingView"><Suspense fallback={<p className="sourceLoading">Loading File Studio…</p>}><ProcessingWorkspace folders={folders} onUpdate={updateFolder} storageScope={workspaceScope} /></Suspense></div>}{page === "applications" && <div className="applicationsView"><Suspense fallback={<p className="sourceLoading">Loading applications…</p>}><ApplicationsWorkspace storageScope={workspaceScope} folders={folders} onScanningChange={setApplicationChecking} onVirtualFilesAdd={(folderId,items)=>updateFolder(folderId,{virtualFiles:[...(folders.find(folder=>folder.id===folderId)?.virtualFiles??[]),...items.filter(item=>!(folders.find(folder=>folder.id===folderId)?.virtualFiles??[]).some(existing=>existing.path===item.path))]})}/></Suspense></div>}{page === "daily" && <Suspense fallback={<p className="sourceLoading">Loading Daily Job…</p>}><DailyJob storageScope={workspaceScope} worldId={world.id} onOpenWorkspace={kind=>navigate(kind==="studio"?"processing":kind==="applications"?"applications":"dashboard")}/></Suspense>}{page === "email"&&<EmailConversations world={world} worlds={worlds} focusThreadId={emailFocusThreadId||undefined} onBack={()=>navigate("dashboard")} onViewGraph={threadId=>onViewGraph(world,threadId)} onGoToDashboard={()=>navigate("dashboard")}/>}</div>
     </div>;
 }
 
@@ -620,11 +668,16 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     const [worlds, setWorlds] = useState(initialWorldState.worlds);
     const [activeWorldId, setActiveWorldId] = useState(initialWorldState.activeWorldId);
     const [worldPickerOpen, setWorldPickerOpen] = useState(false);
+    const [graphTargetWorld,setGraphTargetWorld]=useState<WorkspaceWorld|null>(null);
+    const [graphReturnToPicker,setGraphReturnToPicker]=useState(false);
+    const [graphFocusThreadId,setGraphFocusThreadId]=useState("");
     const [worldTravelTarget, setWorldTravelTarget] = useState<WorkspaceWorld | null>(null);
     const [worldSwitchError, setWorldSwitchError] = useState("");
+    const [obsidianCommandNotice, setObsidianCommandNotice] = useState("");
     const [preloadedSettingsWorldId, setPreloadedSettingsWorldId] = useState<string | null>(null);
     const worldSwitchSequence = useRef(0);
     const worldSwitchInFlight = useRef(false);
+    const selectWorldRef = useRef(selectWorld);
     const activeWorldSyncedOnServerRef = useRef<string | null>(null);
     const activeWorldSyncControllerRef = useRef<AbortController | null>(null);
     const stateKey = worldsStorageKey(user.id);
@@ -635,6 +688,63 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     useEffect(() => {
         localStorage.setItem(stateKey, JSON.stringify({worlds, activeWorldId}));
     }, [activeWorldId, stateKey, worlds]);
+
+    useEffect(() => {
+        let current=true;
+        const controller=new AbortController();
+        void Promise.all(initialWorldState.worlds.map(async localWorld=>{
+            try{
+                const response=await fetch(`${API_BASE_URL}/settings/worlds/${encodeURIComponent(localWorld.id)}`,{credentials:"include",signal:controller.signal});
+                if(!response.ok)return null;
+                const data=await response.json() as {world?:Partial<WorkspaceWorld>};
+                let obsidian:WorkspaceWorld["obsidian"];
+                try {const obsidianResponse=await fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(localWorld.id)}/obsidian`,{credentials:"include",signal:controller.signal});if(obsidianResponse.ok){const obsidianData=await obsidianResponse.json() as {config?:WorkspaceWorld["obsidian"]};obsidian=obsidianData.config;}} catch { /* Keep the local world settings if Obsidian settings are unavailable. */ }
+                return data.world?{id:localWorld.id,world:{...data.world,...(obsidian?{obsidian}:{})}}:null;
+            }catch{return null;}
+        })).then(remoteWorlds=>{
+            if(!current)return;
+            const byId=new Map(remoteWorlds.filter((item):item is {id:string;world:Partial<WorkspaceWorld>}=>Boolean(item)).map(item=>[item.id,item.world]));
+            setWorlds(existing=>existing.map(world=>{
+                const remote=byId.get(world.id);if(!remote)return world;
+                return {...world,...(remote.emailAccount!==undefined?{emailAccount:remote.emailAccount}:{}),...(remote.treeRootMode?{treeRootMode:remote.treeRootMode}:{}),...(remote.obsidian?{obsidian:remote.obsidian}:{})};
+            }));
+        });
+        return()=>{current=false;controller.abort();};
+    },[initialWorldState.worlds,user.id]);
+
+    useEffect(()=>{selectWorldRef.current=selectWorld;});
+
+    useEffect(()=>{
+        let requestController:AbortController|null=null;
+        const unsubscribe=window.folderRocketDesktop?.onObsidianCommand(command=>{
+            if(command.action==="open"){
+                const target=worlds.find(item=>item.id===command.worldId);
+                if(!target){setObsidianCommandNotice("This planet no longer exists in FolderRocket.");return;}
+                if(command.worldId===activeWorld.id){window.dispatchEvent(new CustomEvent("folderrocket-open-email-thread",{detail:{worldId:command.worldId}}));return;}
+                const pendingKey=`folderrocket-obsidian-open-email-${user.id}`;
+                sessionStorage.setItem(pendingKey,command.worldId);
+                setObsidianCommandNotice(`Opening ${target.name} in Conversation…`);
+                void selectWorldRef.current(command.worldId).then(()=>{
+                    if(localStorage.getItem(`folderrocket-active-world-${user.id}`)!==command.worldId){sessionStorage.removeItem(pendingKey);setObsidianCommandNotice(`Could not switch to ${target.name}.`);}
+                }).catch(()=>{sessionStorage.removeItem(pendingKey);setObsidianCommandNotice(`Could not switch to ${target.name}.`);});
+                return;
+            }
+            if(command.action!=="sync")return;
+            if(command.worldId!==activeWorld.id){setObsidianCommandNotice("Obsidian requested a sync for another planet. Switch to that planet to synchronize its vault.");return;}
+            if(!activeWorld.obsidian?.enabled){setObsidianCommandNotice("Obsidian sync is disabled for this planet. Enable it in Fly To Another Planet settings.");return;}
+            requestController?.abort();
+            const controller=new AbortController();requestController=controller;
+            setObsidianCommandNotice("Synchronizing this planet’s Obsidian vault…");
+            void fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(activeWorld.id)}/obsidian/sync`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({records:buildWorldObsidianClientRecords(activeWorldStorageScope(user.id,activeWorld.id))}),signal:controller.signal}).then(async response=>{
+                const data=await response.json().catch(()=>({})) as {result?:{status?:string;written?:number;unchanged?:number;conflicts?:number;warnings?:string[]};message?:string};
+                if(!response.ok)throw new Error(data.message||"Vault synchronization failed.");
+                const result=data.result;
+                const detail=result?.warnings?.length?` Warnings: ${result.warnings.join(" ")}`:"";
+                setObsidianCommandNotice(`${result?.status||"Vault synchronized"}: ${result?.written||0} written, ${result?.unchanged||0} unchanged, ${result?.conflicts||0} conflicts.${detail}`);
+            }).catch(error=>{if(!controller.signal.aborted)setObsidianCommandNotice(error instanceof Error?error.message:"Vault synchronization failed.");});
+        });
+        return()=>{requestController?.abort();unsubscribe?.();};
+    },[activeWorld.id,activeWorld.obsidian?.enabled,user.id,worlds]);
 
     useEffect(() => {
         setDiagnosticWorld(activeWorld.id);
@@ -675,6 +785,10 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
             color: ["#5dbdff", "#c28cff", "#ff967d", "#79d7a3"][worlds.length % 4],
             style: "ringed",
             aiEnabled: false,
+            graphEnabled: false,
+            emailAccount: null,
+            treeRootMode: "computer",
+            obsidian: {enabled:false,vaultPath:""},
             agents: [],
             skills: [],
             permissions: {schemaVersion: 1, configured: false},
@@ -745,13 +859,16 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     async function updateWorld(updated: WorkspaceWorld) {
         const previous = worlds.find(world => world.id === updated.id);
         if (previous) {
-            const response = await fetch(`${API_BASE_URL}/settings/worlds/${encodeURIComponent(updated.id)}`, {method:"PUT", credentials:"include", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name:updated.name,aiEnabled:updated.aiEnabled,agents:updated.agents,skills:updated.skills,activityNotifications:updated.activityNotifications})});
+            const response = await fetch(`${API_BASE_URL}/settings/worlds/${encodeURIComponent(updated.id)}`, {method:"PUT", credentials:"include", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name:updated.name,aiEnabled:updated.aiEnabled,graphEnabled:updated.graphEnabled===true,emailAccount:updated.emailAccount??null,treeRootMode:updated.treeRootMode||"computer",agents:updated.agents,skills:updated.skills,activityNotifications:updated.activityNotifications})});
             const data = await response.json().catch(() => ({})) as {message?:string};
             if (!response.ok) throw new Error(data.message || "Non è stato possibile salvare lo stato AI del pianeta.");
         }
         localStorage.setItem(`${AI_MODE_KEY}-${activeWorldStorageScope(user.id, updated.id)}`, updated.aiEnabled ? "on" : "off");
         window.dispatchEvent(new CustomEvent("folderrocket-world-ai-mode", {detail:{worldId:updated.id, enabled:updated.aiEnabled}}));
         setWorlds(current => current.map(world => world.id === updated.id ? updated : world));
+        if(updated.graphEnabled&&!previous?.graphEnabled){
+            void fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(updated.id)}/graph/index`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({snapshot:readWorldActivitySnapshot(activeWorldStorageScope(user.id,updated.id))})}).catch(()=>{});
+        }
     }
 
     const activeWorldIdForCallbacks = activeWorld.id;
@@ -796,8 +913,10 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
 
     if (!activeWorld) return null;
     return <div className="worldApplicationRoot">
-        <WorldWorkspace key={`${user.id}-${activeWorld.id}`} user={user} onLogout={onLogout} world={activeWorld} worldNames={worldNames} onOpenWorlds={() => setWorldPickerOpen(true)} onWorldAiModeChange={updateWorldAiMode} settingsPreloaded={preloadedSettingsWorldId === activeWorld.id}/>
-        {worldPickerOpen && !isCargoShipWindow && <ChangeWorld worlds={worlds} activeWorldId={activeWorld.id} storageScope={activeWorldStorageScope(user.id, activeWorld.id)} onSelect={selectWorld} onInvokeAssistant={invokeWorldAssistant} switchError={worldSwitchError} onBack={() => setWorldPickerOpen(false)} onAdd={addWorld} onUpdate={updateWorld} onDelete={deleteWorld}/>}
+        {obsidianCommandNotice&&<div className="obsidianCommandNotice" role="status" aria-live="polite"><span>{obsidianCommandNotice}</span><button type="button" onClick={()=>setObsidianCommandNotice("")} aria-label="Dismiss Obsidian status">×</button></div>}
+        <WorldWorkspace key={`${user.id}-${activeWorld.id}`} user={user} onLogout={onLogout} world={activeWorld} worlds={worlds} worldNames={worldNames} onOpenWorlds={() => setWorldPickerOpen(true)} onViewGraph={(world,threadId)=>{setWorldPickerOpen(false);setGraphReturnToPicker(false);setGraphFocusThreadId(threadId||"");setGraphTargetWorld(world);}} onWorldAiModeChange={updateWorldAiMode} onTreeRootModeChange={mode=>updateWorld({...activeWorld,treeRootMode:mode})} settingsPreloaded={preloadedSettingsWorldId === activeWorld.id}/>
+        {worldPickerOpen && !isCargoShipWindow && <ChangeWorld worlds={worlds} activeWorldId={activeWorld.id} storageScope={activeWorldStorageScope(user.id, activeWorld.id)} onSelect={selectWorld} onViewGraph={world=>{setGraphFocusThreadId("");setGraphReturnToPicker(true);setGraphTargetWorld(world);}} onInvokeAssistant={invokeWorldAssistant} switchError={worldSwitchError} onBack={() => setWorldPickerOpen(false)} onAdd={addWorld} onUpdate={updateWorld} onDelete={deleteWorld}/>}
+        {graphTargetWorld&&!isCargoShipWindow&&<PlanetGraph key={`${user.id}:${graphTargetWorld.id}`} userId={user.id} world={worlds.find(item=>item.id===graphTargetWorld.id)||graphTargetWorld} active={activeWorld.id===graphTargetWorld.id} focusThreadId={graphFocusThreadId} worldNames={worldNames} onClose={()=>{setGraphTargetWorld(null);setWorldPickerOpen(graphReturnToPicker);setGraphReturnToPicker(false);setGraphFocusThreadId("");}} onOpenConversation={threadId=>{const target=worlds.find(item=>item.id===graphTargetWorld.id);setGraphTargetWorld(null);setWorldPickerOpen(false);setGraphReturnToPicker(false);setGraphFocusThreadId("");if(target?.id===activeWorld.id)window.dispatchEvent(new CustomEvent("folderrocket-open-email-thread",{detail:{worldId:target.id,threadId}}));}} onEnable={async()=>{const current=worlds.find(item=>item.id===graphTargetWorld.id);if(current)await updateWorld({...current,graphEnabled:true});}}/>}
         {worldTravelTarget && <div className="worldTravelScreen" role="status" aria-live="polite" aria-busy="true" style={{"--planet-color":worldTravelTarget.color,"--world-travel-duration":"700ms"} as CSSProperties}><div className="worldTravelStars"/><p className="worldTravelStatus">Preparazione dell’ambiente</p><div className="worldTravelDestination"><span className={`worldPlanet ${worldTravelTarget.style}${worldTravelTarget.aiEnabled ? " aiEnabled" : ""}`}><i/><b/><em/>{worldTravelTarget.aiEnabled && <span className="worldAiSatelliteOrbit"><i/></span>}</span><strong>{worldTravelTarget.name}</strong></div><div className="worldTravelShip" aria-hidden="true"><Rocket size={44}/></div></div>}
     </div>;
 }

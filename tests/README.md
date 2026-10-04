@@ -34,7 +34,11 @@ names; it never reads installed applications. Switch between Folders on Top and 
 Columns, then choose 0, 1, 2, or 12 folders. Open Tree Rocket to inspect the
 matching graph; click a folder, try Show Files, search, Back/Roots navigation,
 and Add to Folder Management. Switch to Tree Rocket Apps to verify the sample
-catalog and generic icon fallbacks. Folders
+catalog and generic icon fallbacks. App tiles should contain only a centered
+icon and name, remain the same size, and keep their header branding in place
+while switching views. The folder/file search remains visible in Apps and
+returns to folder results when submitted. Clicking a sample app is safely
+mocked and does not launch a real program. Folders
 on Top groups non-empty descriptions and keeps vertical scrolling inside the
 group under the pointer while horizontal movement is reserved for horizontal
 trackpad input. The add action reports the path only in this fixture and does

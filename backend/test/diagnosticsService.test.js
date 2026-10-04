@@ -10,6 +10,7 @@ test("diagnostics are bounded, sanitized, user-isolated and clearable", async t 
     process.env.FOLDERROCKET_DATA_DIR = root;
     const service = require("../services/diagnosticsService");
 
+    assert.equal(service.safeText("Failed at C:\\Synthetic User\\Workspace With Spaces\\private.pdf (EACCES)"), "Failed at [local path] (EACCES)");
     await service.recordDiagnostic("alice", {id: "req-1", type: "http", message: "Bad request\nalice@example.test Bearer super-secret C:\\Users\\bonat\\private.pdf", route: "/files", worldId: "work", status: 400});
     await service.recordDiagnostic("bob", {id: "req-2", type: "backend", message: "Different user"});
     assert.equal((await service.listDiagnostics("alice")).length, 1);

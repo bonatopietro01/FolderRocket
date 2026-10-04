@@ -5953,12 +5953,14 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .treeRocketBrandTitle { display:flex; min-width:0; align-items:center; gap:12px; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; }
 .treeRocketBrandTitle .treeRocketMark { width:104px; height:104px; object-fit:contain; filter:drop-shadow(0 4px 6px #020a18a8); }
 .treeRocketBrandTitle > strong { display:flex; gap:5px; color:#10243c; font-family:inherit; font-size:clamp(29px,2.7vw,40px); font-style:italic; font-weight:950; letter-spacing:-.055em; white-space:nowrap; text-shadow:0 1px 0 #ffffffd9,0 0 10px #ffffffa8; }
-.treeRocketBrandTitle > strong span:last-child { color:#087ed8; }
+.treeRocketBrandTitle > strong span:first-child { color:#071d34; }
+.treeRocketBrandTitle > strong span:last-child { background:linear-gradient(180deg,#25b8f3,#0872d3); background-clip:text; color:transparent; -webkit-background-clip:text; }
 .treeRocketTabs { display:flex; flex:0 0 auto; gap:4px; padding:3px; border:1px solid #a4d5f055; border-radius:9px; background:#07182db3; }
 .treeRocketTabs button { min-height:34px; padding:5px 13px; font-size:12px; }
 .treeRocketTabs .treeRocketAppsRefresh { display:grid; width:34px; min-height:34px; place-items:center; padding:0; border-color:#4b9bc3; background:#227ba4; color:#fff; }
 .treeRocketTabs .treeRocketAppsRefresh svg { color:currentColor; }
 .treeRocketTabs .treeRocketAppsRefresh:disabled { opacity:.7; cursor:wait; }
+.treeRocketTabs .treeRocketAppsRefresh.reserved { visibility:hidden; pointer-events:none; }
 .treeRocketBack,.treeRocketAddFoldersButton { display:inline-flex; min-height:38px; width:max-content; align-items:center; justify-content:center; gap:7px; padding:0 12px; border:1px solid rgba(177,210,241,.36); border-radius:9px; background:rgba(18,39,66,.77); color:#e2f1ff; cursor:pointer; font-size:12px; font-weight:750; backdrop-filter:blur(8px); }
 .treeRocketBack:hover,.treeRocketAddFoldersButton:hover { border-color:#87c6f7; background:rgba(31,68,105,.86); }
 .treeRocketAddFoldersButton { border-color:rgba(100,191,255,.48); background:linear-gradient(180deg,rgba(31,115,177,.9),rgba(25,82,143,.9)); }
@@ -6008,13 +6010,15 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .treeRocketAppsLoading { display:flex; align-items:center; justify-content:center; gap:8px; min-height:52px; margin:0; color:#d4e6f2; font-size:11px; }
 .treeRocketAppsError,.treeRocketAppsEmpty { margin:8px 0; color:#ffe0d7; font-size:12px; text-align:center; }
 .treeRocketAppsEmpty { color:#d4e6f2; }
-.treeRocketAppGrid { display:grid; width:100%; grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),260px)); justify-content:center; align-content:start; gap:14px; padding:4px 0 24px; box-sizing:border-box; }
+.treeRocketAppGrid { display:grid; width:100%; grid-template-columns:repeat(auto-fill,minmax(min(158px,100%),190px)); justify-content:center; align-content:start; gap:16px; padding:4px 0 24px; box-sizing:border-box; }
 .treeRocketAppGrid > p { grid-column:1/-1; color:#d4e6f2; text-align:center; }
-.treeRocketAppCard { display:grid; min-width:0; min-height:104px; grid-template-columns:54px minmax(0,1fr) auto; align-items:center; gap:12px; padding:13px 14px; border:1px solid #b8d5e65f; border-radius:13px; background:linear-gradient(145deg,#102944e8,#0b2038d9); color:#eaf5ff; cursor:pointer; text-align:left; }
-.treeRocketAppIcon { display:grid; width:50px; height:50px; place-items:center; overflow:hidden; border:1px solid #a9d7ef55; border-radius:11px; background:#e9f5ff; color:#267baa; }
-.treeRocketAppIcon img { display:block; width:40px; height:40px; object-fit:contain; }
-.treeRocketAppCard strong { overflow:hidden; font-size:14px; text-overflow:ellipsis; white-space:normal; overflow-wrap:anywhere; }
-.treeRocketAppCard:hover { border-color:#83cae9; background:#143656eb; }
+.treeRocketAppsPanel .treeRocketAppCard { display:flex; width:100%; min-width:0; min-height:166px; flex-direction:column; align-items:center; justify-content:center; gap:12px; padding:16px 12px; border:1px solid #b8d5e65f; border-radius:13px; background:linear-gradient(145deg,#102944e8,#0b2038d9); color:#eaf5ff; cursor:pointer; text-align:center; }
+.treeRocketAppIcon { display:grid; width:82px; height:82px; flex:0 0 82px; place-items:center; overflow:hidden; border:0; border-radius:0; background:transparent; color:#a9dcf4; }
+.treeRocketAppIcon img { display:block; width:74px; height:74px; object-fit:contain; }
+.treeRocketAppCard strong { display:-webkit-box; width:100%; min-height:2.5em; overflow:hidden; color:inherit; font-size:13px; font-weight:800; line-height:1.25; text-overflow:ellipsis; overflow-wrap:anywhere; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+.treeRocketAppsPanel .treeRocketAppCard:hover { border-color:#83cae9; background:#143656eb; }
+.treeRocketAppsPanel .treeRocketAppCard:focus-visible { outline:2px solid #8bd4fa; outline-offset:3px; }
+.treeRocketAppsPanel .treeRocketAppCard:disabled { cursor:wait; opacity:.78; }
 
 @media (max-width:1100px) {
   .treeRocketHeader { grid-template-columns:minmax(0,1fr) minmax(0,auto) minmax(0,1fr); gap:10px; padding-inline:0; }
@@ -6038,8 +6042,9 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 @media (max-width:600px) {
   .treeRocketHeader { grid-template-columns:minmax(0,1fr) minmax(0,1fr); grid-template-rows:auto auto auto; gap:7px; padding:8px 0; }
   .treeRocketHeader .treeRocketBack { grid-column:1/-1; grid-row:1; justify-self:start; }
-  .treeRocketBrand { grid-column:1/-1; grid-row:2; gap:7px; }
-  .treeRocketBrand { gap:7px; }
+  .treeRocketBrand { display:grid; grid-column:1/-1; grid-row:2; grid-template-rows:auto auto; justify-items:center; gap:6px; }
+  .treeRocketBrandTitle { grid-row:1; }
+  .treeRocketTabs { grid-row:2; }
   .treeRocketBrandTitle .treeRocketMark { width:62px; height:62px; }
   .treeRocketBrandTitle > strong { gap:3px; font-size:clamp(20px,6vw,25px); }
   .treeRocketTabs button { min-height:27px; padding-inline:8px; font-size:10px; }
@@ -6056,7 +6061,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
   .treeRocketChildren { grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),220px)); gap:12px; padding:18px 4px 16px; }
   .treeRocketChildren.hasParent::before { left:10%; right:10%; }
   .treeRocketAppsPanel { padding:10px 0; }
-  .treeRocketAppGrid { grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),240px)); gap:10px; }
+  .treeRocketAppGrid { grid-template-columns:repeat(auto-fill,minmax(min(148px,100%),180px)); gap:10px; }
 }
 
 /* Folders on Top is capped at two tile rows; a busy project scrolls inside its white group. */
@@ -6112,3 +6117,162 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .recentSourceCard .usbFileList::-webkit-scrollbar-track { background:transparent; }
 .recentSourceCard .usbFileList::-webkit-scrollbar-thumb { border-radius:3px; background:#718ca344; }
 .recentSourceCard .usbFileList:hover::-webkit-scrollbar-thumb,.recentSourceCard .usbFileList:focus-within::-webkit-scrollbar-thumb { background:#718ca399; }
+
+/* Planet-wide email identity and the FolderRocket launch shortcut. */
+.appLogoButton { position:relative; transform:translateZ(0); }
+.appLogoButton .appLogo { transition:transform .18s ease,filter .18s ease; transform-origin:50% 70%; }
+.appLogoButton:hover .appLogo,.appLogoButton:focus-visible .appLogo { transform:translateY(-3px) rotate(-2deg); filter:drop-shadow(0 5px 4px #287fb455); }
+.appLogoButton.isLaunching .appLogo { animation:folderRocketTakeoff .39s cubic-bezier(.24,.73,.31,1) both; }
+@keyframes folderRocketTakeoff { 0%{transform:translateY(0) rotate(0) scale(1);opacity:1} 55%{transform:translateY(-13px) rotate(-7deg) scale(.98);filter:drop-shadow(0 8px 5px #287fb455)} 100%{transform:translateY(-34px) rotate(-11deg) scale(.88);opacity:.24} }
+.emailWorldAccountBadge { max-width:160px; overflow:hidden; padding:4px 7px; border:1px solid #bdd9e8; border-radius:7px; color:#315c75; background:#f0f8fc; font-size:9px; font-weight:800; text-overflow:ellipsis; white-space:nowrap; }
+.worldEmailAccountEditor,.worldObsidianEditor { display:grid; gap:8px; padding:12px; border:1px solid #d2e0eb; border-radius:10px; background:#fff; }
+.worldEmailAccountEditor h3,.worldObsidianEditor h3 { display:flex; align-items:center; gap:6px; margin:0; color:#31516b; font-size:12px; }
+.worldEmailAccountEditor p,.worldObsidianEditor p { margin:3px 0 0; color:#718497; font-size:10px; line-height:1.4; }
+.worldEmailAccountFields { display:grid; grid-template-columns:minmax(120px,.7fr) minmax(0,1.3fr); gap:8px; }
+.worldEmailAccountFields label,.worldObsidianPath { display:grid; gap:5px; color:#455f75; font-size:10px; font-weight:800; }
+.worldEmailAccountFields select,.worldObsidianPath input { min-width:0; min-height:34px; padding:6px 8px; border:1px solid #cbd9e6; border-radius:7px; background:#fff; color:#28455d; font:inherit; }
+.worldEmailConflict { padding:8px; border-radius:7px; color:#7b4c17!important; background:#fff4df; }
+.worldEmailAccountActive { color:#47708d; font-size:10px; }
+.worldObsidianHeading { display:flex; align-items:center; gap:9px; }
+.worldObsidianHeading>span { display:grid; width:30px; height:30px; flex:0 0 auto; place-items:center; border-radius:8px; color:#5168b2; background:#f0f1ff; }
+.worldObsidianHeading>div { min-width:0; flex:1; }
+.worldObsidianActions { display:flex; align-items:center; flex-wrap:wrap; gap:7px; }
+.worldObsidianActions button { display:inline-flex; min-height:32px; align-items:center; gap:5px; padding:5px 9px; border:1px solid #c6d7e5; border-radius:7px; color:#365a74; background:#f7fbfd; cursor:pointer; font-size:10px; font-weight:800; }
+.worldObsidianActions button:disabled { cursor:default; opacity:.48; }
+.worldObsidianActions>span { flex:1 1 180px; color:#708699; font-size:9px; line-height:1.4; overflow-wrap:anywhere; }
+.worldInlineSpinner { animation:planetGraphSpin 1s linear infinite; }
+.obsidianCommandNotice { position:fixed; z-index:10000; top:12px; left:50%; display:flex; max-width:min(720px,calc(100vw - 24px)); align-items:center; gap:12px; transform:translateX(-50%); padding:10px 13px; border:1px solid #b8d2e5; border-radius:10px; color:#294c67; background:#f4faff; box-shadow:0 8px 24px #19385224; font-size:12px; line-height:1.4; }
+.obsidianCommandNotice span { overflow-wrap:anywhere; }
+.obsidianCommandNotice button { flex:0 0 auto; padding:0 4px; border:0; color:inherit; background:transparent; cursor:pointer; font-size:18px; }
+
+/* Stable, compact Tree Rocket folder grid and its per-world origin selector. */
+.treeRocketOriginPicker { display:flex; flex:0 0 auto; align-items:center; gap:5px; color:#adc9df; font-size:9px; font-weight:850; }
+.treeRocketOriginPicker select { height:30px; padding:0 8px; border:1px solid #b3d9f04a; border-radius:7px; color:#e6f5ff; background:#122c49dc; font-size:10px; font-weight:800; }
+.treeRocketGraphCanvas:has(.rootNodes) .treeRocketChildren.rootNodes { grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),220px)); gap:14px; }
+.treeRocketChildren { grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),220px)); gap:14px; }
+.treeRocketSearchGraph { grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),220px)); gap:14px; }
+.treeRocketNode { max-width:220px; min-height:124px; padding:15px 9px 8px; }
+.treeRocketRootNode { width:min(230px,100%); max-width:230px; min-height:124px; }
+.treeRocketGraphStage > .treeRocketRootNode { width:min(230px,100%); max-width:230px; }
+.treeRocketNodeEnter { gap:6px; padding:20px 8px 44px; }
+.treeRocketNodeIcon svg { width:21px; height:21px; }
+.treeRocketNodeEnter strong,.treeRocketRootNode .treeRocketNodeEnter strong { font-size:14px; line-height:1.22; }
+.treeRocketNodeEnter .treeRocketNodeCount { font-size:9px; }
+.treeRocketNodeActions { gap:3px; }
+.treeRocketNodeActions button { min-height:31px; gap:3px; padding:3px; font-size:9px; }
+@media(max-width:650px) { .worldEmailAccountFields { grid-template-columns:minmax(0,1fr); }.treeRocketOriginPicker { flex:1 1 100%; }.treeRocketNode { max-width:220px; min-height:120px; } }
+@media(prefers-reduced-motion:reduce) { .appLogoButton .appLogo,.appLogoButton:hover .appLogo,.appLogoButton:focus-visible .appLogo { transition:none; transform:none; filter:none; }.appLogoButton.isLaunching .appLogo { animation:none; } }
+
+/* Per-world graph and Gmail conversation views. */
+.appLogoButton { display:flex; align-items:center; justify-content:center; padding:0; border:0; background:transparent; cursor:pointer; }
+.worldCardActions { display:grid; gap:7px; }
+.worldGraphButton,.worldGraphEnable { display:flex; align-items:center; justify-content:center; gap:7px; border:1px solid #b8d9ed; border-radius:10px; background:#f5fbff; color:#286082; padding:8px 12px; font-weight:750; cursor:pointer; }
+.worldGraphEnable { justify-content:flex-start; padding:12px; text-align:left; }
+.worldGraphEnable input { flex:none; }
+.worldGraphEnable span { display:grid; gap:4px; }
+.worldGraphEnable small { color:#60798c; font-weight:500; line-height:1.45; }
+.planetGraphPage { position:fixed; z-index:1800; inset:0; display:flex; flex-direction:column; overflow:hidden; padding:20px clamp(16px,4vw,64px) 24px; color:#edf6ff; background:radial-gradient(ellipse at 50% 44%,#132b48 0,#08182c 48%,#050d19 100%); }
+.planetGraphStars { position:absolute; inset:0; pointer-events:none; opacity:.28; background-image:radial-gradient(#fff 1px,transparent 1.5px),radial-gradient(#93caff 1px,transparent 1.5px); background-position:0 0,37px 61px; background-size:79px 79px,113px 113px; }
+.planetGraphHeader { position:relative; z-index:1; display:grid; grid-template-columns:minmax(190px,1fr) auto minmax(300px,1fr); align-items:center; gap:18px; width:min(100%,1500px); margin:0 auto 12px; }
+.planetGraphBack,.planetGraphHeaderActions>button,.planetGraphDetails button,.planetGraphEmpty button { display:flex; align-items:center; justify-content:center; gap:7px; min-height:38px; padding:7px 12px; border:1px solid #6b8ead80; border-radius:10px; color:#e9f5ff; background:#16304a; cursor:pointer; font-weight:700; }
+.planetGraphTitle { display:flex; align-items:center; gap:12px; white-space:nowrap; }
+.planetGraphTitle>svg { color:#82cbff; }
+.planetGraphTitle h1 { margin:0; font-size:clamp(20px,2.6vw,32px); }
+.planetGraphTitle p { margin:3px 0 0; color:#a8c3d9; font-size:12px; }
+.planetGraphHeaderActions { display:flex; justify-content:flex-end; gap:8px; }
+.planetGraphSearch,.emailConversationSearch { display:flex; align-items:center; gap:8px; min-width:0; padding:0 10px; border:1px solid #7c9db877; border-radius:10px; background:#0b1d30; color:#9bbbd5; }
+.planetGraphSearch input,.emailConversationSearch input { width:100%; min-width:0; height:38px; border:0; outline:0; color:inherit; background:transparent; }
+.planetGraphWorkspace { position:relative; z-index:1; flex:1; min-height:0; width:min(100%,1500px); margin:auto; overflow:hidden; border:1px solid #6f99bd4d; border-radius:18px; background:radial-gradient(ellipse at center,#122c477d,#081526bd); }
+.planetGraphCanvas { display:block; width:100%; height:100%; touch-action:none; cursor:grab; }
+.planetGraphCanvas:active { cursor:grabbing; }
+.planetGraphEdge { stroke:#75bff755; stroke-width:1.5; }
+.planetGraphNode { cursor:pointer; outline:none; }
+.planetGraphNode circle { fill:#193650; stroke:#8dcaff; stroke-width:2px; transition:transform .12s ease,fill .12s ease; }
+.planetGraphNode:hover circle,.planetGraphNode:focus circle,.planetGraphNode.selected circle { fill:#286087; stroke:#d2efff; stroke-width:3px; }
+.planetGraphNode.world circle { fill:#2973a3; stroke:#a6e4ff; stroke-width:3px; }
+.planetGraphNode.folder circle { fill:#e3ae54; stroke:#ffe2a4; }
+.planetGraphNode.file circle { fill:#557894; stroke:#b3d6ed; }
+.planetGraphNode.email circle { fill:#aa77cb; stroke:#e3c4fb; }
+.planetGraphNode.calendar-event circle,.planetGraphNode.reminder circle { fill:#4eaa88; stroke:#b4f1d8; }
+.planetGraphNode.search circle,.planetGraphNode.activity circle { fill:#5274bb; stroke:#c1d2ff; }
+.planetGraphNode text { text-anchor:middle; fill:#e5f3ff; font:12px system-ui,sans-serif; paint-order:stroke; stroke:#081526; stroke-width:4px; stroke-linejoin:round; pointer-events:none; }
+.planetGraphZoom { position:absolute; right:12px; bottom:12px; display:flex; align-items:center; gap:5px; padding:5px; border:1px solid #7696b66b; border-radius:10px; background:#09192be8; }
+.planetGraphZoom button { display:grid; place-items:center; min-width:30px; height:30px; border:0; border-radius:7px; color:#e8f5ff; background:#193650; cursor:pointer; }
+.planetGraphZoom span { min-width:42px; text-align:center; font-size:12px; }
+.planetGraphDetails { position:absolute; top:14px; right:14px; width:min(340px,calc(100% - 28px)); padding:16px; border:1px solid #89b5d377; border-radius:14px; color:#eaf5ff; background:#0b1b2cf2; box-shadow:0 12px 38px #0008; }
+.planetGraphDetails h2 { margin:4px 22px 9px 0; font-size:18px; overflow-wrap:anywhere; }
+.planetGraphDetails small,.planetGraphDetails p { color:#b1c9dc; }
+.planetGraphDetails button { margin-top:8px; }
+.planetGraphCloseDetails { position:absolute; top:7px; right:7px; min-height:26px!important; padding:3px 8px!important; }
+.planetGraphPath { overflow-wrap:anywhere; font:11px ui-monospace,monospace; }
+.planetGraphProgress,.planetGraphError,.planetGraphWarning,.planetGraphWarnings { position:relative; z-index:1; width:min(100%,1500px); margin:0 auto 8px; }
+.planetGraphError { color:#ffc0b5; }
+.planetGraphWarning,.planetGraphWarnings { color:#ffe1a1; }
+.planetGraphWarnings summary { cursor:pointer; }
+.planetGraphEmpty { position:relative; z-index:1; display:grid; justify-items:center; align-content:center; flex:1; gap:10px; text-align:center; }
+.planetGraphEmpty h2,.planetGraphEmpty p { margin:0; }
+.planetGraphSpin { animation:planetGraphSpin 1s linear infinite; }
+@keyframes planetGraphSpin { to { transform:rotate(360deg); } }
+.emailConversationsPage { position:relative; z-index:2; display:flex; flex-direction:column; width:min(100%,1500px); height:min(100%,calc(100vh - 145px)); min-height:480px; margin:0 auto; overflow:hidden; border:1px solid #d8e2ea; border-radius:16px; color:#233b4d; background:#fff; box-shadow:0 6px 24px #1a3c5510; }
+.emailConversationsHeader { display:flex; align-items:center; gap:10px; min-height:60px; padding:9px 14px; border-bottom:1px solid #e2eaf0; }
+.emailConversationsHeader>button,.emailThreadHeading>button,.emailReplyComposer footer>button { display:flex; align-items:center; justify-content:center; gap:6px; min-height:34px; padding:6px 10px; border:1px solid #d5e1ea; border-radius:9px; color:#31526a; background:#f8fbfd; cursor:pointer; }
+.emailConversationsTitle { display:flex; align-items:center; gap:9px; margin-right:auto; }
+.emailConversationsTitle>svg { color:#2482bc; }
+.emailConversationsTitle span { display:grid; gap:2px; }
+.emailConversationsTitle strong { font-size:16px; }
+.emailConversationsTitle small { color:#73889a; }
+.emailConversationsHeader .emailGraphButton { color:#2473a3; }
+.emailConversationLayout { display:grid; grid-template-columns:minmax(250px,340px) minmax(0,1fr); flex:1; min-height:0; }
+.emailConversationList { display:flex; flex-direction:column; min-height:0; border-right:1px solid #e3ebf0; }
+.emailConversationSearch { margin:10px; border-color:#dce5ec; background:#fbfdfe; color:#748b9b; }
+.emailConversationRows { flex:1; min-height:0; overflow:auto; }
+.emailConversationRow { display:grid; gap:4px; width:100%; padding:11px 13px; border:0; border-bottom:1px solid #eaf0f4; color:#314b60; text-align:left; background:#fff; cursor:pointer; }
+.emailConversationRow.active { background:#eaf6fd; box-shadow:inset 3px 0 #338bbd; }
+.emailConversationRowTop { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.emailConversationRow strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-size:13px; }
+.emailConversationRow small,.emailConversationRow time { color:#71879a; font-size:10px; }
+.emailConversationRow>span:last-child { overflow:hidden; color:#607789; font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
+.emailConversationAccount { padding:8px 12px; color:#708597; background:#f7fafc; }
+.emailConversationThread { display:flex; flex-direction:column; min-width:0; min-height:0; }
+.emailThreadHeading { display:flex; align-items:center; gap:7px; padding:12px 15px; border-bottom:1px solid #e4ebf0; }
+.emailThreadHeading>div { min-width:0; margin-right:auto; }
+.emailThreadHeading h2 { margin:0; overflow:hidden; font-size:17px; text-overflow:ellipsis; white-space:nowrap; }
+.emailThreadHeading p { margin:3px 0 0; color:#71879a; font-size:11px; }
+.emailMessageList { flex:1; min-height:100px; overflow:auto; padding:13px; background:#fbfcfd; }
+.emailMessageCard { margin-bottom:11px; padding:13px 15px; border:1px solid #e0e8ee; border-radius:12px; background:#fff; }
+.emailMessageCard header { display:flex; justify-content:space-between; gap:10px; }
+.emailMessageCard header strong { overflow-wrap:anywhere; font-size:13px; }
+.emailMessageCard time,.emailMessageCard>small { color:#7a8d9b; font-size:10px; }
+.emailMessageCard pre { margin:10px 0; overflow-wrap:anywhere; white-space:pre-wrap; font:13px/1.55 system-ui,sans-serif; }
+.emailMessageAttachments,.emailReplyFiles { display:flex; flex-wrap:wrap; gap:6px; }
+.emailMessageAttachments span,.emailReplyFiles span { display:flex; align-items:center; gap:4px; padding:4px 7px; border-radius:7px; color:#43657d; background:#eef5f9; font-size:11px; }
+.emailReplyComposer { display:grid; gap:8px; padding:12px; border-top:1px solid #dfe8ee; background:#fff; }
+.emailReplyTitle { display:flex; justify-content:space-between; gap:8px; font-size:12px; }
+.emailReplyTitle small { color:#7a8e9d; }
+.emailReplyRecipient { display:flex; align-items:center; gap:7px; color:#75899a; font-size:11px; }
+.emailReplyRecipient input,.emailReplyComposer textarea { min-width:0; padding:8px 10px; border:1px solid #d9e4eb; border-radius:8px; color:#30495d; background:#fff; }
+.emailReplyComposer textarea { min-height:70px; resize:vertical; font:13px/1.45 system-ui,sans-serif; }
+.emailReplyComposer footer { display:flex; align-items:center; gap:7px; }
+.emailReplyComposer footer>span { flex:1; }
+.emailReplyComposer .emailSendReply { color:#fff; border-color:#247fb3; background:#2789be; }
+.emailSendReply:disabled { opacity:.55; }
+.emailConversationEmpty,.emailConversationEmptyState { display:grid; justify-items:center; align-content:center; gap:9px; flex:1; min-height:0; padding:24px; color:#708698; text-align:center; }
+.emailConversationEmptyState h2,.emailConversationEmptyState p { margin:0; }
+.emailConversationEmptyState button { margin-top:8px; padding:8px 12px; border:0; border-radius:8px; color:#fff; background:#3289b6; cursor:pointer; }
+.emailConversationError,.emailConversationNotice { display:flex; align-items:center; gap:7px; margin:7px 12px; padding:8px 10px; border-radius:8px; color:#8d352b; background:#fff1ef; font-size:12px; }
+.emailConversationNotice { color:#25654a; background:#edfaf3; }
+.emailConversationNotice button { margin-left:auto; border:0; color:inherit; background:transparent; cursor:pointer; }
+.emailShareScrim { position:fixed; z-index:1900; inset:0; display:grid; place-items:center; padding:16px; background:#10253899; }
+.emailShareDialog { width:min(440px,100%); padding:18px; border-radius:14px; background:#fff; box-shadow:0 20px 70px #07172366; }
+.emailShareDialog header,.emailShareDialog footer { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.emailShareDialog h2 { margin:0; font-size:17px; }
+.emailShareDialog p { margin:6px 0 0; color:#6d8091; font-size:12px; }
+.emailShareDialog header button { border:0; background:transparent; cursor:pointer; }
+.emailShareWorlds { display:grid; gap:8px; margin:18px 0; }
+.emailShareWorlds label { display:flex; align-items:center; gap:9px; padding:8px; border:1px solid #e0e8ee; border-radius:9px; cursor:pointer; }
+.emailShareWorlds .worldPlanet { width:22px; height:22px; }
+.emailShareDialog footer button { padding:8px 12px; border:1px solid #d7e2e9; border-radius:8px; background:#f8fbfc; cursor:pointer; }
+.emailShareDialog footer button:last-child { color:#fff; border-color:#287eaa; background:#287eaa; }
+@media(max-width:850px){.planetGraphHeader{grid-template-columns:1fr auto;}.planetGraphTitle{grid-row:1;grid-column:1/-1;justify-self:center;}.planetGraphHeaderActions{grid-column:1/-1;}.planetGraphBack{grid-row:2}.emailConversationsPage{height:calc(100vh - 155px)}.emailConversationLayout{grid-template-columns:minmax(180px,250px) minmax(0,1fr)}}
+@media(max-width:620px){.planetGraphPage{padding:10px}.planetGraphHeader{gap:8px}.planetGraphTitle{justify-self:start}.planetGraphTitle h1{font-size:20px}.planetGraphBack{min-height:33px;padding:5px 8px;font-size:11px}.planetGraphHeaderActions{flex-wrap:wrap}.planetGraphSearch{flex:1 1 100%}.planetGraphWorkspace{border-radius:12px}.emailConversationsPage{height:calc(100vh - 145px);min-height:400px}.emailConversationLayout{grid-template-columns:1fr;grid-template-rows:minmax(120px,33%) minmax(0,1fr)}.emailConversationList{border-right:0;border-bottom:1px solid #e3ebf0}.emailConversationRows{display:flex;overflow-x:auto;overflow-y:hidden}.emailConversationRow{flex:0 0 235px;border-right:1px solid #eaf0f4}.emailConversationAccount{display:none}.emailThreadHeading{flex-wrap:wrap}.emailThreadHeading>div{flex:1 1 100%}.emailReplyTitle{display:grid}}
+@media(prefers-reduced-motion:reduce){.planetGraphSpin,.planetGraphNode circle{animation:none!important;transition:none!important}}

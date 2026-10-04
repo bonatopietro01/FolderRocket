@@ -448,7 +448,8 @@ async function createDraft({to, subject, text, attachments = []}, userId, blockI
     });
     const draft = await response.json();
     for (const attachment of attachments) {
-        await graphFetch(userId, `/me/messages/${encodeURIComponent(draft.id)}/attachments`, blockId, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({"@odata.type":"#microsoft.graph.fileAttachment",name:attachment.name,contentBytes:fs.readFileSync(attachment.path).toString("base64")})});
+        const content = await fs.promises.readFile(attachment.path);
+        await graphFetch(userId, "/me/messages/" + encodeURIComponent(draft.id) + "/attachments", blockId, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({"@odata.type":"#microsoft.graph.fileAttachment",name:attachment.name,contentBytes:content.toString("base64")})});
     }
     return draft;
 }

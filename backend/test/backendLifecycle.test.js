@@ -59,6 +59,48 @@ test("backend starts with isolated data and shuts down cleanly through stdin", {
             const save=await fetch(`http://127.0.0.1:${port}/settings/dashboard?worldId=${worldId}`,{...requestOptions,method:"PUT",headers:{...requestOptions.headers,"Content-Type":"application/json"},body:JSON.stringify({settings:{folders:[{id:marker,name:marker}],sourceBlocks:[{id:`gmail-block-${worldId}`,type:"gmail",height:410,accountBlockId:`account-${worldId}`}]}})});
             assert.equal(save.status,200);
         }
+        const workGraphRoot=path.join(registeredUser.workspacePath,"planet-graph-work-fixture");
+        await fs.promises.mkdir(path.join(workGraphRoot,"nested"),{recursive:true});
+        await fs.promises.writeFile(path.join(workGraphRoot,"work-note.txt"),"synthetic private fixture body");
+        const configureGraphFolders=await fetch(`http://127.0.0.1:${port}/settings/dashboard?worldId=work`,{...requestOptions,method:"PUT",headers:{...requestOptions.headers,"Content-Type":"application/json"},body:JSON.stringify({settings:{folders:[{id:"folder-work",name:"folder-work"},{id:"graph-work-root",name:"Graph work fixture",path:workGraphRoot,storage:"computer"}],sourceBlocks:[{id:"gmail-block-work",type:"gmail",height:410,accountBlockId:"account-work"}]}})});
+        assert.equal(configureGraphFolders.status,200);
+        const enableWorkGraph=await fetch(`http://127.0.0.1:${port}/settings/worlds/work`,{...requestOptions,method:"PUT",headers:{...requestOptions.headers,"Content-Type":"application/json"},body:JSON.stringify({graphEnabled:true})});
+        assert.equal(enableWorkGraph.status,200);
+        const disabledGraphIndex=await fetch(`http://127.0.0.1:${port}/worlds/personal/graph/index`,{...requestOptions,method:"POST",headers:{...requestOptions.headers,"Content-Type":"application/json"},body:JSON.stringify({snapshot:{}})});
+        assert.equal(disabledGraphIndex.status,409);
+        const graphIndex=await fetch(`http://127.0.0.1:${port}/worlds/work/graph/index`,{...requestOptions,method:"POST",headers:{...requestOptions.headers,"Content-Type":"application/json"},body:JSON.stringify({snapshot:{}})});
+        assert.equal(graphIndex.status,202);
+        let workGraph={};
+        for(let attempt=0;attempt<80;attempt++){
+            const response=await fetch(`http://127.0.0.1:${port}/worlds/work/graph`,requestOptions);
+            workGraph=(await response.json()).graph;
+            if(["ready","partial"].includes(workGraph.status))break;
+            await new Promise(resolve=>setTimeout(resolve,25));
+        }
+        assert.ok(["ready","partial"].includes(workGraph.status),"configured folder graph should finish indexing");
+        assert.ok(workGraph.nodes.some(item=>item.label==="Graph work fixture"));
+        assert.ok(workGraph.nodes.some(item=>item.label==="work-note.txt"));
+        assert.ok(!JSON.stringify(workGraph).includes("synthetic private fixture body"),"file contents are never indexed");
+        const unselectedMailbox=await fetch(`http://127.0.0.1:${port}/worlds/work/email/conversations?blockId=account-not-selected`,requestOptions);
+        assert.equal(unselectedMailbox.status,403);
+        const unauthorizedPlanet=await fetch(`http://127.0.0.1:${port}/worlds/not-this-user-world/graph`,requestOptions);
+        assert.equal(unauthorizedPlanet.status,404);
+        const mismatchedActivity=await fetch(`http://127.0.0.1:${port}/worlds/work/graph/activity`,{...requestOptions,method:"POST",headers:{...requestOptions.headers,"Content-Type":"application/json"},body:JSON.stringify({activity:{worldId:"personal",operationId:"wrong-world",summary:"should be rejected"}})});
+        assert.equal(mismatchedActivity.status,400);
+        const validActivity=await fetch(`http://127.0.0.1:${port}/worlds/work/graph/activity`,{...requestOptions,method:"POST",headers:{...requestOptions.headers,"Content-Type":"application/json"},body:JSON.stringify({activity:{worldId:"work",operationId:"work-search-1",kind:"search",summary:"Searched configured work files",at:"2026-10-03T12:00:00.000Z"}})});
+        assert.equal(validActivity.status,202);
+        const graphAfterActivity=await fetch(`http://127.0.0.1:${port}/worlds/work/graph`,requestOptions);
+        const graphAfterActivityData=(await graphAfterActivity.json()).graph;
+        assert.ok(graphAfterActivityData.nodes.some(item=>item.label==="work-note.txt"),"incremental activity must not erase indexed files");
+        assert.ok(graphAfterActivityData.nodes.some(item=>item.label==="Searched configured work files"));
+        const initialPlanetSnapshot=await fetch(`http://127.0.0.1:${port}/worlds/work/graph/snapshot`,{...requestOptions,method:"POST",headers:{...requestOptions.headers,"Content-Type":"application/json"},body:JSON.stringify({snapshot:{reminders:[{title:"Synthetic reminder",at:"2026-10-04T09:00:00.000Z"}]}})});
+        assert.equal(initialPlanetSnapshot.status,202);
+        const clearPlanetSnapshot=await fetch(`http://127.0.0.1:${port}/worlds/work/graph/snapshot`,{...requestOptions,method:"POST",headers:{...requestOptions.headers,"Content-Type":"application/json"},body:JSON.stringify({snapshot:{}})});
+        assert.equal(clearPlanetSnapshot.status,202);
+        const afterSnapshot=await fetch(`http://127.0.0.1:${port}/worlds/work/graph`,requestOptions);
+        const afterSnapshotData=(await afterSnapshot.json()).graph;
+        assert.ok(!afterSnapshotData.nodes.some(item=>item.label==="Synthetic reminder"),"removed reminders leave the derived graph");
+        assert.ok(afterSnapshotData.nodes.some(item=>item.label==="work-note.txt"));
         for(const [worldId,marker] of [["work","gmail-work"],["personal","gmail-personal"]]){
             const save=await fetch(`http://127.0.0.1:${port}/email/alerts/settings/gmail?worldId=${worldId}&blockId=${marker}`,{...requestOptions,method:"PUT",headers:{...requestOptions.headers,"Content-Type":"application/json"},body:JSON.stringify({providerSettings:{accountBlockId:marker,rules:[]}})});
             assert.equal(save.status,200);
@@ -86,6 +128,8 @@ test("backend starts with isolated data and shuts down cleanly through stdin", {
         assert.equal((await missingFolder.json()).code,"FOLDER_NOT_FOUND");
         const diagnosticsAfterMissingFolder=await fetch(`http://127.0.0.1:${port}/diagnostics`,requestOptions);
         assert.ok(!(await diagnosticsAfterMissingFolder.json()).events.some(item=>item.route==="/list-folder-files"));
+        const clearSetupDiagnostics=await fetch(`http://127.0.0.1:${port}/diagnostics`,{...requestOptions,method:"DELETE"});
+        assert.equal(clearSetupDiagnostics.status,200);
 
         const blockedInvoke=await fetch(`http://127.0.0.1:${port}/worlds/work/ai/invoke`,{
             ...requestOptions,
