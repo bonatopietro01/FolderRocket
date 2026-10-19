@@ -5,6 +5,7 @@ const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
+const planetGraph = require("../services/planetGraphService");
 
 async function freePort() {
     const probe = net.createServer();
@@ -25,6 +26,20 @@ async function waitForBootstrap(port, child, output) {
         await new Promise(resolve=>setTimeout(resolve,50));
     }
     throw new Error(`Backend did not become ready within 20 seconds. Output: ${output()}`);
+}
+
+async function directoryContents(root) {
+    const result={};
+    async function visit(directory) {
+        const entries=await fs.promises.readdir(directory,{withFileTypes:true});
+        for(const entry of entries) {
+            const target=path.join(directory,entry.name);
+            if(entry.isDirectory())await visit(target);
+            else result[path.relative(root,target)]=await fs.promises.readFile(target,"utf8");
+        }
+    }
+    await visit(root);
+    return result;
 }
 
 test("backend starts with isolated data and shuts down cleanly through stdin", {timeout:30000}, async t => {
@@ -61,26 +76,57 @@ test("backend starts with isolated data and shuts down cleanly through stdin", {
         }
         const workGraphRoot=path.join(registeredUser.workspacePath,"planet-graph-work-fixture");
         await fs.promises.mkdir(path.join(workGraphRoot,"nested"),{recursive:true});
-        await fs.promises.writeFile(path.join(workGraphRoot,"work-note.txt"),"synthetic private fixture body");
+        const knowledgeFixtureText="Project: Atlas\nProcedure: Synthetic knowledge sync\n\nThe Atlas project coordinates reusable research workflows, evidence review, source indexing, and careful document retention. Teams compare verified observations, record repeatable procedures, and preserve useful technical decisions for future work. The synthetic example describes local processing, searchable knowledge notes, and reliable source synchronization without referencing real people or files.\n";
+        await fs.promises.writeFile(path.join(workGraphRoot,"work-note.txt"),knowledgeFixtureText);
+        await fs.promises.writeFile(path.join(workGraphRoot,"work-binary.bin"),Buffer.from([0,255,17,32,128]));
         const configureGraphFolders=await fetch(`http://127.0.0.1:${port}/settings/dashboard?worldId=work`,{...requestOptions,method:"PUT",headers:{...requestOptions.headers,"Content-Type":"application/json"},body:JSON.stringify({settings:{folders:[{id:"folder-work",name:"folder-work"},{id:"graph-work-root",name:"Graph work fixture",path:workGraphRoot,storage:"computer"}],sourceBlocks:[{id:"gmail-block-work",type:"gmail",height:410,accountBlockId:"account-work"}]}})});
         assert.equal(configureGraphFolders.status,200);
         const enableWorkGraph=await fetch(`http://127.0.0.1:${port}/settings/worlds/work`,{...requestOptions,method:"PUT",headers:{...requestOptions.headers,"Content-Type":"application/json"},body:JSON.stringify({graphEnabled:true})});
         assert.equal(enableWorkGraph.status,200);
+        const knowledgeVault=path.join(registeredUser.workspacePath,"d2-knowledge-vault");
+        const knowledgeSelection={version:2,folders:true,email:false,alerts:false,activity:true,snapshots:true,clientNotes:false,attachments:false,threadMode:"selected",threadIds:[],folderMode:"all",folderIds:[],fileTypeMode:"all",fileTypes:[],excludedFileIds:[],includeSubfolders:true};
+        const enableKnowledgeVault=await fetch(`http://127.0.0.1:${port}/worlds/work/obsidian`,{...requestOptions,method:"PUT",headers:{...requestOptions.headers,"Content-Type":"application/json"},body:JSON.stringify({enabled:true,autoSync:false,vaultPath:knowledgeVault,sourceSelection:knowledgeSelection})});
+        assert.equal(enableKnowledgeVault.status,200,await enableKnowledgeVault.text());
         const disabledGraphIndex=await fetch(`http://127.0.0.1:${port}/worlds/personal/graph/index`,{...requestOptions,method:"POST",headers:{...requestOptions.headers,"Content-Type":"application/json"},body:JSON.stringify({snapshot:{}})});
         assert.equal(disabledGraphIndex.status,409);
         const graphIndex=await fetch(`http://127.0.0.1:${port}/worlds/work/graph/index`,{...requestOptions,method:"POST",headers:{...requestOptions.headers,"Content-Type":"application/json"},body:JSON.stringify({snapshot:{}})});
         assert.equal(graphIndex.status,202);
         let workGraph={};
-        for(let attempt=0;attempt<80;attempt++){
+        const graphIndexDeadline=Date.now()+10_000;
+        while(Date.now()<graphIndexDeadline){
             const response=await fetch(`http://127.0.0.1:${port}/worlds/work/graph`,requestOptions);
             workGraph=(await response.json()).graph;
             if(["ready","partial"].includes(workGraph.status))break;
             await new Promise(resolve=>setTimeout(resolve,25));
         }
-        assert.ok(["ready","partial"].includes(workGraph.status),"configured folder graph should finish indexing");
+        assert.ok(["ready","partial"].includes(workGraph.status),`configured folder graph should finish indexing: ${JSON.stringify({status:workGraph.status,progress:workGraph.progress,warnings:workGraph.warnings,sourceStatuses:workGraph.sourceStatuses})}`);
         assert.ok(workGraph.nodes.some(item=>item.label==="Graph work fixture"));
         assert.ok(workGraph.nodes.some(item=>item.label==="work-note.txt"));
-        assert.ok(!JSON.stringify(workGraph).includes("synthetic private fixture body"),"file contents are never indexed");
+        assert.ok(workGraph.nodes.some(item=>item.label==="work-binary.bin"));
+        assert.ok(!JSON.stringify(workGraph).includes(knowledgeFixtureText),"file contents are never indexed");
+        assert.equal(workGraph.sourceStatuses.find(item=>item.sourceId==="folder:graph-work-root")?.status,"complete");
+        const firstKnowledgeSync=await fetch(`http://127.0.0.1:${port}/worlds/work/obsidian/sync`,{...requestOptions,method:"POST",headers:{...requestOptions.headers,"Content-Type":"application/json"},body:JSON.stringify({})});
+        assert.equal(firstKnowledgeSync.status,200,await firstKnowledgeSync.clone().text());
+        const firstKnowledgeSyncData=await firstKnowledgeSync.json();
+        assert.equal(firstKnowledgeSyncData.result.status,"ready");
+        const firstKnowledge=await fetch(`http://127.0.0.1:${port}/worlds/work/knowledge`,requestOptions).then(response=>response.json());
+        assert.equal(firstKnowledge.status,"ready");
+        assert.ok(firstKnowledge.exclusions.some(item=>item.reason.includes("text extraction is unavailable for .bin")),"unsupported binary files remain informational exclusions");
+        assert.ok(firstKnowledge.knowledge.notes.length>0,"the supported synthetic text file creates a managed knowledge note");
+        const completeCustomVault=await directoryContents(knowledgeVault);
+        assert.ok(Object.keys(completeCustomVault).some(file=>file.toLowerCase().endsWith(".md")));
+        const graphRoot=path.join(root,"data","planet-graphs");
+        const incompleteGraph=await planetGraph.readGraph(registeredUser.id,"work",graphRoot);
+        const missingSource=incompleteGraph.nodes.find(item=>item.type==="file"&&item.label==="work-note.txt");
+        assert.ok(missingSource,"the synthetic graph retains the selected text source");
+        missingSource.sourceRef={...missingSource.sourceRef,path:path.join(workGraphRoot,"missing-work-note.txt")};
+        await planetGraph.writeGraph(incompleteGraph,graphRoot);
+        const incompleteKnowledgeSync=await fetch(`http://127.0.0.1:${port}/worlds/work/obsidian/sync`,{...requestOptions,method:"POST",headers:{...requestOptions.headers,"Content-Type":"application/json"},body:JSON.stringify({})});
+        assert.equal(incompleteKnowledgeSync.status,409,await incompleteKnowledgeSync.clone().text());
+        const incompleteKnowledgeSyncData=await incompleteKnowledgeSync.json();
+        assert.equal(incompleteKnowledgeSyncData.code,"KNOWLEDGE_INCOMPLETE");
+        assert.ok(incompleteKnowledgeSyncData.reasonSummary.reasonCodes.includes("content_unavailable"));
+        assert.deepEqual(await directoryContents(knowledgeVault),completeCustomVault,"an incomplete knowledge generation preserves the last complete custom vault revision");
         const unselectedMailbox=await fetch(`http://127.0.0.1:${port}/worlds/work/email/conversations?blockId=account-not-selected`,requestOptions);
         assert.equal(unselectedMailbox.status,403);
         const unauthorizedPlanet=await fetch(`http://127.0.0.1:${port}/worlds/not-this-user-world/graph`,requestOptions);

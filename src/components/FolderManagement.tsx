@@ -54,6 +54,12 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
     const [createFolderError, setCreateFolderError] = useState("");
     const newFolderDialog = useRef<HTMLDialogElement>(null);
     useEffect(() => { if (newFolder) newFolderDialog.current?.showModal(); }, [newFolder]);
+    const [renameTarget, setRenameTarget] = useState<FileEntry | null>(null);
+    const [renameName, setRenameName] = useState("");
+    const [renamingFile, setRenamingFile] = useState(false);
+    const [renameError, setRenameError] = useState("");
+    const renameDialog = useRef<HTMLDialogElement>(null);
+    useEffect(() => { if (renameTarget) renameDialog.current?.showModal(); }, [renameTarget]);
     const [moveQueue, setMoveQueue] = useState<FileEntry[]>([]);
     const [filesVersion, setFilesVersion] = useState(0);
     const [query, setQuery] = useState("");
@@ -370,20 +376,46 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
         setMoveQueue(current => [...current, ...files.filter(candidate => !current.some(item => item.path === candidate.path))]);
     }
 
-    async function renameFile(file: FileEntry) {
-        const name = window.prompt("Enter the new file name:", file.name);
-        if (!name?.trim() || name.trim() === file.name) return;
-        const response = await fetch(`${API_BASE_URL}/files/rename`, {method: "POST", headers: {"Content-Type": "application/json"}, credentials: "include", body: JSON.stringify({path: file.path, name})});
-        const data = await response.json() as {path?: string; name?: string; message?: string};
-        if (!response.ok || !data.path || !data.name) { setMessage(data.message ?? "Unable to rename file"); return; }
-        setResults(current => current.map(item => item.path === file.path ? {...item, path: data.path!, name: data.name!} : item));
-        setMoveQueue(current => current.map(item => item.path === file.path ? {...item, path: data.path!, name: data.name!} : item));
-        setSelectedPaths(current => current.map(item => item === file.path ? data.path! : item));
-        setSelectedFiles(current => current.map(item => item.path === file.path ? {...item, path: data.path!, name: data.name!} : item));
-        for (const folder of openedFolders.filter(folder => folder.storage === "imaginary")) {
-            onUpdate(folder.id, {virtualFiles: (folder.virtualFiles ?? []).map(item => item.path === file.path ? {...item, path: data.path!, name: data.name!} : item)});
+    function beginRenameFile(file: FileEntry) {
+        setRenameName(file.name);
+        setRenameError("");
+        setRenameTarget(file);
+    }
+
+    async function renameFile() {
+        if (!renameTarget) return;
+        const file = renameTarget;
+        const trimmedName = renameName.trim();
+        if (!trimmedName) {
+            setRenameError("Enter a file name.");
+            return;
         }
-        setFilesVersion(current => current + 1);
+        if (trimmedName === file.name) return;
+        setRenamingFile(true);
+        setRenameError("");
+        try {
+            const response = await fetch(`${API_BASE_URL}/files/rename`, {method: "POST", headers: {"Content-Type": "application/json"}, credentials: "include", body: JSON.stringify({path: file.path, name: trimmedName})});
+            const data = await response.json().catch(() => ({})) as {path?: string; name?: string; message?: string};
+            if (!response.ok || !data.path || !data.name) throw new Error(data.message ?? "Unable to rename file");
+            const renamed = {...file, path: data.path, name: data.name};
+            setResults(current => current.map(item => item.path === file.path ? renamed : item));
+            setMoveQueue(current => current.map(item => item.path === file.path ? renamed : item));
+            setSelectedPaths(current => current.map(item => item === file.path ? renamed.path : item));
+            setSelectedFiles(current => current.map(item => item.path === file.path ? renamed : item));
+            setFolderContents(current => Object.fromEntries(Object.entries(current).map(([key, contents]) => [key, {
+                ...contents,
+                files: contents.files.map(item => item.path === file.path ? {...item, path: renamed.path, name: renamed.name} : item)
+            }])));
+            for (const folder of folders.filter(folder => folder.storage === "imaginary" && folder.virtualFiles?.some(item => item.path === file.path))) {
+                onUpdate(folder.id, {virtualFiles: (folder.virtualFiles ?? []).map(item => item.path === file.path ? {...item, path: renamed.path, name: renamed.name} : item)});
+            }
+            setMessage(`Renamed to ${renamed.name}.`);
+            setRenameTarget(null);
+        } catch (error) {
+            setRenameError(error instanceof Error ? error.message : "Unable to rename file. Check the file name and try again.");
+        } finally {
+            setRenamingFile(false);
+        }
     }
 
     async function sendQueuedFiles(mode: "copy" | "move") {
@@ -530,7 +562,7 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
             <button className="inspectorFire" type="button" title="Send to Fire Mountain" onClick={event => {event.stopPropagation(); sendToFire(file);}}><Flame size={14}/></button>
             <span className="inspectorFileName"><FileKindIcon name={file.name} /><strong>{file.name}</strong></span>
             <small>{file.createdAt ? new Date(file.createdAt).toLocaleDateString("en-GB") : ""}</small>
-            <button className="inspectorRename" type="button" title="Rename file" onClick={event => {event.stopPropagation(); void renameFile(file);}}><Pencil size={13}/></button>
+            <button className="inspectorRename" type="button" title="Rename file" aria-label={`Rename ${file.name}`} onClick={event => {event.stopPropagation(); beginRenameFile(file);}}><Pencil size={13}/></button>
             <button className="inspectorFileOpen" type="button" title="Open file" onClick={event => {event.stopPropagation(); void openPaths([file.path]);}}><ExternalLink size={14}/></button>
         </div>;
     }
@@ -566,12 +598,22 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
                 <footer><button type="button" disabled={creatingFolder} onClick={() => setNewFolder(null)}>Cancel</button><button type="submit" disabled={creatingFolder || !newFolderName.trim()}>{creatingFolder ? "Creating…" : "Create and link"}</button></footer>
             </form>
         </dialog>}
+        {renameTarget && <dialog ref={renameDialog} className="createFolderDialog" onCancel={event => { event.preventDefault(); if (!renamingFile) setRenameTarget(null); }} aria-labelledby="renameFileTitle">
+            <form onSubmit={event => { event.preventDefault(); void renameFile(); }}>
+                <h2 id="renameFileTitle">Rename file</h2>
+                <p>Choose a new name for <strong>{renameTarget.name}</strong>.</p>
+                <label htmlFor="renameFileName">File name<input id="renameFileName" autoFocus value={renameName} disabled={renamingFile} aria-invalid={Boolean(renameError)} aria-describedby={renameError ? "renameFileInstructions renameFileError" : "renameFileInstructions"} onChange={event => { setRenameName(event.target.value); if (renameError) setRenameError(""); }}/></label>
+                <small id="renameFileInstructions">Enter a different name. The existing extension is preserved.</small>
+                {renameError && <p id="renameFileError" role="alert">{renameError}</p>}
+                <footer><button type="button" disabled={renamingFile} onClick={() => setRenameTarget(null)}>Cancel</button><button type="submit" disabled={renamingFile || renameName.trim() === renameTarget.name}>{renamingFile ? "Renaming…" : "Rename"}</button></footer>
+            </form>
+        </dialog>}
         <section className="folderManagementLeft"><section className="folderTablePanel">
-            <div className="folderTableToolbar" role="toolbar" aria-label="Folder Management controls"><strong>Folders</strong><div className="folderTableToolbarActions"><button type="button" className={orderingFolders ? "orderFoldersButton active" : "orderFoldersButton"} onClick={() => { if (orderingFolders) setAppearanceFolderId(null); setOrderingFolders(!orderingFolders); setDraggedFolderId(null); setDropTarget(null); setPathEditorId(null); setPathMenuId(null); }} title={orderingFolders ? "Finish ordering folders" : "Reorder folders"} aria-label={orderingFolders ? "Finish ordering folders" : "Reorder folders"}><ListOrdered size={15}/><span>{orderingFolders ? "Done" : "Reorder folders"}</span></button><button type="button" className="addFolder" onClick={() => onAdd()} title="Add folder" aria-label="Add folder"><Plus size={16}/><span>Add folder</span></button></div></div>
+            <div className="folderTableToolbar" role="toolbar" aria-label="Folder Management controls"><strong className="folderTableTitle"><FolderClosed size={15}/>Folders</strong><div className="folderTableToolbarActions"><button type="button" className={orderingFolders ? "orderFoldersButton active" : "orderFoldersButton"} onClick={() => { if (orderingFolders) setAppearanceFolderId(null); setOrderingFolders(!orderingFolders); setDraggedFolderId(null); setDropTarget(null); setPathEditorId(null); setPathMenuId(null); }} title={orderingFolders ? "Finish ordering folders" : "Reorder folders"} aria-label={orderingFolders ? "Finish ordering folders" : "Reorder folders"}><ListOrdered size={15}/><span>{orderingFolders ? "Done" : "Reorder folders"}</span></button><button type="button" className="addFolder" onClick={() => onAdd()} title="Add folder" aria-label="Add folder"><Plus size={16}/><span>Add folder</span></button></div></div>
             <div className="folderTable" role="table">
-                <div className={orderingFolders ? "folderTableRow folderTableHead orderingHead" : "folderTableRow folderTableHead"} role="row">{orderingFolders && <span aria-label="Reorder folder"/>}<span aria-label="Delete folder"/><span>Name</span><span>Path</span><span>Description</span><span aria-label="Folder actions"/></div>
+                <div className={orderingFolders ? "folderTableRow folderTableHead orderingHead" : "folderTableRow folderTableHead"} role="row"><span className="folderOrderColumn" aria-label={orderingFolders?"Reorder folder":""}/><span aria-label="Delete folder"/><span>Name</span><span>Path</span><span>Description</span><span aria-label="Folder actions"/></div>
                 {folders.map(folder => <div className={`${folder.id === primaryOpenedId ? "folderTableRow primaryOpened" : visibleOpenedFolderIds.includes(folder.id) ? "folderTableRow secondaryOpened" : "folderTableRow"}${orderingFolders ? " orderingFolder" : ""}${draggedFolderId === folder.id ? " draggingFolder" : ""}${dropTarget?.id === folder.id ? ` drop${dropTarget.placement === "before" ? "Before" : "After"}` : ""}`} role="row" key={folder.id} data-folder-id={folder.id}>
-                    {orderingFolders && <span className="folderOrderHandle" role="button" tabIndex={0} onPointerDown={event => { event.preventDefault(); pointerDraggedFolderId.current = folder.id; setDraggedFolderId(folder.id); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (pointerDraggedFolderId.current !== folder.id) return; const target = getPointerDropTarget(event.clientX, event.clientY); setDropTarget(target && target.id !== folder.id ? target : null); }} onPointerUp={event => { const sourceId = pointerDraggedFolderId.current; const target = getPointerDropTarget(event.clientX, event.clientY); if (sourceId && target && sourceId !== target.id) onReorder(sourceId, target.id, target.placement); pointerDraggedFolderId.current = null; setDraggedFolderId(null); setDropTarget(null); }} onPointerCancel={() => { pointerDraggedFolderId.current = null; setDraggedFolderId(null); setDropTarget(null); }} title="Hold and drag to reorder"><GripVertical size={14}/></span>}
+                    {orderingFolders ? <span className="folderOrderHandle" role="button" tabIndex={0} onPointerDown={event => { event.preventDefault(); pointerDraggedFolderId.current = folder.id; setDraggedFolderId(folder.id); event.currentTarget.setPointerCapture(event.pointerId); }} onPointerMove={event => { if (pointerDraggedFolderId.current !== folder.id) return; const target = getPointerDropTarget(event.clientX, event.clientY); setDropTarget(target && target.id !== folder.id ? target : null); }} onPointerUp={event => { const sourceId = pointerDraggedFolderId.current; const target = getPointerDropTarget(event.clientX, event.clientY); if (sourceId && target && sourceId !== target.id) onReorder(sourceId, target.id, target.placement); pointerDraggedFolderId.current = null; setDraggedFolderId(null); setDropTarget(null); }} onPointerCancel={() => { pointerDraggedFolderId.current = null; setDraggedFolderId(null); setDropTarget(null); }} title="Hold and drag to reorder"><GripVertical size={14}/></span> : <span className="folderOrderColumn" aria-hidden="true"/>}
                     <button type="button" className={pendingDeleteId === folder.id ? "deleteFolder confirmDelete" : "deleteFolder"} onClick={() => requestDelete(folder.id)} title={pendingDeleteId === folder.id ? "Press again to delete" : "Delete folder"}>x</button>
                     <span className="folderNameInput"><input value={folder.name} onChange={event => onUpdate(folder.id, {name: event.target.value})} aria-label="Folder name"/></span>
                     <span className="pathInput" data-path-folder-id={folder.id}>

@@ -35,6 +35,7 @@ interface Window {
         captureBehindCargoShip: (options?: {topInset?: number}) => Promise<string>;
         navigationState: () => Promise<{canGoBack: boolean; canGoForward: boolean}>;
         zoomFactor: () => Promise<number>;
+        zoomLimits?: () => Promise<{min: number; max: number; fits: boolean}>;
         setZoomFactor: (factor: number) => Promise<number>;
         cargoShipState: () => Promise<{open: boolean; expanded: boolean}>;
         toggleCargoShipWindow: () => Promise<{open: boolean; expanded: boolean}>;

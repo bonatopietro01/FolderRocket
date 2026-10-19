@@ -43,18 +43,31 @@ test("planet profiles, styles, and future permission hooks remain separate acros
     assert.equal(switchedLoad.worlds[1].skills[0].instructions,"Istruzioni personali");
 });
 
+test("legacy planet style identifiers remain unchanged during visual preference loading",()=>{
+    const storage=new Map();const worlds=loadWorldModule(storage);const key=worlds.worldsStorageKey("user-a");
+    const legacy={...worlds.createDefaultWorlds()[0],id:"work-legacy",style:"rocky",color:"#123456",aiEnabled:true};
+    const asteroid={...worlds.createDefaultWorlds()[1],id:"personal-legacy",style:"asteroid",color:"#654321"};
+    storage.set(key,JSON.stringify({worlds:[legacy,asteroid],activeWorldId:"work-legacy"}));
+    const loaded=worlds.loadWorkspaceWorldState("user-a");
+    assert.equal(loaded.worlds[0].id,"work-legacy");assert.equal(loaded.worlds[0].color,"#123456");assert.equal(loaded.worlds[0].style,"rocky");assert.equal(loaded.worlds[0].aiEnabled,true);
+    assert.equal(loaded.worlds[1].id,"personal-legacy");assert.equal(loaded.worlds[1].color,"#654321");assert.equal(loaded.worlds[1].style,"asteroid");
+    assert.deepEqual(JSON.parse(storage.get(key)).worlds.map(world=>world.style),["rocky","asteroid"]);
+});
+
 test("planet artwork and world switch retain distinct styles and reduced-motion handling", () => {
     const css = fs.readFileSync(path.join(__dirname,"..","..","src","worlds.css"),"utf8");
     const app = fs.readFileSync(path.join(__dirname,"..","..","src","App.tsx"),"utf8");
     const worldsScreen = fs.readFileSync(path.join(__dirname,"..","..","src","components","ChangeWorld.tsx"),"utf8");
     const account = fs.readFileSync(path.join(__dirname,"..","..","src","components","AuthGate.tsx"),"utf8");
     const integrations = fs.readFileSync(path.join(__dirname,"..","..","src","components","IntegrationSetup.tsx"),"utf8");
-    assert.match(css,/\.worldPlanet\.rocky::before/);
+    assert.match(css,/\.worldPlanet\.planet::before/);
     assert.match(css,/\.worldPlanet\.glowing::before/);
     assert.match(css,/\.worldPlanet\.ringed\s*>\s*em/);
     assert.match(css,/\.worldPlanet\.ringed::after[^}]*z-index:3[^}]*clip-path:inset\(50% 0 0\)/);
     assert.match(css,/\.worldAiSatelliteOrbit\s*>\s*i[^}]*animation:planetSatelliteOrbit/);
     assert.match(worldsScreen,/world\.aiEnabled \? " aiEnabled"/);
+    assert.match(worldsScreen,/folderRocketMark/);
+    assert.match(worldsScreen,/"black-hole", "galaxy"/);
     assert.match(app,/return Number\.isFinite\(value\).*\.85/);
     assert.match(app,/migrateDefaultWorldZoom\(user\.id, state\.worlds\)/);
     assert.match(account,/className="accountWorkspaceControls"/);

@@ -1,0 +1,5 @@
+interface:
+  display_name: "Project Graph Context"
+  short_description: "Find and verify relevant graph relationships"
+policy:
+  allow_implicit_invocation: true

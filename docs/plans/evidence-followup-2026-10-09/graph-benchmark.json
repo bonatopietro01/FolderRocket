@@ -1,0 +1,69 @@
+{
+  "scenario": "4000 in-memory synthetic files across 40 child directories; no disk/provider/network IO; warmup then five alternating samples",
+  "before": [
+    {
+      "ms": 260.37,
+      "files": 4000,
+      "directories": 41,
+      "updates": 41
+    },
+    {
+      "ms": 372.45,
+      "files": 4000,
+      "directories": 41,
+      "updates": 41
+    },
+    {
+      "ms": 268.35,
+      "files": 4000,
+      "directories": 41,
+      "updates": 41
+    },
+    {
+      "ms": 263.32,
+      "files": 4000,
+      "directories": 41,
+      "updates": 41
+    },
+    {
+      "ms": 158.77,
+      "files": 4000,
+      "directories": 41,
+      "updates": 41
+    }
+  ],
+  "after": [
+    {
+      "ms": 415.6,
+      "files": 4000,
+      "directories": 41,
+      "updates": 41
+    },
+    {
+      "ms": 246.49,
+      "files": 4000,
+      "directories": 41,
+      "updates": 41
+    },
+    {
+      "ms": 224.56,
+      "files": 4000,
+      "directories": 41,
+      "updates": 41
+    },
+    {
+      "ms": 227.48,
+      "files": 4000,
+      "directories": 41,
+      "updates": 41
+    },
+    {
+      "ms": 186.41,
+      "files": 4000,
+      "directories": 41,
+      "updates": 41
+    }
+  ],
+  "medianBeforeMs": 263.32,
+  "medianAfterMs": 227.48
+}

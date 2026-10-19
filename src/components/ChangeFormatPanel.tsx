@@ -63,7 +63,7 @@ export default function ChangeFormatPanel({files, onRemove, onComplete}: Props) 
         }
     }
 
-    return <section className="changeFormatPanel conversionToolCard">
+    return <section className={`changeFormatPanel conversionToolCard ${files.length ? "hasQueuedFiles" : "queueEmpty"}`}>
         <h2>
             <span className="conversionCardHeading"><Palette size={17}/><span>Change format<small>Copy typography and layout</small></span></span>
             {busy && <LoaderCircle className="conversionHeaderSpinner format" size={14}/>}
@@ -71,7 +71,6 @@ export default function ChangeFormatPanel({files, onRemove, onComplete}: Props) 
         </h2>
 
         <label className="formatChoiceField">
-            <span className="formatFieldCopy"><strong>Format source</strong></span>
             <span className="formatSelectShell"><FileText size={15}/><select aria-label="Format source file" value={mother?.path || ""} disabled={busy || !files.length} onChange={event => setMother(event.target.value)}><option value="" disabled>Choose a source file</option>{files.map(file => <option key={file.path} value={file.path}>{formatLabel(file.name)} · {file.name}</option>)}</select></span>
         </label>
 

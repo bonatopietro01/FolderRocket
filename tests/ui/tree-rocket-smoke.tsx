@@ -7,23 +7,39 @@ import TreeRocket from '../../src/components/TreeRocket';
 import '../../src/App.css';
 
 const rootPath = 'C:\\Fixture';
+const desktopRoots = [
+    {name: 'Desktop', path: 'C:\\Fixture\\Desktop', kind: 'desktop', directFileCount: 3, directFolderCount: 20},
+    {name: 'Public Desktop', path: 'C:\\Fixture\\Public Desktop', kind: 'desktop', directFileCount: 4, directFolderCount: 20}
+];
 let scenario = 2;
-let rootMode: 'computer' | 'desktop' = 'computer';
+let rootMode: 'computer' | 'desktop' = 'desktop';
 const rootRequests: string[] = [];
-const children = (count: number) => Array.from({length: count}, (_, index) => ({name: `Project ${index + 1}`, path: `${rootPath}\\Project-${index + 1}`}));
+const children = (count: number, parent = rootPath) => Array.from({length: count}, (_, index) => {
+    const name = (index + 1) % 5 === 0 ? `Project ${index + 1} — client documents, archive and deadlines 2026` : `Project ${index + 1}`;
+    return {name, path: `${parent}\\Project-${index + 1}`};
+});
 window.fetch = async (input, init) => {
     const url = new URL(String(input), location.href);
     if (url.pathname === '/applications/catalog') return Response.json({applications: ['SolidWorks', 'Visual Studio Code', 'Word', 'Excel', 'PowerPoint', 'Inkscape', 'Blender', 'Photos', 'Calculator', 'Notepad', 'Paint', 'Teams'].map((name, index) => ({name, appId: `fixture-${index + 1}`}))});
     if (url.pathname === '/applications/open-installed') return Response.json({opened: true});
-    if (url.pathname === '/filesystem/tree-roots') { rootRequests.push(url.searchParams.get('mode') || ''); return Response.json({roots: [{name: rootMode === 'desktop' ? 'Desktop fixture' : 'Fixture', path: rootPath, kind: 'computer', directFileCount: 3}]}); }
+    if (url.pathname === '/filesystem/tree-roots') {
+        const mode = url.searchParams.get('mode') || '';
+        rootRequests.push(mode);
+        return Response.json({roots: mode === 'desktop' ? desktopRoots : [{name: 'Fixture', path: rootPath, kind: 'computer', directFileCount: 3, directFolderCount: scenario}]});
+    }
     if (url.pathname === '/filesystem/tree-children') {
         const body = JSON.parse(String(init?.body || '{}'));
-        const isRoot = body.path === rootPath;
-        return Response.json({path: body.path, directFileCount: isRoot ? 3 : 1, folders: isRoot ? children(scenario).map((item,index)=>({...item,directFileCount:index%3})) : [], folderCountsLimited:false, files: body.includeFiles ? [
-            {name: 'Plans.pdf', path: `${body.path}\\Plans.pdf`},
-            {name: 'Report.docx', path: `${body.path}\\Report.docx`},
-            {name: 'Image.png', path: `${body.path}\\Image.png`}
-        ] : []});
+        const desktopRoot = desktopRoots.find(item => item.path === body.path);
+        const isRoot = body.path === rootPath || Boolean(desktopRoot);
+        const directFiles = Array.from({length: desktopRoot ? desktopRoot.directFileCount : isRoot ? 3 : 205}, (_, index) => {
+            const extensions = ['pdf', 'docx', 'png'];
+            const name = `Fixture ${String(index + 1).padStart(3, '0')}.${extensions[index % extensions.length]}`;
+            return {name, path: `${body.path}\\${name}`};
+        });
+        const fileOffset = Number.isInteger(body.fileOffset) ? body.fileOffset : 0;
+        const visibleFiles = body.includeFiles ? directFiles.slice(fileOffset, fileOffset + 200) : [];
+        const folderList = isRoot ? children(scenario, body.path).map(item=>({...item,directFileCount:205})) : [];
+        return Response.json({path: body.path, directFileCount: directFiles.length, folders: folderList, folderTotal: folderList.length, folderCountsLimited:false, files: body.includeFiles ? visibleFiles : [],fileOffset,fileTotal:directFiles.length,nextFileOffset:fileOffset+visibleFiles.length<directFiles.length?fileOffset+visibleFiles.length:null,truncatedFiles:fileOffset+visibleFiles.length<directFiles.length});
     }
     if (url.pathname === '/filesystem/tree-search') return Response.json({folders: children(scenario).filter(item => item.name.toLowerCase().includes('project')).map(item => ({...item, rootPath, rootName: 'Fixture', depth: 1})), files: [], scannedDirectories: 1, truncated: false});
     throw new Error(`Unexpected fixture request: ${url.pathname}`);
@@ -45,7 +61,7 @@ export default function Fixture() {
         <div style={{padding: 12, display: 'flex', gap: 8, flexWrap: 'wrap', background: '#edf6fd'}}>
             <strong>Local fixture — fictitious folders and files</strong>
             <button onClick={() => setLayout(layout === 'folders-top' ? 'three-column' : 'folders-top')}>Layout: {layout}</button>
-            {[0, 1, 2, 12].map(value => <button key={value} onClick={() => {scenario = value; setCount(value); setRevision(current => current + 1);}}>{value} folders</button>)}
+            {[0, 1, 2, 20].map(value => <button key={value} onClick={() => {scenario = value; setCount(value); setRevision(current => current + 1);}}>{value} folders</button>)}
             <button onClick={() => setOpen(true)}>Open Tree Rocket</button>
             <span role="status">{result}</span>
         </div>

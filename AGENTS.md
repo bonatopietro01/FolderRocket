@@ -29,18 +29,37 @@ Add backend tests under `backend/test/` using `node:test`; add source-helper reg
 
 For browser development, copy `backend/.env.example` to local `backend/.env`; its optional settings include `PORT`, `HOST`, origins, an OAuth token key, and OpenAI/Gmail/Calendar/Outlook credentials. `src/api.ts` accepts optional `VITE_API_BASE_URL`. Installed-app credentials belong in `%APPDATA%\FolderRocket\config.env`, using `desktop/config.env.example` as a template. Never commit real credentials, OAuth tokens, personal documents, generated Excel files, or signing keys. `.gitignore` excludes local data and generated paths such as `backend/data/`, `backend/uploads/`, `input/`, `output/`, `dist/`, `release/`, and `graphify-out/`. Immutable source files are **Not specified in the repository**.
 
+## Canonical paths for agents and skills
+
+For this repository, use the local runtime copies below. The upstream Full_stack_pack is the import/provenance source; agents do not load that external pack for each assignment.
+
+| What to read | Project path | Purpose |
+|---|---|---|
+| Agent roles | `.codex/agents/<role>.toml` | Identity, scope, permissions and runtime instructions for the seven roles. |
+| Agent workflow | [.codex/agents/README.md](.codex/agents/README.md) | Coordinator dispatch, ownership and handoff rules. |
+| Skill catalog and activation protocol | [.agents/skills/README.md](.agents/skills/README.md) | Automatic procedure selection at every role invocation. |
+| Skill procedure and resources | `.agents/skills/<skill>/SKILL.md` and its folder | Read the selected procedure and its required references/scripts. |
+| Routing reminders | `.codex/hooks.json` and `.codex/hooks/` | Optional trusted lifecycle context; the coordinator still calls the agents. |
+| Legacy skills path | [.codex/skills/README.md](.codex/skills/README.md) | Compatibility link only; install and update skills in `.agents/skills`, not here. |
+
 ## Graphify, plans, and delegation
 
-For a significant cross-module change or refactor, use `npm run graph:build` if the local graph is missing or stale, then query only relevant relationships as described in `docs/GRAPHIFY.md`. All coding roles may use Graphify; confirm its static findings in source and tests. For complex multi-area work, follow `PLANS.md` and maintain one ExecPlan under `docs/plans/`. When independent work warrants delegation, the coordinator may assign frontend, backend/Electron, and quality/Graphify specialists; give each a narrow scope and one writer per file.
+For a significant cross-module change or refactor, use `npm run graph:build` only when the active task permits generating an index and the local graph is missing or stale; then query relevant relationships as described in `docs/GRAPHIFY.md`. Confirm static findings in source and tests. For complex multi-area work, follow `PLANS.md` and maintain one ExecPlan under `docs/plans/`. When independent work warrants delegation, use AppStarter for structure, Architect for cross-boundary decisions, and Backend, Frontend or AIEngineer for their assigned areas; the coordinator owns unassigned tests, documentation, tooling and quality checks. Give each role a narrow scope and one writer per file.
 
-Use the project agents according to this explicit workflow:
+Use the project agents according to this workflow, documented in `.codex/agents/README.md`:
 
-- For a request to create or refine an implementation prompt, use `prompt_agent` only; it is read-only and must not implement the request.
-- For a coding request, use `analyzer` for read-only discovery and a compact TaskState, then `writer` for the scoped implementation. The coordinator may do straightforward work directly when delegation would add no value.
-- Use `reviewer` only when the user explicitly asks for a review or invokes Reviewer. Do not trigger it automatically because a change is large or risky.
-- Use the existing `debugger` only after an explicitly requested Reviewer pass identifies a concrete defect that needs diagnosis. Do not call it for speculative risks, standalone debugging, or routinely alongside Analyzer/Writer; the coordinator sends a confirmed diagnosis to Writer for any fix.
+At task intake, follow the routing and handoff contract in `.codex/agents/README.md` and consult `.agents/skills/README.md`. Every invoked role must complete the mandatory skill activation protocol in `.agents/skills/README.md` before work: automatically select the pertinent procedures, read their `SKILL.md` files, apply them within scope, and return actual `skill_usage`; do not wait for the user to name skills. The coordinator checks this gate before accepting a checkpoint. A named skill must also be located and read before use. All project skills are accessible to every role within its scope and permissions. The coordinator dispatches relevant agents according to this workflow without requiring the user to repeat an already authorized request, and records actual skill usage and handoffs in TaskState for multi-part work.
 
-Keep delegated tasks narrow, avoid parallel agents editing the same file, and skip delegation for obvious small edits. The active project agents are `analyzer`, `prompt_agent`, `writer`, `reviewer`, and `debugger`; use them only according to the routing rules above.
+- The main chat is the coordinator and owns the original request, TaskState, stable requirement IDs (`R1`…), owners, dependencies, decisions, status, and evidence. Agent TOMLs configure roles but do not autonomously dispatch them.
+- Use `app_starter` for requested project bootstrap, structure analysis, or organization. In `RUNNING` mode it maps the active application read-only and proposes a separate-checkout/copy plan; do not reorganize the active source or installation.
+- Use `architect` read-only before changes that cross module, data, API, security, or integration boundaries.
+- Assign implementation to one relevant owner per file/contract: `frontend` for React/TypeScript UI and client state; `backend` for Express, services, persistence, filesystem and Electron main/preload/lifecycle/IPC; `ai_engineer` for prompt, extraction, retrieval and AI context behavior. Backend retains provider credentials and gateway. The coordinator owns unassigned tests, documentation, tooling, and release coordination unless assigned otherwise.
+- Before implementation, agree shared API/data contracts and preserve each R ID through handoffs. For complex multi-area work follow `PLANS.md` and maintain one ExecPlan.
+- `reviewer` performs the final review of every file-changing task in strict read-only mode. Review depth follows risk; it does not implement fixes. Allow at most one focused fix/re-review cycle.
+- `prompt_agent` remains separate. Real requests such as "fammi il prompt", "fammi un prompt", "fammi prompt" and "fai prompt per..." require an actual coordinator call to this role, which prepares the prompt without executing its task. At every prompt assignment it reads `writing-for-agents` and `grilling`, performs the decision-frontier check before `READY`, and reports both in `skill_usage`. Quotes, negations and reports about routing do not by themselves request a new prompt.
+- The user removed the legacy `analyzer`, `writer`, and `debugger` configurations. Do not recreate or dispatch those roles. Use only the current six development roles above; `prompt_agent` remains a separate prompt-writing role.
+
+Keep delegated tasks narrow, avoid parallel agents editing the same file, and skip delegation for obvious small edits. The configured development roles are `app_starter`, `architect`, `backend`, `frontend`, `ai_engineer`, and `reviewer`; `prompt_agent` is separate. The older Analyzer/Writer/Debugger files were removed by the user and must stay removed unless requested again.
 
 ## Git and review
 

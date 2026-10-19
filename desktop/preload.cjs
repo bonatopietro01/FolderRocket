@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld("folderRocketDesktop", {
     captureBehindCargoShip: options => ipcRenderer.invoke("folderrocket:capture-behind-cargo-ship", options),
     navigationState: () => ipcRenderer.invoke("folderrocket:navigation-state"),
     zoomFactor: () => ipcRenderer.invoke("folderrocket:zoom-factor"),
+    zoomLimits: () => ipcRenderer.invoke("folderrocket:zoom-limits"),
     setZoomFactor: factor => ipcRenderer.invoke("folderrocket:set-zoom-factor", factor),
     cargoShipState: () => ipcRenderer.invoke("folderrocket:cargo-ship-state"),
     toggleCargoShipWindow: () => ipcRenderer.invoke("folderrocket:toggle-cargo-ship-window"),

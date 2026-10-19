@@ -364,7 +364,7 @@ export default function ApplicationsWorkspace({storageScope, folders, onVirtualF
 
     return <main className="applicationsWorkspace">
         <header>
-            <div><h1>Applications</h1><p>Choose file types, then start a check only when you need it. Saved indexes make later searches fast.</p></div>
+            <div><h1>Applications</h1></div>
             <div className="applicationAdd"><select aria-label="Application preset" value="" onChange={event=>{const preset=PRESETS[event.target.value];if(preset){setName(event.target.value);setIcon(preset.icon);setExtensions(preset.extensions.join(", "));}}}><option value="">Choose application / formats</option>{Object.keys(PRESETS).map(item=><option key={item} value={item}>{item}</option>)}</select>
                 <input value={name} onChange={event => { const value = event.target.value; setName(value); if (PRESETS[value]) { setIcon(PRESETS[value].icon); setExtensions(PRESETS[value].extensions.join(", ")); } }} list="applicationPresets" placeholder="Application name"/>
                 <datalist id="applicationPresets">{Object.keys(PRESETS).map(item => <option key={item} value={item}/>)}</datalist>

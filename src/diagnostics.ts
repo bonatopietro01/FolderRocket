@@ -271,6 +271,7 @@ export function installDiagnostics(userId: string) {
                 const expectedMissingResource = response.status === 404 && (
                     details.route === "/domain/preview" && body?.code === "REMOTE_PAGE_NOT_FOUND"
                     || details.route === "/list-folder-files" && body?.code === "FOLDER_NOT_FOUND"
+                    || details.method === "GET" && /^\/settings\/worlds\/[^/]+$/.test(details.route) && body?.code === "WORLD_SETTINGS_NOT_FOUND"
                 );
                 if (!expectedMissingResource) captureDiagnostic(diagnosticsUserId, {
                     id: requestId || crypto.randomUUID(),

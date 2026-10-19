@@ -2,10 +2,13 @@ import {useEffect, useMemo, useState, type ReactNode} from "react";
 import {AppWindow, Flag, CalendarDays, ChevronLeft, ChevronRight, Clock, FileCheck2, FileClock, FileCog, Flame, FolderInput, Globe2, Mail, MessageCircle, Smartphone, StickyNote, Usb} from "lucide-react";
 import {readDailyActivities, removeDailyActivity, watchDailyActivity, type DailyActivity} from "../dailyActivity";
 import {API_BASE_URL} from "../api";
+import type {WorkspaceWorld} from "../worlds";
 
 interface CalendarItem { title?: string; start?: string; end?: string; location?: string; }
 interface Note { id: string; title?: string; text: string; color?: string; reminderAt?: string; }
 interface EmailSource { provider: "gmail" | "outlook"; blockId: string; email: string; label: string; }
+interface DailyEmailState { worldId: string; sources: EmailSource[]; sourceId: string; recipientOverride: string | null; draftMessage: string; draftError: string; }
+const emptyDailyEmailState = (worldId: string): DailyEmailState => ({worldId, sources: [], sourceId: "", recipientOverride: null, draftMessage: "", draftError: ""});
 
 const metadata: Record<string, {label: string; color: string; icon: ReactNode}> = {
     gmail: {label: "Gmail", color: "#d84b40", icon: <Mail/>}, outlook: {label: "Outlook", color: "#2476d3", icon: <Mail/>}, teams: {label: "Teams", color: "#6251a4", icon: <MessageCircle/>},
@@ -25,17 +28,16 @@ const formatTime = (value?: string) => {
     return Number.isNaN(date.getTime()) ? "Orario non specificato" : date.toLocaleTimeString("it-IT", {hour: "2-digit", minute: "2-digit"});
 };
 
-export default function DailyJob({storageScope, worldId, onOpenWorkspace}: {storageScope: string; worldId: string; onOpenWorkspace: (kind: DailyActivity["kind"]) => void}) {
+export default function DailyJob({storageScope, worldId, planetEmailAccount, onOpenWorkspace}: {storageScope: string; worldId: string; planetEmailAccount?:WorkspaceWorld["emailAccount"]; onOpenWorkspace: (kind: DailyActivity["kind"]) => void}) {
     const [date, setDate] = useState(() => new Date());
     const [activities, setActivities] = useState<DailyActivity[]>(() => readDailyActivities(storageScope));
     const [undoing, setUndoing] = useState<string | null>(null);
-    const [emailSources, setEmailSources] = useState<EmailSource[]>([]);
-    const [emailSourceId, setEmailSourceId] = useState("");
-    const [recipientOverride, setRecipientOverride] = useState<string | null>(null);
+    const [emailState, setEmailState] = useState<DailyEmailState>(() => emptyDailyEmailState(worldId));
     const [includeTomorrow, setIncludeTomorrow] = useState(false);
     const [draftBusy, setDraftBusy] = useState(false);
-    const [draftMessage, setDraftMessage] = useState("");
-    const [draftError, setDraftError] = useState("");
+    const currentEmailState = emailState.worldId === worldId ? emailState : emptyDailyEmailState(worldId);
+    const {sources: emailSources, sourceId: emailSourceId, recipientOverride, draftMessage, draftError} = currentEmailState;
+    const updateEmailState = (updates: Partial<Omit<DailyEmailState, "worldId">>) => setEmailState(current => ({...(current.worldId === worldId ? current : emptyDailyEmailState(worldId)), ...updates, worldId}));
 
     useEffect(() => {
         let active = true;
@@ -51,13 +53,13 @@ export default function DailyJob({storageScope, worldId, onOpenWorkspace}: {stor
             .then(async response => {
                 const data = await response.json().catch(() => ({})) as {sources?: EmailSource[]; message?: string};
                 if (!response.ok) throw new Error(data.message || "Unable to load the selected planet's email accounts.");
-                if (!controller.signal.aborted) setEmailSources(Array.isArray(data.sources) ? data.sources : []);
+                if (!controller.signal.aborted) setEmailState(current => ({...(current.worldId === worldId ? current : emptyDailyEmailState(worldId)), sources: Array.isArray(data.sources) ? data.sources : [], draftError: "", worldId}));
             })
-            .catch(error => { if (!controller.signal.aborted) setDraftError(error instanceof Error ? error.message : "Unable to load email accounts."); });
+            .catch(error => { if (!controller.signal.aborted) setEmailState(current => ({...(current.worldId === worldId ? current : emptyDailyEmailState(worldId)), draftError: error instanceof Error ? error.message : "Unable to load email accounts.", worldId})); });
         return () => controller.abort();
     }, [worldId]);
 
-    const selectedSource = emailSources.find(source => `${source.provider}:${source.blockId}` === emailSourceId) ?? emailSources[0];
+    const selectedSource = emailSources.find(source => `${source.provider}:${source.blockId}` === emailSourceId);
     const recipient = recipientOverride ?? selectedSource?.email ?? "";
 
     const allCalendar = useMemo(() => {
@@ -111,14 +113,14 @@ export default function DailyJob({storageScope, worldId, onOpenWorkspace}: {stor
 
     async function createRecapDraft() {
         if (!selectedSource || !recipient.trim() || draftBusy) return;
-        setDraftBusy(true); setDraftMessage(""); setDraftError("");
+        setDraftBusy(true); updateEmailState({draftMessage: "", draftError: ""});
         try {
             const recap = makeRecap();
             const response = await fetch(`${API_BASE_URL}/cargo-ship/email-draft`, {method: "POST", credentials: "include", headers: {"Content-Type": "application/json"}, body: JSON.stringify({...recap, to: recipient.trim(), provider: selectedSource.provider, blockId: selectedSource.blockId})});
             const data = await response.json().catch(() => ({})) as {message?: string};
             if (!response.ok) throw new Error(data.message || "Unable to create the recap draft.");
-            setDraftMessage(data.message || "Bozza creata. Rivedila e inviala dalla tua mailbox.");
-        } catch (error) { setDraftError(error instanceof Error ? error.message : "Unable to create the recap draft."); }
+            updateEmailState({draftMessage: data.message || "Bozza creata. Rivedila e inviala dalla tua mailbox."});
+        } catch (error) { updateEmailState({draftError: error instanceof Error ? error.message : "Unable to create the recap draft."}); }
         finally { setDraftBusy(false); }
     }
 
@@ -131,8 +133,9 @@ export default function DailyJob({storageScope, worldId, onOpenWorkspace}: {stor
             {!calendar.length && !reminders.length && <p>No calendar appointments or post-it reminders are due today.</p>}
         </section>
         <section className="dailySummary"><h2 className="dailySectionTitle"><span className="dailySectionLogo work"><FileCheck2 size={25}/></span>Today’s work</h2><p>{activities.length ? `${activities.length} important action${activities.length === 1 ? "" : "s"} recorded across ${groups.length} block${groups.length === 1 ? "" : "s"}.` : "No work activity has been recorded for this day yet."}</p><div className="dailyGroups">{groups.map(([kind, items]) => { const meta = metadata[kind] || {label: kind, color: "#607d99", icon: <Clock/>}; return <section key={kind} style={{"--daily-accent": meta.color} as React.CSSProperties}><h3><span className="dailyGroupLogo">{meta.icon}</span>{meta.label}<small>{items.length}</small></h3>{items.map(item => <article className="dailyActivityRow" key={item.id}><time>{formatDailyDate(item.at)}</time><strong title={item.summary}>{item.summary}</strong><small className="dailyActivityDetails" title={`${meta.label} · ${item.destination || "—"} · ${item.files?.join(" · ") || "No files"}`}>From: {meta.label} · To: {item.destination || "—"} · {item.files?.join(" · ") || "No files"}</small><div className="dailyActivityActions"><button type="button" onClick={() => onOpenWorkspace(item.kind)}>Open</button>{item.undo ? <button type="button" className="dailyUndoLog" disabled={undoing === item.id} onClick={() => void undoActivity(item)}>{undoing === item.id ? "Undoing…" : "Undo"}</button> : <button type="button" className="dailyUndoLog" onClick={() => removeLog(item)}>Remove log</button>}</div></article>)}</section>; })}</div></section>
-        <section className="dailyRecapPanel"><h2><Mail size={20}/>Email recap</h2><p>Prepara una bozza per il tuo account: controllala e inviala manualmente dalla mailbox. Nessuna email viene inviata automaticamente.</p>
-            <div className="dailyRecapControls"><label>Email account<select value={selectedSource ? `${selectedSource.provider}:${selectedSource.blockId}` : ""} disabled={!emailSources.length} onChange={event => { setEmailSourceId(event.target.value); setRecipientOverride(null); }}><option value="">{emailSources.length ? "Choose connected account" : "No email account connected in this planet"}</option>{emailSources.map(source => <option key={`${source.provider}:${source.blockId}`} value={`${source.provider}:${source.blockId}`}>{source.label} · {source.provider === "gmail" ? "Gmail" : "Outlook"}</option>)}</select></label><label>To<input type="email" value={recipient} onChange={event => setRecipientOverride(event.target.value)} placeholder="Your email address"/></label></div>
+        <section className="dailyRecapPanel"><h2><Mail size={20}/>Email recap</h2><p>Prepara una bozza per il mittente che scegli qui. È separato dalla casella in ingresso usata da Conversations e dagli alert di questo pianeta. Controlla e invia manualmente dalla mailbox; nessuna email parte automaticamente.</p>
+            <p className="dailyPlanetInbox"><strong>Planet inbox for Conversations and alerts:</strong> {planetEmailAccount?.email || (planetEmailAccount ? `${planetEmailAccount.provider.toUpperCase()} account selected; email address unavailable` : "No inbox account selected for this planet")}</p>
+            <div className="dailyRecapControls"><label>Recap sender<select value={selectedSource ? `${selectedSource.provider}:${selectedSource.blockId}` : ""} disabled={!emailSources.length} onChange={event => updateEmailState({sourceId: event.target.value, recipientOverride: null})}><option value="">{emailSources.length ? "Choose recap sender" : "No sender available in this planet"}</option>{emailSources.map(source => <option key={`${source.provider}:${source.blockId}`} value={`${source.provider}:${source.blockId}`}>{source.label} · {source.provider === "gmail" ? "Gmail sender" : "Outlook sender"}</option>)}</select></label><label>Send recap to<input type="email" value={recipient} onChange={event => updateEmailState({recipientOverride: event.target.value})} placeholder="Your email address"/></label></div>
             <label className="dailyRecapTomorrow"><input type="checkbox" checked={includeTomorrow} onChange={event => setIncludeTomorrow(event.target.checked)}/>Include tomorrow’s events and reminders</label>
             <button type="button" className="dailyCreateDraft" disabled={!selectedSource || !recipient.trim() || draftBusy} onClick={() => void createRecapDraft()}><Mail size={15}/>{draftBusy ? "Creating draft…" : "Create recap draft"}</button>
             {draftMessage && <p className="dailyRecapStatus" role="status">{draftMessage}</p>}{draftError && <p className="dailyRecapError" role="alert">{draftError}</p>}

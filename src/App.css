@@ -74,19 +74,16 @@ body {
     z-index: 5;
 }
 
-.appNavigation { position: absolute; left: var(--header-column-edge); bottom: 3px; display: flex; gap: 8px; }
-.appNavigation button { border: 1px solid #c79019; border-radius: 7px; background: linear-gradient(180deg, #ffd970, #e5ad2c); color: #4e3300; cursor: pointer; font-weight: 700; padding: 8px 12px; }
-.appNavigation button.active { border-color: #3489d6; background: linear-gradient(180deg, #bce6ff, #6eb9ed); color: #123b63; }
-.pageMenu { display:flex; width:max(400px,var(--nav-column-width)); max-width:min(520px,calc(100vw - 380px)); overflow:hidden; border:1px solid #c79019; border-radius:7px; background:linear-gradient(180deg,#ffd970,#e5ad2c); box-shadow:0 2px 5px rgba(95,64,5,.11); }
+.pageNavigation { position:absolute; left:var(--header-column-edge); right:calc(50% + 205px); bottom:3px; display:flex; min-width:0; }
+.pageMenu { display:flex; width:100%; min-width:0; max-width:100%; overflow:hidden; border:1px solid #8fc8ed; border-radius:8px; background:linear-gradient(180deg,#e9f7ff,#b8e2fa); box-shadow:0 2px 7px rgba(52,132,183,.13); }
 .pageMenuItems { display:flex; width:100%; align-items:stretch; }
-.appNavigation .pageMenuItems button { display:flex; min-width:0; flex:1 1 auto; align-items:center; justify-content:center; gap:4px; min-height:32px; padding:5px 7px; overflow:hidden; border:0; border-right:1px solid rgba(126,83,0,.23); border-radius:0; background:transparent; box-shadow:none; font-size:11px; text-overflow:ellipsis; white-space:nowrap; }
-.appNavigation .pageMenuItems button svg { width:14px; height:14px; flex:0 0 auto; }
-.appNavigation .pageMenuItems button:last-child { border-right:0; }
-.appNavigation .pageMenuItems button:hover { background:rgba(255,255,255,.28); }
-.appNavigation .pageMenuItems button.active { background:linear-gradient(180deg,#bce6ff,#6eb9ed); color:#123b63; }
+.pageNavigation .pageMenuItems > button { display:flex; min-width:0; flex:1 1 0; align-items:center; justify-content:center; gap:4px; min-height:35px; padding:4px 5px; overflow:hidden; border:0; border-right:1px solid rgba(67,126,160,.2); border-radius:0; background:transparent; box-shadow:none; color:#285b7c; cursor:pointer; font-size:clamp(9px,1vw,11px); font-weight:800; line-height:1.12; text-align:center; text-overflow:ellipsis; white-space:normal; overflow-wrap:anywhere; }
+.pageNavigation .pageMenuItems > button svg { width:14px; height:14px; flex:0 0 14px; }
+.pageNavigation .pageMenuItems button:last-child { border-right:0; }
+.pageNavigation .pageMenuItems > button:hover { background:linear-gradient(180deg,#dff3ff,#b8e5fc); color:#174f79; }
+.pageNavigation .pageMenuItems > button.active { background:linear-gradient(180deg,#c8edff,#8ed1f5); color:#123b63; }
 .notesQuickAdd { position:absolute; z-index:14; top:14px; left:clamp(-152px, calc(328px - 25vw), -41px); display:inline-flex; align-items:center; justify-content:center; gap:5px; min-width:84px; padding:8px 9px; border:1px solid #a68d48; border-radius:7px; background:linear-gradient(180deg,#fff7c8,#ead57c); color:#66500d; cursor:pointer; font:inherit; font-size:12px; font-weight:800; }
 .notesQuickAdd:hover { border-color:#8c6f1b; background:linear-gradient(180deg,#fff0a7,#e7c85d); }
-.appNavigation .dashboardResetButton { display: inline-flex; align-items: center; justify-content: center; width: 33px; padding: 0; }
 
 .appLogo {
     width: 390px;
@@ -114,7 +111,7 @@ body {
 .appWorldIdentity { position:absolute; z-index:3; top:27px; left:calc(50% + 207px); display:inline-flex; max-width:145px; align-items:center; gap:6px; color:#183e5d; pointer-events:none; }
 .appWorldIdentity > span:last-child { max-width:102px; overflow:hidden; color:#254660; font-size:10px; font-weight:800; text-overflow:ellipsis; white-space:nowrap; text-shadow:0 1px 0 rgba(255,255,255,.75); }
 
-.appNavigation { z-index: 2; }
+.pageNavigation { z-index: 2; }
 
 .appHeaderTools { position:absolute; right:var(--header-column-edge); bottom:3px; z-index:20; display:flex; align-items:stretch; gap:6px; height:34px; white-space:nowrap; }
 .appHeaderTools > .integrationSetup, .appHeaderTools > .cargoShipRoot, .appHeaderTools > .accountMenuWrap { display:flex; flex:0 0 auto; height:34px; min-width:0; margin-left:0; }
@@ -306,7 +303,16 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
     cursor: grab;
 }
 
-.sourcesColumnHeader { display: flex; align-items: center; justify-content: space-between; min-height: 18px; padding: 0 1px; color: #475569; font-size: 9px; font-weight: 800; letter-spacing: .02em; line-height: 1; text-transform: uppercase; }.sourcePickerWrap { position: relative; }.sourcesAddButton { display: inline-flex; width: 20px; height: 20px; align-items: center; justify-content: center; padding: 0; border: 1px solid #c58b14; border-radius: 5px; background: linear-gradient(180deg, #ffe08a, #e6ad2c); color: #543700; cursor: pointer; line-height: 0; }.sourcesAddButton svg { display: block; }.sourcePicker { position: absolute; z-index: 120; top: calc(100% + 5px); right: 0; display: grid; width: 132px; gap: 3px; padding: 5px; border: 1px solid #c8d4e1; border-radius: 8px; background: #fff; box-shadow: 0 10px 22px rgba(29, 52, 76, .22); }.sourcePicker button { display: flex; align-items: center; gap: 6px; border: 0; border-radius: 5px; background: #fff; color: #36495e; cursor: pointer; font-size: 11px; font-weight: 700; padding: 7px; text-align: left; }.sourcePicker button:hover { background: #edf6ff; }.sourcePickerDomainIcon { color: #7c3aed; font-size: 18px; line-height: 12px; }.sourcePickerScreenIcon { color: #1e7bba; font-size: 15px; }.sourcesBlockList { display: flex; min-height: 0; flex: 0 0 auto; flex-direction: column; gap: 8px; overflow: visible; padding: 0 1px 5px; }
+.sourcesAddFooter { position:relative; z-index:121; display:flex; flex:0 0 auto; justify-content:center; padding:2px 1px 8px; }
+.sourcePickerWrap { position: relative; }
+.sourcesAddButton { display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; padding: 0; border: 1px solid #c58b14; border-radius: 6px; background: linear-gradient(180deg, #ffe08a, #e6ad2c); color: #543700; cursor: pointer; line-height: 0; }
+.sourcesAddButton svg { display: block; }
+.sourcePicker { position: absolute; z-index: 120; bottom: calc(100% + 5px); top:auto; right: 0; display: grid; width: 132px; gap: 3px; padding: 5px; border: 1px solid #c8d4e1; border-radius: 8px; background: #fff; box-shadow: 0 10px 22px rgba(29, 52, 76, .22); }
+.sourcePicker button { display: flex; align-items: center; gap: 6px; border: 0; border-radius: 5px; background: #fff; color: #36495e; cursor: pointer; font-size: 11px; font-weight: 700; padding: 7px; text-align: left; }
+.sourcePicker button:hover { background: #edf6ff; }
+.sourcePickerDomainIcon { color: #7c3aed; font-size: 18px; line-height: 12px; }
+.sourcePickerScreenIcon { color: #1e7bba; font-size: 15px; }
+.sourcesBlockList { display: flex; min-height: 0; flex: 0 0 auto; flex-direction: column; gap: 8px; overflow: visible; padding: 0 1px 5px; }
 
 .dashboardSourceBlock { position: relative; flex: 0 0 auto; min-height: 210px; overflow: visible; }.sourceBlockContent { width: 100%; height: 100%; border-radius: 13px; }.sourceBlockContent > .sourceCard { width: 100%; height: 100% !important; min-height: 0 !important; }.sourceBlockMenuToggle { position: absolute; z-index: 41; top: 6px; right: 6px; display: inline-flex; width: 23px; height: 23px; align-items: center; justify-content: center; padding: 0; border: 1px solid #d3dce7; border-radius: 6px; background: rgba(255, 255, 255, .94); color: #5a697b; cursor: pointer; line-height: 0; opacity: 0; transition: opacity .16s, background .16s; }.sourceBlockMenuToggle svg { display:block; }.dashboardSourceBlock:hover .sourceBlockMenuToggle, .dashboardSourceBlock:focus-within .sourceBlockMenuToggle, .sourceBlockMenuOpen .sourceBlockMenuToggle { opacity: 1; }.sourceBlock-domain:not(:has(.domainOpenButton)) .sourceBlockMenuToggle, .sourceBlock-screen:not(:has(.screenCaptureStop)) .sourceBlockMenuToggle, .sourceBlock-gmail:has(.emailConnectArea) .sourceBlockMenuToggle, .sourceBlock-outlook:has(.emailConnectArea) .sourceBlockMenuToggle { opacity: 1; }.sourceBlockMenuToggle:hover { background: #edf5fc; color: #176fc8; }.sourceBlockMenu { position: absolute; z-index: 80; top: 34px; right: 6px; display: grid; width: 128px; gap: 3px; padding: 5px; border: 1px solid #c8d4e1; border-radius: 8px; background: #fff; box-shadow: 0 10px 24px rgba(29, 52, 76, .26); }.sourceBlock-domain:has(.domainOpenButton) .sourceBlockMenuToggle { right: 37px; }.sourceBlock-domain:has(.domainOpenButton) .sourceBlockMenu { right: 37px; }.sourceBlock-screen:has(.screenCaptureStop) .sourceBlockMenuToggle { right: 60px; }.sourceBlock-screen:has(.screenCaptureStop) .sourceBlockMenu { right: 60px; }.sourceBlockMenu button { display: flex; align-items: center; gap: 6px; border: 0; border-radius: 5px; background: #fff; color: #3d5067; cursor: pointer; font-size: 11px; font-weight: 700; padding: 7px; text-align: left; }.sourceBlockMenu button:hover:not(:disabled) { background: #edf6ff; }.sourceBlockMenu button:disabled { cursor: not-allowed; opacity: .4; }.sourceBlockMenu .sourceBlockDelete { color: #b24034; }.sourceBlockMenu .sourceBlockDelete:hover { background: #fff0ee; }.sourceBlockResize { position: absolute; z-index: 42; bottom: -7px; left: 50%; display: inline-grid; width: 48px; height: 13px; place-items: center; border: 1px solid #ccd7e3; border-radius: 9px; background: #fff; color: #748397; cursor: ns-resize; opacity: 0; transform: translateX(-50%); transition: opacity .16s, color .16s; touch-action: none; }.dashboardSourceBlock:hover .sourceBlockResize, .dashboardSourceBlock:focus-within .sourceBlockResize, .dashboardSourceBlock.isResizing .sourceBlockResize { opacity: 1; }.sourceBlockResize:hover { color: #176fc8; }
 
@@ -2705,17 +2711,17 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .floatingStickyNote .stickyNoteTop > .stickyNoteDelete { position:absolute; top:0; right:-5px; }
 
 /* A compact sticky-note button stays outside the three workspace columns. */
-.appNavigation .notesQuickAdd { position:fixed; z-index:14; top:59px; right:auto; bottom:auto; left:10px; display:inline-grid; width:34px; min-width:34px; height:34px; place-items:center; overflow:hidden; padding:0; border:1px solid #b89937; border-radius:3px 3px 10px 3px; background:linear-gradient(135deg,#fffbd8 0 75%,#ead46b 75%); box-shadow:2px 3px 7px rgba(108,82,17,.22); color:#70550b; cursor:pointer; white-space:nowrap; }
-.appNavigation .notesQuickAdd::after { position:absolute; right:0; bottom:0; width:9px; height:9px; border-top:1px solid rgba(144,112,20,.42); border-left:1px solid rgba(144,112,20,.35); background:rgba(255,255,255,.45); content:""; transform:skew(-18deg,-18deg); transform-origin:bottom right; }
-.appNavigation .notesQuickAdd svg { position:relative; z-index:1; stroke-width:2.7; }
-.appNavigation .notesQuickAdd:hover { border-color:#8f6d11; background:linear-gradient(135deg,#fff7af 0 75%,#dec454 75%); transform:translateY(-1px); }
-.appNavigation .notesQuickAdd:active { transform:translateY(1px) scale(.96); box-shadow:1px 1px 3px rgba(108,82,17,.22); }
-.appNavigation .notesQuickAdd.withAi { left:55px; }
-.appNavigation .notesAiQuickAdd { position:fixed; z-index:14; top:59px; right:auto; bottom:auto; left:10px; display:inline-grid; width:34px; min-width:34px; height:34px; place-items:center; overflow:hidden; padding:0; border:1px solid #c77872; border-radius:3px 3px 10px 3px; background:linear-gradient(135deg,#fff0ee 0 75%,#e99a94 75%); box-shadow:2px 3px 7px rgba(138,58,51,.2); color:#a4443e; cursor:pointer; font-size:10px; font-weight:950; letter-spacing:.04em; white-space:nowrap; }
-.appNavigation .notesAiQuickAdd::after { position:absolute; right:0; bottom:0; width:9px; height:9px; border-top:1px solid rgba(160,63,55,.42); border-left:1px solid rgba(160,63,55,.35); background:rgba(255,255,255,.48); content:""; transform:skew(-18deg,-18deg); transform-origin:bottom right; }
-.appNavigation .notesAiQuickAdd > span { position:relative; z-index:1; }
-.appNavigation .notesAiQuickAdd:hover { border-color:#a94842; background:linear-gradient(135deg,#ffe0dd 0 75%,#dd7f78 75%); transform:translateY(-1px); }
-.appNavigation .notesAiQuickAdd:active { transform:translateY(1px) scale(.96); box-shadow:1px 1px 3px rgba(138,58,51,.2); }
+.appHeaderQuickActions .notesQuickAdd { position:fixed; z-index:14; top:59px; right:auto; bottom:auto; left:10px; display:inline-grid; width:34px; min-width:34px; height:34px; place-items:center; overflow:hidden; padding:0; border:1px solid #b89937; border-radius:3px 3px 10px 3px; background:linear-gradient(135deg,#fffbd8 0 75%,#ead46b 75%); box-shadow:2px 3px 7px rgba(108,82,17,.22); color:#70550b; cursor:pointer; white-space:nowrap; }
+.appHeaderQuickActions .notesQuickAdd::after { position:absolute; right:0; bottom:0; width:9px; height:9px; border-top:1px solid rgba(144,112,20,.42); border-left:1px solid rgba(144,112,20,.35); background:rgba(255,255,255,.45); content:""; transform:skew(-18deg,-18deg); transform-origin:bottom right; }
+.appHeaderQuickActions .notesQuickAdd svg { position:relative; z-index:1; stroke-width:2.7; }
+.appHeaderQuickActions .notesQuickAdd:hover { border-color:#8f6d11; background:linear-gradient(135deg,#fff7af 0 75%,#dec454 75%); transform:translateY(-1px); }
+.appHeaderQuickActions .notesQuickAdd:active { transform:translateY(1px) scale(.96); box-shadow:1px 1px 3px rgba(108,82,17,.22); }
+.appHeaderQuickActions .notesQuickAdd.withAi { left:55px; }
+.appHeaderQuickActions .notesAiQuickAdd { position:fixed; z-index:14; top:59px; right:auto; bottom:auto; left:10px; display:inline-grid; width:34px; min-width:34px; height:34px; place-items:center; overflow:hidden; padding:0; border:1px solid #c77872; border-radius:3px 3px 10px 3px; background:linear-gradient(135deg,#fff0ee 0 75%,#e99a94 75%); box-shadow:2px 3px 7px rgba(138,58,51,.2); color:#a4443e; cursor:pointer; font-size:10px; font-weight:950; letter-spacing:.04em; white-space:nowrap; }
+.appHeaderQuickActions .notesAiQuickAdd::after { position:absolute; right:0; bottom:0; width:9px; height:9px; border-top:1px solid rgba(160,63,55,.42); border-left:1px solid rgba(160,63,55,.35); background:rgba(255,255,255,.48); content:""; transform:skew(-18deg,-18deg); transform-origin:bottom right; }
+.appHeaderQuickActions .notesAiQuickAdd > span { position:relative; z-index:1; }
+.appHeaderQuickActions .notesAiQuickAdd:hover { border-color:#a94842; background:linear-gradient(135deg,#ffe0dd 0 75%,#dd7f78 75%); transform:translateY(-1px); }
+.appHeaderQuickActions .notesAiQuickAdd:active { transform:translateY(1px) scale(.96); box-shadow:1px 1px 3px rgba(138,58,51,.2); }
 .searchAiBadge { display:inline-grid; min-width:21px; height:17px; place-items:center; border:1px solid #8e66b4; border-radius:8px; background:#efe3fc; color:#643b8d; font-size:9px; font-weight:900; }
 .cargoShipHeaderActions .cargoShipClose:hover { background:#c84d43; color:#fff; }
 
@@ -2793,9 +2799,9 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .cargoShipResize { right:2px; bottom:2px; width:17px; height:17px; z-index:3; }
 
 /* The post-it launchers belong to the header, never on top of workspace cards. */
-.appNavigation .notesQuickAdd { top:12px; left:12px; }
-.appNavigation .notesQuickAdd.withAi { left:54px; }
-.appNavigation .notesAiQuickAdd { top:12px; left:12px; }
+.appHeaderQuickActions .notesQuickAdd { top:12px; left:12px; }
+.appHeaderQuickActions .notesQuickAdd.withAi { left:54px; }
+.appHeaderQuickActions .notesAiQuickAdd { top:12px; left:12px; }
 
 /* Hidden notes remain as slim tabs on the left edge of the page. */
 .floatingStickyBookmark { z-index:8994; justify-content:flex-start; padding:0 7px 0 5px; border-right:1px solid rgba(80,65,28,.34); border-left:0; border-radius:0 7px 7px 0; box-shadow:2px 2px 6px rgba(52,46,29,.16); text-align:left; }
@@ -3129,7 +3135,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 @container (max-width:430px) { .calendarDayLabel { font-size:9px; }.calendarDayCell > strong { font-size:18px; }.calendarDayIndicators small span { display:none; }.calendarDayIndicators small { font-size:9px; } }
 .usbTreeBranch { min-width:0; margin-left:calc(var(--usb-depth,0) * 13px); }.usbTreeChildren { display:grid; min-width:0; margin:2px 0 3px 13px; padding-left:5px; border-left:2px solid #dce6ee; }.usbFolder.expanded .usbFolderChevron { transform:rotate(90deg); }.usbFolderChevron { transition:transform .15s ease; }
 .emailReaderHeaderButton svg { margin:-1px 0 -1px -7px; padding:6px 7px; border:0; border-radius:5px 0 0 5px; background:#d94940; color:#fff; box-sizing:content-box; }.emailReaderHeaderButton svg:hover { background:#bf3029; color:#fff; }.emailReaderHeaderButton { overflow:hidden; padding-left:7px; border-color:#c8d2dc; }
-.appNavigation .notesReminderQuickAdd { left:54px; background:linear-gradient(135deg,#fff0c9 0 75%,#efbd68 75%); border-color:#d79a3d; color:#975c08; }.appNavigation:has(.notesAiQuickAdd) .notesReminderQuickAdd { left:96px; }.gmailSelectionActions.emailInlineSelectionActions { margin-right:auto; margin-left:auto; }
+.appHeaderQuickActions .notesReminderQuickAdd { left:54px; background:linear-gradient(135deg,#fff0c9 0 75%,#efbd68 75%); border-color:#d79a3d; color:#975c08; }.appHeaderQuickActions:has(.notesAiQuickAdd) .notesReminderQuickAdd { left:96px; }.gmailSelectionActions.emailInlineSelectionActions { margin-right:auto; margin-left:auto; }
 .folderDropZone::before { top:50%!important; left:-7px!important; width:28px!important; height:28px!important; border:0!important; background:transparent!important; font-size:19px!important; transform:translateY(-50%)!important; }.folderSymbolPreview { border:0; background:transparent; font-size:19px; }
 .floatingStickyNote textarea { font-size:15px; line-height:1.45; }.floatingStickyNote small { font-size:12px; }.floatingStickyNote .stickyNoteTop > button { width:38px; height:34px; }.floatingStickyNote .stickyNoteTop > button svg { width:20px; height:20px; }.floatingStickyNote .stickyNoteTop { grid-template-columns:38px minmax(0,1fr) 38px; }
 .foldersContainer .archiveButton.archiveCompact,.foldersContainer .renameMenu { border-color:#8fc5ea!important; background:linear-gradient(180deg,#f1f9ff,#ddecf8)!important; color:#2676ad!important; }.foldersContainer .archiveButton.archiveCompact:hover { background:linear-gradient(180deg,#e6f5ff,#cde7f8)!important; }
@@ -3142,7 +3148,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .folderSymbolPicker { display:grid; grid-template-columns:repeat(8,minmax(31px,1fr)); align-items:center; gap:6px; padding-top:8px; border-top:1px solid #e1e8ee; }.folderSymbolPicker > span { grid-column:1/-1; color:#415b72; font-size:14px; font-weight:750; }.folderSymbolPicker > button { min-width:31px; height:31px; padding:0; border:1px solid #c4d2df; border-radius:50%; background:#fff; cursor:pointer; font-size:16px; }.folderSymbolPicker > button:first-of-type { font-size:9px; }.folderSymbolPicker > button.active { border-color:#176fc8; background:#e4f2ff; box-shadow:0 0 0 2px rgba(23,111,200,.15); }.folderCustomSymbol { grid-column:1/-1; display:grid; grid-template-columns:auto minmax(76px,1fr) auto; align-items:center; gap:7px; margin-top:2px; color:#415b72; font-size:12px; font-weight:750; }.folderCustomSymbol input { min-width:0; height:31px; border:1px solid #c4d2df; border-radius:6px; padding:4px 7px; font:inherit; text-transform:uppercase; }.folderCustomSymbol button { width:auto!important; min-width:48px!important; border-radius:6px!important; font-size:11px!important; font-weight:800; }.folderAppearancePreview > div { position:relative; }.folderSymbolPreview { position:absolute; top:-12px; left:-12px; display:grid; width:28px; height:28px; place-items:center; border:1px solid #b9c9d8; border-radius:50%; background:#fff; font-size:16px; }
 .cargoDayNavigation { display:grid; grid-template-columns:30px minmax(0,1fr) 30px; gap:5px; }.cargoDayNavigation input { min-width:0; border:1px solid #bdccda; border-radius:6px; background:#fff; color:#314a63; font:inherit; font-size:11px; padding:6px; }.cargoDayNavigation button { display:grid; place-items:center; padding:0; border:1px solid #bdccda; border-radius:6px; background:#edf6ff; color:#266a9e; cursor:pointer; }.emailReaderHeaderButton svg { cursor:pointer; pointer-events:auto; }.emailReaderHeaderButton svg:hover { color:#087944; }
 .folderFiles > h3 { display:flex; align-items:center; justify-content:space-between; gap:8px; }.folderFilesFormatSelect { min-width:108px; margin-left:auto; border:1px solid #b9c9d8; border-radius:5px; background:#fff; color:#3d586f; font:inherit; font-size:9px; padding:3px 5px; }
-.appNavigation .notesReminderQuickAdd { position:fixed; z-index:14; top:12px; left:54px; display:grid; width:34px; height:34px; place-items:center; padding:0; border:1px solid #d58c22; border-radius:3px 3px 10px 3px; background:linear-gradient(135deg,#ffd99a 0 75%,#eea63c 75%); box-shadow:2px 3px 7px rgba(150,83,10,.25); color:#914d00; cursor:pointer; font:inherit; font-size:20px; font-weight:950; }.appNavigation:has(.notesAiQuickAdd) .notesReminderQuickAdd { left:96px; }.appNavigation .notesReminderQuickAdd::after { position:absolute; right:0; bottom:0; width:9px; height:9px; border-top:1px solid rgba(145,77,0,.38); border-left:1px solid rgba(145,77,0,.3); background:rgba(255,255,255,.38); content:""; transform:skew(-18deg,-18deg); transform-origin:bottom right; }.appNavigation .notesReminderQuickAdd:hover { border-color:#b66c0d; background:linear-gradient(135deg,#ffe3ac 0 75%,#e99a29 75%); transform:translateY(-1px); }.stickyReminderTime { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:8px; padding:7px 6px; border-top:1px solid rgba(100,78,20,.18); color:#69561b; font-size:12px; font-weight:850; }.stickyReminderTime input { min-width:0; height:34px; border:1px solid rgba(100,78,20,.3); border-radius:6px; background:rgba(255,255,255,.78); font:inherit; font-size:12px; padding:5px 7px; }.cargoReminderAlert { position:absolute; z-index:30; inset:34px 8px auto; display:grid; gap:4px; padding:9px; border:1px solid #d0aa35; border-radius:8px; background:#fff3aa; box-shadow:0 8px 20px rgba(91,67,8,.28); color:#614b09; }.cargoReminderAlert strong { font-size:12px; }.cargoReminderAlert span { font-size:11px; }.cargoReminderAlert small { font-size:9px; }.cargoReminderAlert button { justify-self:end; display:flex; align-items:center; gap:3px; border:0; border-radius:5px; background:#8c6910; color:#fff; cursor:pointer; font-size:9px; padding:4px 6px; }
+.appHeaderQuickActions .notesReminderQuickAdd { position:fixed; z-index:14; top:12px; left:54px; display:grid; width:34px; height:34px; place-items:center; padding:0; border:1px solid #d58c22; border-radius:3px 3px 10px 3px; background:linear-gradient(135deg,#ffd99a 0 75%,#eea63c 75%); box-shadow:2px 3px 7px rgba(150,83,10,.25); color:#914d00; cursor:pointer; font:inherit; font-size:20px; font-weight:950; }.appHeaderQuickActions:has(.notesAiQuickAdd) .notesReminderQuickAdd { left:96px; }.appHeaderQuickActions .notesReminderQuickAdd::after { position:absolute; right:0; bottom:0; width:9px; height:9px; border-top:1px solid rgba(145,77,0,.38); border-left:1px solid rgba(145,77,0,.3); background:rgba(255,255,255,.38); content:""; transform:skew(-18deg,-18deg); transform-origin:bottom right; }.appHeaderQuickActions .notesReminderQuickAdd:hover { border-color:#b66c0d; background:linear-gradient(135deg,#ffe3ac 0 75%,#e99a29 75%); transform:translateY(-1px); }.stickyReminderTime { display:grid; grid-template-columns:auto minmax(0,1fr); align-items:center; gap:8px; padding:7px 6px; border-top:1px solid rgba(100,78,20,.18); color:#69561b; font-size:12px; font-weight:850; }.stickyReminderTime input { min-width:0; height:34px; border:1px solid rgba(100,78,20,.3); border-radius:6px; background:rgba(255,255,255,.78); font:inherit; font-size:12px; padding:5px 7px; }.cargoReminderAlert { position:absolute; z-index:30; inset:34px 8px auto; display:grid; gap:4px; padding:9px; border:1px solid #d0aa35; border-radius:8px; background:#fff3aa; box-shadow:0 8px 20px rgba(91,67,8,.28); color:#614b09; }.cargoReminderAlert strong { font-size:12px; }.cargoReminderAlert span { font-size:11px; }.cargoReminderAlert small { font-size:9px; }.cargoReminderAlert button { justify-self:end; display:flex; align-items:center; gap:3px; border:0; border-radius:5px; background:#8c6910; color:#fff; cursor:pointer; font-size:9px; padding:4px 6px; }
 
 /* Final visual alignment for folder badges, calendar controls and post-it readability. */
 .folderDropZone::before { border:1px solid #b9c9d8!important; background:#fff!important; box-shadow:0 2px 6px rgba(40,65,88,.18)!important; }
@@ -3507,8 +3513,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .deadlineControls > div { z-index:650!important; }
 .archiveSettingsMenu { top:7px; right:47px; z-index:650!important; }
 /* Final dashboard and File Studio proportions. */
-.sourcesColumnHeader { min-height:30px; padding:4px 2px; font-size:13px; letter-spacing:.045em; }
-.sourcesColumnHeader > span { font-size:13px; }
 .dashboardProjectLabel { font-size:14px; font-weight:800; }
 .processingPage { grid-template-columns:310px minmax(0,1fr) 320px; }
 .processingPage .conversionStack > .conversionPanel { min-height:215px; }
@@ -4092,13 +4096,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
   margin:0!important;
   line-height:1.1!important;
 }
-.dashboard .sourcesColumnHeader > span {
-  display:inline-flex;
-  height:100%;
-  align-items:center;
-  line-height:1;
-}
-
 /* Exact title-bar centre line: every label occupies the same 26px track. */
 .dashboardSourceBlock .sourceHeader .sourceTitle,
 .dashboardSourceBlock .sourceHeader .emailConnectionTitle,
@@ -4305,7 +4302,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
   min-width:0;
   overflow-x:hidden;
 }
-@media(max-width:900px) {
+@media(max-width:1100px) {
   .applicationsLayout { grid-template-columns:1fr; }
   .applicationSearch { position:static; }
 }
@@ -5390,24 +5387,19 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .treeRocketToolbar { display:flex; min-width:0; align-items:center; gap:6px; padding:7px 10px; border-bottom:1px solid #e0e8ef; background:#fff; }
 .treeRocketToolbar > button { display:inline-flex; min-height:28px; flex:0 0 auto; align-items:center; justify-content:center; gap:4px; padding:3px 7px; border:1px solid #c9d7e3; border-radius:6px; background:#f9fcff; color:#49647d; cursor:pointer; font-size:9px; font-weight:800; }
 .treeRocketToolbar > button:disabled { cursor:default; opacity:.48; }
-.treeRocketBreadcrumbs { display:flex; min-width:70px; flex:1 1 auto; align-items:center; gap:3px; overflow:auto; }
+.treeRocketBreadcrumbs { display:flex; min-width:0; flex:0 0 auto; align-items:center; gap:3px; overflow:auto; }
 .treeRocketBreadcrumbs button { max-width:150px; overflow:hidden; padding:3px 5px; border:0; border-radius:4px; background:transparent; color:#386d91; cursor:pointer; font-size:10px; font-weight:750; text-overflow:ellipsis; white-space:nowrap; }
 .treeRocketBreadcrumbs button:disabled { color:#405a70; cursor:default; }
 .treeRocketBreadcrumbs span { display:inline-flex; flex:0 0 auto; align-items:center; gap:2px; }
 .treeRocketBreadcrumbs i { color:#91a5b6; font-style:normal; }
 .treeRocketPath { max-width:220px; overflow:hidden; color:#8294a4; font:9px/1.3 Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
 .treeRocketError { margin:0; padding:6px 12px; border-bottom:1px solid #f0d3cf; background:#fff6f4; color:#a84339; font-size:10px; }
-.treeRocketBody { display:grid; min-height:0; grid-template-columns:minmax(0,1fr) minmax(220px,290px); }
-.treeRocketGraph { min-width:0; min-height:0; overflow:auto; background-color:#f5faff; background-image:radial-gradient(#d7e5ef 1px,transparent 1px); background-size:20px 20px; }
-.treeRocketGraphCanvas { width:100%; min-width:820px; min-height:100%; padding:34px 24px; box-sizing:border-box; transform-origin:top left; }
 .treeRocketCurrentNode { display:flex; width:max-content; max-width:min(560px,90%); min-height:64px; align-items:center; gap:10px; margin:0 auto 12px; padding:10px 14px; border:2px solid #81abc4; border-radius:12px; background:linear-gradient(150deg,#fff,#e8f5ff); box-shadow:0 5px 14px rgba(55,104,138,.12); color:#347092; }
 .treeRocketCurrentNode > div { display:grid; min-width:0; gap:3px; }
 .treeRocketCurrentNode > div small { color:#82a1b7; font-size:8px; font-weight:900; letter-spacing:.08em; }
 .treeRocketCurrentNode > div strong { max-width:340px; overflow:hidden; color:#294d67; font-size:13px; text-overflow:ellipsis; white-space:nowrap; }
 .treeRocketCurrentNode > div code { max-width:460px; overflow:hidden; color:#71879a; font:9px Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
 .treeRocketCurrentNode > button { display:inline-flex; min-height:28px; flex:0 0 auto; align-items:center; gap:5px; padding:4px 8px; border:1px solid #70a4c1; border-radius:7px; background:#e4f4ff; color:#286888; cursor:pointer; font-size:9px; font-weight:850; }
-.treeRocketChildren { position:relative; display:flex; min-height:90px; flex-wrap:wrap; justify-content:center; gap:30px 14px; padding:30px 8px 12px; }
-.treeRocketChildren.hasParent::before { position:absolute; top:0; left:50%; height:20px; border-left:2px solid #a9c5d8; content:""; }
 .treeRocketChildren.hasParent::after { position:absolute; top:20px; left:calc(10% + 120px); right:calc(10% + 120px); border-top:2px solid #a9c5d8; content:""; }
 .treeRocketNode { position:relative; display:grid; width:220px; min-height:106px; align-content:start; gap:5px; padding:7px; border:1px solid #c9d9e6; border-radius:10px; background:rgba(255,255,255,.96); box-shadow:0 3px 9px rgba(50,83,109,.08); }
 .treeRocketChildren.hasParent .treeRocketNode::before { position:absolute; top:-12px; left:50%; height:12px; border-left:2px solid #a9c5d8; content:""; }
@@ -5492,7 +5484,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .folderTableTopActions .treeRocketOpenButton { width:25px; min-width:25px; min-height:30px; justify-content:center; padding:0; }
 
 @media (prefers-reduced-motion:reduce) {
-  .treeRocketGraphCanvas { scroll-behavior:auto; }
 }
 
 @media (max-width:1050px) {
@@ -5504,7 +5495,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
   .treeRocketOverlay { padding:0; }
   .treeRocketWindow { width:100%; height:100%; min-height:0; border-radius:0; grid-template-rows:auto auto minmax(0,1fr) auto; }
   .treeRocketToolbar { flex-wrap:wrap; }
-  .treeRocketBreadcrumbs { order:3; flex-basis:100%; }
+  .treeRocketBreadcrumbs { order:0; flex:0 0 auto; }
   .treeRocketPath { display:none; }
   .treeRocketBody { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr) minmax(130px,32vh); }
   .treeRocketFiles { border-top:1px solid #d7e2eb; border-left:0; }
@@ -5532,20 +5523,16 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .treeRocketBrand>span { display:flex; align-items:center; gap:7px; color:#f3fbff; text-shadow:0 2px 9px #020a16; }.treeRocketBrand>span strong { font-family:inherit; font-size:16px; font-weight:850; letter-spacing:.015em; }.treeRocketMark { flex:0 0 auto; filter:drop-shadow(0 3px 5px #020a18aa); }
 .treeRocketToolbar { display:flex; min-width:0; min-height:46px; align-items:center; gap:7px; padding:7px 12px; border-bottom:1px solid #96c9e833; background:#091a2ea8; backdrop-filter:blur(10px); }
 .treeRocketToolbar>button,.treeRocketCopyPath { display:inline-flex; min-height:30px; flex:0 0 auto; align-items:center; justify-content:center; gap:5px; padding:4px 8px; border:1px solid #b3d9f04a; border-radius:7px; background:#122c49dc; color:#e6f5ff; cursor:pointer; font-size:10px; font-weight:800; }
-.treeRocketToolbar>button:disabled { cursor:default; opacity:.46; }.treeRocketBreadcrumbs { display:flex; min-width:55px; flex:1 1 150px; align-items:center; gap:3px; overflow:auto; }
+.treeRocketToolbar>button:disabled { cursor:default; opacity:.46; }.treeRocketBreadcrumbs { display:flex; min-width:0; flex:0 0 auto; align-items:center; gap:3px; overflow:auto; }
 .treeRocketBreadcrumbs button { max-width:155px; overflow:hidden; padding:4px 6px; border:0; border-radius:5px; background:transparent; color:#dcefff; cursor:pointer; font-size:10px; font-weight:750; text-overflow:ellipsis; white-space:nowrap; }
 .treeRocketBreadcrumbs button:disabled { color:#fff; cursor:default; }.treeRocketBreadcrumbs span { display:inline-flex; flex:0 0 auto; align-items:center; gap:3px; }.treeRocketBreadcrumbs i { color:#87b4d4; font-style:normal; }
 .treeRocketSearch { display:flex; min-width:170px; flex:0 1 285px; align-items:center; gap:5px; padding:3px 4px 3px 8px; border:1px solid #aed4ec59; border-radius:8px; background:#07172ae0; color:#a7d5f1; }
 .treeRocketSearch input { min-width:0; width:100%; height:25px; border:0; outline:0; background:transparent; color:#f5fbff; font:inherit; font-size:10px; }.treeRocketSearch input::placeholder { color:#a4bad0; }.treeRocketSearch>button { min-height:25px; padding:3px 8px; border:0; border-radius:5px; background:#5cb3df; color:#08213a; cursor:pointer; font-size:9px; font-weight:900; }
 .treeRocketPath { max-width:190px; overflow:hidden; color:#b8cfe0; font:9px/1.3 Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
 .treeRocketError,.treeRocketNotice { display:flex; align-items:center; gap:7px; margin:0; padding:7px 14px; border-bottom:1px solid #f0b6ad55; background:#361c25df; color:#ffd6d0; font-size:10px; }.treeRocketNotice { border-color:#83d7ae55; background:#0e342ce8; color:#d9ffeb; }
-.treeRocketBody { display:grid; min-height:0; grid-template-columns:minmax(0,1fr); overflow:hidden; }.treeRocketBody.withSidebar { grid-template-columns:minmax(255px,310px) minmax(0,1fr); }
-.treeRocketGraph { min-width:0; min-height:0; overflow:auto; touch-action:pan-x pan-y; cursor:grab; background:radial-gradient(circle at 1px 1px,#d7ebff36 1px,transparent 1.5px); background-size:24px 24px; scrollbar-color:#a6c7dc66 transparent; }
-.treeRocketGraph:active { cursor:grabbing; }.treeRocketGraphCanvas { width:100%; min-width:820px; min-height:100%; padding:44px 34px 70px; box-sizing:border-box; transform-origin:top left; transition:transform 120ms ease-out; }
 .treeRocketCurrentNode { display:flex; width:max-content; max-width:min(680px,92%); min-height:72px; align-items:center; gap:12px; margin:0 auto; padding:11px 15px; border:1px solid #a7ddff88; border-radius:15px; background:linear-gradient(145deg,#0c3353f2,#142948ee); box-shadow:0 10px 30px #02091266,inset 0 1px #ffffff1a; color:#f6fbff; }
 .treeRocketCurrentNode>svg { color:#f4c96b; }.treeRocketCurrentNode>div { display:grid; min-width:0; gap:3px; }.treeRocketCurrentNode>div small,.treeRocketGraphHeading>span { color:#a7cce4; font-size:8px; font-weight:900; letter-spacing:.14em; }.treeRocketCurrentNode>div strong { max-width:380px; overflow:hidden; color:#fff; font-size:15px; text-overflow:ellipsis; white-space:nowrap; }.treeRocketCurrentNode>div code { max-width:490px; overflow:hidden; color:#c1d4e3; font:9px Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }.treeRocketCurrentNode>button,.treeRocketAddButton { display:inline-flex; min-height:30px; flex:0 0 auto; align-items:center; gap:5px; padding:5px 9px; border:1px solid #96d1ef77; border-radius:7px; background:#17426aba; color:#eefaff; cursor:pointer; font-size:9px; font-weight:850; }
-.treeRocketTrunk { width:0; height:30px; margin:0 auto; border-left:2px solid #b5ddf188; }.treeRocketChildren { position:relative; display:grid; min-width:100%; grid-template-columns:repeat(auto-fill,minmax(205px,1fr)); align-items:stretch; gap:30px 15px; padding:24px 6px 12px; }
-.treeRocketChildren.hasParent::before { position:absolute; top:0; left:2%; right:2%; border-top:2px solid #b5ddf177; content:""; }.treeRocketChildren.hasParent::after { position:absolute; top:-30px; left:50%; height:30px; border-left:2px solid #b5ddf177; content:""; }
+.treeRocketTrunk { width:0; height:30px; margin:0 auto; border-left:2px solid #b5ddf188; }
 .treeRocketNode { position:relative; display:grid; min-width:0; min-height:122px; align-content:start; gap:8px; padding:9px; border:1px solid #b4d8ef66; border-radius:12px; background:linear-gradient(145deg,#f7fcfff2,#dcecf2ed); box-shadow:0 7px 20px #03101e44,inset 0 1px #ffffff; color:#25445b; }.treeRocketChildren.hasParent .treeRocketNode::before { position:absolute; top:-26px; left:50%; height:26px; border-left:2px solid #b5ddf188; content:""; }
 .treeRocketNodeEnter { display:grid; min-width:0; grid-template-columns:28px minmax(0,1fr); align-items:center; gap:2px 8px; padding:4px; border:0; border-radius:7px; background:transparent; color:#a47420; cursor:pointer; text-align:left; }.treeRocketNodeEnter:hover { background:#ffffffaa; }.treeRocketNodeIcon { display:grid; grid-row:1 / span 2; place-items:center; color:#bc8a32; }.treeRocketNodeEnter strong { overflow:hidden; color:#25445b; font-size:12px; text-overflow:ellipsis; white-space:nowrap; }.treeRocketNodeEnter small { overflow:hidden; color:#688196; font:9px Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }
 .treeRocketNodeActions { display:flex; gap:5px; }.treeRocketNodeActions button { display:inline-flex; min-height:28px; flex:1 1 0; align-items:center; justify-content:center; gap:4px; padding:4px; border:1px solid #a9c5d6; border-radius:6px; background:#ffffffbd; color:#365f78; cursor:pointer; font-size:9px; font-weight:800; white-space:nowrap; }.treeRocketNodeActions button:hover,.treeRocketAddButton:hover { background:#ccecff; }.treeRocketNodeActions button:disabled { cursor:wait; opacity:.5; }
@@ -5568,9 +5555,9 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .dashboardFoldersTop .foldersColumn::before { left:0; right:auto; background:linear-gradient(90deg,#f5f8fb,transparent); }
 .dashboardFoldersTop .foldersColumn::after { right:0; left:auto; background:linear-gradient(270deg,#f5f8fb,transparent); }
 .dashboardFoldersTop .dashboardProjectGroup.linkedProject { margin:0!important; }
-@media (max-width:850px) { .treeRocketToolbar { flex-wrap:wrap; }.treeRocketSearch { order:4; flex:1 1 250px; }.treeRocketBreadcrumbs { order:3; flex-basis:100%; }.treeRocketPath { display:none; } }
+@media (max-width:850px) { .treeRocketToolbar { flex-wrap:wrap; }.treeRocketSearch { order:4; flex:1 1 250px; }.treeRocketBreadcrumbs { order:0; flex:0 0 auto; }.treeRocketPath { display:none; } }
 @media (max-width:650px) { .treeRocketHeader { padding:6px 8px; }.treeRocketHeader .treeRocketBack { font-size:0; gap:0; padding:5px; }.treeRocketHeader .treeRocketBack svg { width:19px; height:19px; }.treeRocketBody.withSidebar { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr) minmax(150px,28vh); }.treeRocketFiles { grid-row:2; border-top:1px solid #a4cce745; border-right:0; }.treeRocketGraph { grid-row:1; }.treeRocketGraphCanvas { min-width:660px; padding:28px 18px 50px; }.treeRocketCurrentNode { max-width:calc(100% - 12px); flex-wrap:wrap; }.treeRocketCurrentNode>div { max-width:calc(100% - 50px); }.treeRocketNode { min-width:190px; }.folderManagementLeft .folderQuickPreview { grid-template-columns:minmax(75px,.7fr) minmax(0,1.7fr); } }
-@media (prefers-reduced-motion:reduce) { .treeRocketGraphCanvas { transition:none; }.treeRocketSpinner { animation:none; } }
+@media (prefers-reduced-motion:reduce) { .treeRocketSpinner { animation:none; } }
 
 /* Tree Rocket uses the same full-screen space treatment as Change World. */
 .treeRocketOverlay { background:linear-gradient(125deg,rgba(3,11,24,.62),rgba(5,19,37,.35) 47%,rgba(11,12,39,.68)),url("./assets/folderrocket-space-login.png") center/cover no-repeat; }
@@ -5578,9 +5565,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .treeRocketOverlay::before { background-image:radial-gradient(1px 1px at 8% 18%,#fff 99%,transparent),radial-gradient(1px 1px at 26% 76%,#d6ecff 99%,transparent),radial-gradient(1.5px 1.5px at 74% 23%,#fff 99%,transparent),radial-gradient(1px 1px at 91% 65%,#d6ecff 99%,transparent),radial-gradient(1px 1px at 53% 48%,#fff 99%,transparent); background-size:310px 260px,390px 350px,430px 370px,350px 310px,510px 470px; opacity:.56; }
 .treeRocketOverlay::after { background:radial-gradient(ellipse at 52% 54%,rgba(40,115,184,.17),transparent 58%); }
 .treeRocketWindow { position:relative; z-index:1; }
-.treeRocketGraph { overflow-x:hidden; overflow-y:auto; background:transparent; touch-action:pan-y; cursor:default; scrollbar-color:#a6c7dc66 transparent; }
-.treeRocketGraph:active { cursor:default; }
-.treeRocketGraphCanvas { display:flex; width:100%; min-width:0; min-height:100%; flex-direction:column; align-items:stretch; padding:clamp(25px,5vh,54px) clamp(16px,3vw,36px) 48px; transform-origin:top center; }
 .treeRocketGraphCanvas:has(.rootNodes) { justify-content:center; }
 .treeRocketGraphHeading { align-self:center; }
 .treeRocketNode { z-index:0; width:100%; min-width:0; max-width:270px; min-height:150px; flex:initial; gap:8px; margin:9px auto 0; padding:19px 12px 11px; transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease; }
@@ -5599,15 +5583,13 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .treeRocketChildrenHeading span { color:#a7cce4; font-size:10px; font-weight:900; letter-spacing:.16em; }
 .treeRocketChildrenHeading strong { max-width:45%; overflow:hidden; color:#fff; font-size:12px; text-overflow:ellipsis; white-space:nowrap; }
 .treeRocketChildrenHeading i { display:grid; min-width:22px; height:22px; place-items:center; border:1px solid #96c9e84b; border-radius:50%; background:#102a42bc; color:#eaf5ff; font-size:10px; font-style:normal; font-weight:850; }
-.treeRocketChildren { position:relative; display:grid; width:100%; min-width:0; min-height:80px; grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),270px)); justify-content:center; align-items:stretch; gap:24px 22px; padding:24px 0 12px; box-sizing:border-box; }
 .treeRocketChildren.hasParent::after { top:0; left:50%; right:auto; width:0; height:22px; border:0; border-left:2px solid #a4ddf0a6; }
 .treeRocketChildren::before,.treeRocketChildren .treeRocketNode::before { display:none!important; }
 .treeRocketChildren.rootNodes { padding-top:15px; }
 .treeRocketChildren.emptyChildren::after { display:none; }
 .treeRocketSearchGraph { display:grid; width:100%; min-width:0; grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),270px)); justify-content:center; align-items:stretch; gap:24px 22px; }
 .treeRocketSearchGraph .treeRocketNode { align-self:stretch; }
-.treeRocketGraph { scrollbar-width:thin; }
-.treeRocketBack:focus-visible,.treeRocketClose:focus-visible,.treeRocketToolbar button:focus-visible,.treeRocketNodeEnter:focus-visible,.treeRocketNodeActions button:focus-visible { outline:3px solid #9cdbff; outline-offset:3px; }
+.treeRocketBack:focus-visible,.treeRocketClose:focus-visible,.treeRocketToolbar button:focus-visible,.treeRocketNodeEnter:focus-visible,.treeRocketNodeActions button:focus-visible,.treeRocketSeeFiles:focus-visible { outline:3px solid #9cdbff; outline-offset:3px; }
 .treeRocketNodeEnter:focus-visible { background:#fff5cd; }
 .treeRocketWindow > footer { flex:0 0 auto; }
 .treeRocketQuickLauncher { overflow:hidden; }
@@ -5623,9 +5605,8 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
   .treeRocketClose { width:32px; padding:0; }
   .treeRocketClose span { display:none; }
   .treeRocketToolbar { flex-wrap:wrap; gap:5px; padding:6px; }
-  .treeRocketBreadcrumbs { order:3; flex-basis:100%; }
+  .treeRocketBreadcrumbs { order:0; flex:0 0 auto; }
   .treeRocketSearch { order:2; min-width:0; flex:1 1 145px; }
-  .treeRocketChildren { grid-template-columns:minmax(0,min(270px,100%)); gap:17px; padding-top:20px; }
   .treeRocketSearchGraph { grid-template-columns:minmax(0,min(270px,100%)); gap:17px; }
   .treeRocketChildrenHeading { margin-top:16px; }
   .treeRocketFiles { top:auto; bottom:9px; left:9px; width:calc(100% - 18px); height:min(40vh,360px); max-height:calc(100% - 18px); }
@@ -5637,34 +5618,31 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 }
 @media (prefers-reduced-motion:reduce) {
   .treeRocketNode { transition:none; }
-  .treeRocketGraphCanvas { transition:none; }
   .treeRocketSpinner { animation:none; }
 }
 
 /* Tree Rocket is a separate, space-themed workspace. Its canvas stays stable when the file drawer opens. */
 .treeRocketOverlay { isolation:isolate; }
-.treeRocketWindow { display:flex; flex-direction:column; }
+.treeRocketWindow { display:flex; min-height:0; flex-direction:column; }
 .treeRocketHeader { min-height:69px; }
 .treeRocketBrand { display:flex; align-items:center; gap:10px; }
 .treeRocketBrand > span { display:flex; align-items:center; justify-content:center; text-align:center; }
 .treeRocketBrand > span strong { color:#fff; font-size:23px; font-weight:900; letter-spacing:.015em; line-height:1; text-shadow:0 2px 10px #020a18; }
 .treeRocketClose { width:auto; min-height:34px; padding:5px 10px; }
-.treeRocketBody { position:relative; display:block; min-height:0; flex:1 1 auto; }
-.treeRocketGraph { width:100%; height:100%; overflow-x:hidden; overflow-y:auto; background:transparent; background-image:none; touch-action:pan-y; }
-.treeRocketGraphCanvas { display:flex; width:100%; min-width:0; min-height:100%; flex-direction:column; align-items:stretch; padding:clamp(26px,5vh,58px) clamp(16px,3vw,36px) 60px; box-sizing:border-box; transform-origin:top center; }
+.treeRocketBody { position:relative; display:block; min-height:0; flex:1 1 0; }
 .treeRocketGraphCanvas:has(.rootNodes) { justify-content:center; }
-.treeRocketNode { position:relative; display:flex; width:100%; min-width:0; max-width:270px; min-height:150px; flex:initial; flex-direction:column; align-items:stretch; justify-content:space-between; gap:5px; margin:9px auto 0; padding:17px 10px 9px; box-sizing:border-box; border:2px solid #d39940; border-radius:5px 15px 13px 13px; background:linear-gradient(155deg,#fff4ba,#f4c260 55%,#cc8d35); box-shadow:0 12px 27px #020a1d80,inset 0 2px #fff9d8; color:#3d301d; }
+.treeRocketNode { position:relative; display:grid; width:100%; min-width:0; max-width:270px; min-height:0; grid-template-rows:minmax(44px,auto) auto auto; align-content:start; align-items:stretch; gap:7px; margin:9px auto 0; padding:18px 10px 9px; box-sizing:border-box; border:2px solid #d39940; border-radius:5px 15px 13px 13px; background:linear-gradient(155deg,#fff4ba,#f4c260 55%,#cc8d35); box-shadow:0 12px 27px #020a1d80,inset 0 2px #fff9d8; color:#3d301d; }
 .treeRocketNode::after { position:absolute; z-index:-1; top:7px; left:0; right:0; height:16px; border-radius:5px 13px 0 0; background:#e4a94e; content:""; }
 .treeRocketFolderTab { position:absolute; top:-15px; left:-2px; width:77px; height:20px; border:2px solid #d39940; border-bottom:0; border-radius:9px 11px 0 0; background:#ffe194; }
-.treeRocketNodeEnter { position:absolute; z-index:0; inset:0; display:flex; width:100%; min-height:0; align-items:flex-start; gap:8px; padding:22px 10px 49px; box-sizing:border-box; border:0; border-radius:7px; background:transparent; color:#4a381e; cursor:pointer; text-align:left; }
+.treeRocketNodeEnter { position:relative; z-index:0; display:grid; width:100%; min-width:0; min-height:44px; grid-template-columns:28px minmax(0,1fr); align-items:start; gap:4px 8px; padding:4px 6px; box-sizing:border-box; border:0; border-radius:7px; background:transparent; color:#4a381e; cursor:pointer; text-align:left; }
 .treeRocketNodeEnter:hover { background:#fff5cd91; }
 .treeRocketNodeIcon { flex:0 0 auto; color:#9a5f19; }
 .treeRocketNodeTitle { display:grid; min-width:0; gap:3px; }
-.treeRocketNodeEnter strong { display:block; min-width:0; overflow:visible; color:#49351b; font-size:17px; line-height:1.28; text-overflow:clip; white-space:normal; overflow-wrap:anywhere; }
+.treeRocketNodeEnter strong { display:-webkit-box; min-width:0; max-width:100%; overflow:hidden; color:#49351b; font-size:17px; line-height:1.22; text-overflow:ellipsis; white-space:normal; overflow-wrap:anywhere; -webkit-box-orient:vertical; -webkit-line-clamp:3; }
 .treeRocketNodeEnter .treeRocketNodeCount { color:#705632; font-family:inherit; font-size:10px; font-weight:700; line-height:1.2; white-space:normal; }
 .cargoEmailUnavailable { margin:0; padding:7px 8px; border:1px solid #dfc48b; border-radius:6px; background:#fff8e7; color:#725721; font-size:10px; line-height:1.4; }
 .treeRocketFolderTab { z-index:1; pointer-events:none; }
-.treeRocketNodeActions { position:relative; z-index:2; display:flex; width:100%; gap:4px; margin-top:auto; }
+.treeRocketNodeActions { position:relative; z-index:2; display:flex; width:100%; min-width:0; gap:4px; margin:0; }
 .treeRocketNodeActions button { display:flex; min-width:0; min-height:35px; flex:1 1 0; gap:4px; padding:4px 5px; border-color:#b57c30; background:#fff9e4eF; color:#543b22; font-size:10px; line-height:1.15; white-space:normal; }
 .treeRocketNodeActions button:last-child { flex:1.45 1 0; }
 .treeRocketNodeActions button svg { flex:0 0 auto; }
@@ -5673,7 +5651,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .treeRocketRootNode .treeRocketFolderTab { border-color:#86cbea; background:#c8ecff; }
 .treeRocketRootNode .treeRocketNodeEnter strong { color:#123b5d; }
 .treeRocketRootNode .treeRocketNodeIcon { color:#2673a2; }
-.treeRocketChildren { position:relative; display:grid; width:100%; min-width:0; min-height:80px; grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),270px)); justify-content:center; align-items:stretch; gap:24px 22px; padding:24px 0 12px; box-sizing:border-box; }
 .treeRocketChildren.hasParent::after { top:0; left:50%; right:auto; width:0; height:22px; border:0; border-left:2px solid #a4ddf0a6; }
 .treeRocketChildren.multipleChildren::before,.treeRocketChildren.singleChild::before { display:none; }
 .treeRocketChildren.emptyChildren::before,.treeRocketChildren.emptyChildren::after { display:none; }
@@ -5698,8 +5675,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .treeRocketLogoProposal { display:grid; min-height:58px; place-items:center; margin:0 auto 6px; }
 .treeRocketLogoProposal .treeRocketMark { width:44px; height:46px; }
 @media (max-width:850px) {
-  .treeRocketGraphCanvas { padding:32px 16px 45px; }
-  .treeRocketChildren { gap:14px; padding-left:14px; padding-right:14px; }
 }
 @media (max-width:650px) {
   .treeRocketHeader { grid-template-columns:auto 1fr auto; min-height:61px; }
@@ -5708,7 +5683,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
   .treeRocketClose { width:32px; padding:0; }
   .treeRocketClose span { display:none; }
   .treeRocketToolbar { gap:5px; padding:6px; }
-  .treeRocketBreadcrumbs { order:3; flex-basis:100%; }
+  .treeRocketBreadcrumbs { order:0; flex:0 0 auto; }
   .treeRocketSearch { order:2; min-width:0; flex:1 1 150px; }
   .treeRocketFiles { top:auto; bottom:10px; left:10px; width:calc(100% - 20px); height:min(39vh,360px); max-height:calc(100% - 20px); }
   .treeRocketNodeActions button { font-size:10px; }
@@ -5831,6 +5806,13 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
   .processingPage .conversionToolCard > h2 { margin-left:0; margin-right:0; border-radius:8px; }
 }
 
+@media(max-width:600px) {
+  .appHeader,.app:has(.applicationsView) > .appHeader,.app:has(.emailConversationsPage) > .appHeader { height:156px; flex-basis:156px; }
+  .pageNavigation { bottom:0; }
+  .pageNavigation .pageMenuItems { grid-template-rows:minmax(27px,auto); }
+  .pageNavigation .pageMenuItems > button { min-height:27px; }
+}
+
 /* Compact, accessible scrollbars and predictable nested scrolling. */
 :where(.dashboardColumn,.folderTable,.inspectorList,.processingFolderList,.processingFileList,.conversionQueue,.emailAttachmentList,.fireMountainFiles,.resultsBody,.calendarEventList,.usbFileList,.cargoItemList,.cargoForm,.cargoConvert,.cargoLens,.cargoLensResult,.projectionAnalysisResult,.domainAiResult,.screenSourcePicker,.integrationSetupPanel,.accountMenu,.auditList,.stickyNoteList,.foldersScrollRegion,.dashboardProjectGroup,.treeRocketGraph,.treeRocketFileList) { scrollbar-width:thin; scrollbar-color:#91a8ba55 transparent; }
 :where(.dashboardColumn,.folderTable,.inspectorList,.processingFolderList,.processingFileList,.conversionQueue,.emailAttachmentList,.fireMountainFiles,.resultsBody,.calendarEventList,.usbFileList,.cargoItemList,.cargoForm,.cargoConvert,.cargoLens,.cargoLensResult,.projectionAnalysisResult,.domainAiResult,.screenSourcePicker,.integrationSetupPanel,.accountMenu,.auditList,.stickyNoteList,.foldersScrollRegion,.dashboardProjectGroup,.treeRocketGraph,.treeRocketFileList)::-webkit-scrollbar { width:3px; height:3px; }
@@ -5873,12 +5855,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .treeRocketAddFoldersMenu footer button,.treeRocketAppsPanel button { min-height:29px; padding:5px 9px; border:1px solid #adc4d5; border-radius:6px; background:#fff; color:#355b74; cursor:pointer; font-size:10px; font-weight:800; }
 .treeRocketAddFoldersMenu footer button:last-child,.treeRocketAppsPanel button { border-color:#4b9bc3; background:#227ba4; color:#fff; }.treeRocketAddFoldersMenu footer button:disabled { opacity:.45; cursor:default; }
 .treeRocketToolbar { min-height:40px; padding-block:5px; }
-.treeRocketBody { grid-template-columns:minmax(0,1fr); }
 .treeRocketBody.withSidebar { grid-template-columns:minmax(0,1fr) minmax(250px,310px); }
-.treeRocketGraph { overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; }
-.treeRocketGraphCanvas { width:100%; min-width:0; padding:26px clamp(10px,3vw,34px) 48px; box-sizing:border-box; }
-.treeRocketChildren { width:100%; min-width:0; grid-template-columns:repeat(auto-fit,minmax(min(205px,100%),1fr)); gap:22px 12px; padding-inline:0; box-sizing:border-box; }
-.treeRocketChildren.hasParent::before { left:3%; right:3%; }
 .treeRocketNode { min-width:0; }
 .treeRocketNodeEnter { grid-template-columns:28px minmax(0,1fr); }
 .treeRocketNodeEnter strong { white-space:normal; overflow-wrap:anywhere; }
@@ -5924,9 +5901,8 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
   .treeRocketFiles { grid-row:2; border-top:1px solid #a4cce745; border-left:0; }
   .treeRocketGraph { grid-row:1; }
   .treeRocketToolbar { flex-wrap:wrap; }
-  .treeRocketBreadcrumbs { order:4; flex:1 1 100%; }
+  .treeRocketBreadcrumbs { order:0; flex:0 0 auto; }
   .treeRocketSearch { order:1; min-width:140px; flex:1 1 160px; }
-  .treeRocketGraphCanvas { padding:18px 10px 34px; }
   .treeRocketNodeActions { flex-wrap:wrap; }
   .treeRocketNodeActions button { flex-basis:100%; }
   .folderTableHead { display:none; }
@@ -5968,36 +5944,38 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .treeRocketSearch { width:auto; min-width:0; max-width:340px; flex:1 1 210px; }
 .treeRocketAddFoldersWrap { display:flex; flex:0 0 auto; flex-direction:column; align-items:flex-end; gap:8px; }
 .treeRocketToolbar { width:min(1180px,calc(100% - clamp(32px,6vw,76px))); min-height:37px; flex:0 0 auto; margin:0 auto; padding:4px 0; box-sizing:border-box; border-bottom:1px solid #96c9e833; background:#091a2e90; }
-.treeRocketBreadcrumbs { width:100%; max-width:100%; flex:1 1 auto; }
+.treeRocketBreadcrumbs { width:100%; max-width:100%; min-height:31px; }
+.treeRocketError,.treeRocketNotice { flex:0 0 auto; }
 .treeRocketBreadcrumbs button { max-width:min(200px,25vw); }
 .treeRocketBreadcrumbs .treeRocketCopyPath { min-height:24px; padding:3px 7px; font-size:9px; }
-.treeRocketBody { width:min(1180px,calc(100% - clamp(32px,6vw,76px))); min-width:0; min-height:0; flex:1 1 0; margin:0 auto; }
-.treeRocketBody.withSidebar { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr); }
-.treeRocketGraph { overflow-x:hidden; overscroll-behavior:contain; }
+.treeRocketBody { width:min(1180px,calc(100% - clamp(32px,6vw,76px))); min-width:0; min-height:0; margin:0 auto; overflow:hidden; }
+.treeRocketGraph { width:100%; height:100%; min-height:0; flex:1 1 0; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; }
 .treeRocketGraph.hasOpenBranch { overflow:hidden; }
-.treeRocketGraphCanvas { width:100%; min-width:0; min-height:100%; padding:24px clamp(12px,2vw,26px); box-sizing:border-box; transform:none; transition:none; }
+.treeRocketGraphCanvas { width:100%; min-width:0; min-height:100%; padding:12px clamp(12px,2vw,26px); box-sizing:border-box; transform:none; transition:none; }
 .treeRocketGraph.hasOpenBranch .treeRocketGraphCanvas { height:100%; }
 .treeRocketGraphCanvas:has(.rootNodes) { display:block; }
 .treeRocketGraphCanvas:has(.rootNodes) .treeRocketChildren.rootNodes { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),260px)); justify-content:center; align-items:stretch; gap:18px; padding:14px 0 26px; }
 .treeRocketGraphHeading { display:flex; align-items:center; gap:10px; margin:0 0 8px; }
 .treeRocketGraphHeading strong { color:#eff8ff; }
-.treeRocketGraphStage { display:flex; width:100%; height:100%; min-height:0; flex-direction:column; align-items:center; justify-content:center; gap:18px; }
-.treeRocketGraphStage > .treeRocketRootNode { width:min(260px,100%); max-width:260px; flex:0 0 auto; align-self:center; }
-.treeRocketGraphStage > .treeRocketRootNode::after { position:absolute; top:100%; left:50%; width:0; height:18px; border-left:2px solid #b5ddf188; content:""; }
-.treeRocketBranch { position:relative; display:grid; width:100%; height:100%; min-width:0; min-height:0; flex:1 1 0; grid-template-rows:auto minmax(0,1fr) auto; align-content:stretch; padding:14px 0 0; }
-.treeRocketBranch::before { position:absolute; top:-18px; left:50%; height:18px; border-left:2px solid #b5ddf177; content:""; }
+.treeRocketGraphStage { position:relative; display:flex; width:100%; height:100%; min-width:0; min-height:0; flex-direction:column; align-items:center; justify-content:flex-start; gap:clamp(8px,1.1vh,14px); overflow:hidden; }
+.treeRocketGraphStage > .treeRocketRootNode { width:min(230px,100%); max-width:250px; flex:0 0 auto; align-self:center; }
+.treeRocketGraphStage > .treeRocketRootNode::after { content:none; }
+.treeRocketBranch { position:relative; z-index:1; display:flex; width:100%; height:auto; min-width:0; min-height:0; flex:1 1 0; flex-direction:column; align-content:stretch; padding:clamp(4px,.8vh,12px) 0 0; overflow:hidden; }
+.treeRocketBranch::before { content:none; }
 .treeRocketBranch::after { display:none; }
-.treeRocketChildrenHeading { display:flex; min-width:0; align-items:center; justify-content:center; gap:8px; margin:0; padding:8px 8px 10px; }
+.treeRocketChildrenHeading { position:relative; z-index:2; display:flex; width:max-content; max-width:100%; min-width:0; align-items:center; justify-content:center; gap:8px; box-sizing:border-box; margin:0 auto; padding:6px 11px; border:1px solid #7db5db55; border-radius:9px; background:#0b1d31; box-shadow:0 3px 12px #02091470; }
 .treeRocketChildrenHeading > i { display:grid; width:25px; height:25px; flex:0 0 25px; place-items:center; box-sizing:border-box; border:1px solid #94c9e686; border-radius:50%; background:#102b46; color:#eff8ff; font-size:11px; font-style:normal; font-weight:850; line-height:1; text-align:center; }
-.treeRocketChildren { width:100%; min-width:0; min-height:0; max-height:100%; grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),260px)); align-content:start; justify-content:center; align-items:start; gap:18px; padding:20px 8px 24px; box-sizing:border-box; overflow:auto; }
-.treeRocketChildren.hasParent::before { position:absolute; top:8px; left:12%; right:12%; border-top:2px solid #b5ddf177; content:""; }
-.treeRocketChildren.hasParent::after { position:absolute; top:-10px; left:50%; height:18px; border-left:2px solid #b5ddf177; content:""; }
+.treeRocketChildren { position:relative; display:grid; width:100%; min-width:0; min-height:0; max-height:none; grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),220px)); align-content:start; justify-content:center; align-items:start; gap:30px 14px; padding:12px 8px 18px; box-sizing:border-box; overflow:auto; overscroll-behavior:contain; }
+.treeRocketChildren.hasParent { flex:1 1 0; }
+.treeRocketChildren.hasParent::before,.treeRocketChildren.hasParent::after { content:none; }
 .treeRocketChildren.hasParent .treeRocketNode::before { display:none; }
-.treeRocketChildren.hasParent > .treeRocketNode:nth-child(-n+4)::before { position:absolute; top:-14px; left:50%; height:14px; border-left:2px solid #b5ddf188; content:""; }
 .treeRocketChildren.singleChild { grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),260px)); justify-content:center; }
 .treeRocketChildren.emptyChildren { align-content:center; }
-.treeRocketNode { width:100%; max-width:260px; min-height:145px; margin:0; }
-.treeRocketNodeEnter { padding:21px 10px 48px; }
+.treeRocketLoadMore { display:flex; min-height:38px; align-items:center; justify-content:center; gap:7px; padding:8px 12px; border:1px dashed #7baec4; border-radius:10px; color:#215c78; background:#edf8fc; font:inherit; font-size:12px; font-weight:700; cursor:pointer; }
+.treeRocketLoadMore:disabled { opacity:.65; cursor:wait; }
+.treeRocketNode { width:100%; max-width:220px; min-height:0; margin:0; }
+.treeRocketRootNode { min-height:0; }
+.treeRocketNodeEnter { min-height:44px; padding:4px 6px; }
 .treeRocketNodeEnter strong { font-size:clamp(15px,1.2vw,18px); }
 .treeRocketNodeEnter .treeRocketNodeCount { font-size:10px; }
 .treeRocketNodeActions button { min-height:33px; font-size:10px; }
@@ -6036,8 +6014,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
   .treeRocketHeaderTools { grid-column:2; grid-row:1; justify-self:end; }
   .treeRocketBrand { grid-column:1/-1; grid-row:2; }
   .treeRocketBrandTitle .treeRocketMark { width:76px; height:76px; }
-  .treeRocketGraphStage { gap:14px; }
-  .treeRocketChildren { grid-template-columns:repeat(auto-fit,minmax(min(210px,100%),250px)); }
 }
 @media (max-width:600px) {
   .treeRocketHeader { grid-template-columns:minmax(0,1fr) minmax(0,1fr); grid-template-rows:auto auto auto; gap:7px; padding:8px 0; }
@@ -6054,12 +6030,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
   .treeRocketAddFoldersButton { min-height:31px; }
   .treeRocketToolbar { padding-inline:0; }
   .treeRocketGraph.hasOpenBranch { overflow:hidden; }
-  .treeRocketGraphCanvas { padding:12px; }
-  .treeRocketGraphStage { gap:12px; }
-  .treeRocketGraphStage > .treeRocketRootNode { max-width:250px; }
-  .treeRocketBranch { padding-top:12px; }
-  .treeRocketChildren { grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),220px)); gap:12px; padding:18px 4px 16px; }
-  .treeRocketChildren.hasParent::before { left:10%; right:10%; }
   .treeRocketAppsPanel { padding:10px 0; }
   .treeRocketAppGrid { grid-template-columns:repeat(auto-fill,minmax(min(148px,100%),180px)); gap:10px; }
 }
@@ -6067,7 +6037,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 /* Folders on Top is capped at two tile rows; a busy project scrolls inside its white group. */
 .dashboardFoldersTop > .foldersColumn { height:min(252px,34vh); max-height:min(252px,34vh); min-height:0; overflow:hidden; }
 .dashboardFoldersTop .foldersScrollRegion { height:100%; min-height:0; overflow-x:auto; overflow-y:hidden; scrollbar-gutter:auto; overscroll-behavior-x:contain; }
-.dashboardFoldersTop .foldersContainer { width:max-content; min-width:100%; height:100%; align-items:stretch; padding:3px 10px; }
+.dashboardFoldersTop .foldersContainer { width:max-content; min-width:100%; height:100%; align-items:stretch; justify-content:center; padding:3px 10px; }
 .dashboardFoldersTop .dashboardProjectGroup,
 .dashboardFoldersTop .dashboardProjectGroup.linkedProject { height:100%; min-height:0; padding:2px 0; overflow-y:auto; border:0; border-radius:0; background:transparent; }
 .dashboardFoldersTop .dashboardProjectLabel { justify-content:center; min-height:25px; flex-basis:25px; margin:0 0 2px; padding:1px 4px; border:0; background:transparent; text-align:center; }
@@ -6085,9 +6055,10 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .folderTableToolbar { display:flex; min-width:0; justify-content:space-between; align-items:center; gap:8px; }
 .folderTableToolbar > strong { margin-right:auto; color:#344e63; font-size:15px; font-weight:900; letter-spacing:.01em; }
 .folderTableToolbarActions { display:flex; flex:0 0 auto; align-items:center; gap:5px; }
+.folderTableToolbar > .folderTableTitle { display:inline-flex; align-items:center; gap:6px; }
+.folderTableTitle svg { width:14px; height:14px; flex:0 0 auto; color:#4f7c9c; }
 .folderTable { min-width:0!important; overflow-x:hidden!important; }
-.folderTableRow,.folderTableRow.orderingFolder,.folderTableRow.orderingHead { width:100%; min-width:0!important; grid-template-columns:24px minmax(78px,1fr) minmax(62px,.9fr) minmax(92px,1.2fr) 54px; gap:4px; padding-inline:3px; }
-.folderTableRow.orderingFolder,.folderTableRow.orderingHead { grid-template-columns:17px 22px minmax(78px,1fr) minmax(62px,.9fr) minmax(92px,1.2fr) 54px; }
+.folderTableRow,.folderTableRow.orderingFolder,.folderTableRow.orderingHead { width:100%; min-width:0!important; grid-template-columns:17px 22px minmax(78px,1fr) minmax(62px,.9fr) minmax(92px,1.2fr) 54px; gap:4px; padding-inline:3px; }
 .folderTableHead { color:#52667d; font-size:15px; font-weight:800; text-transform:uppercase; }
 .folderTableHead > span:not([aria-label]) { min-width:0; font-weight:900; }
 .folderTableRow input { font-size:14px; font-weight:700; }
@@ -6118,12 +6089,19 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .recentSourceCard .usbFileList::-webkit-scrollbar-thumb { border-radius:3px; background:#718ca344; }
 .recentSourceCard .usbFileList:hover::-webkit-scrollbar-thumb,.recentSourceCard .usbFileList:focus-within::-webkit-scrollbar-thumb { background:#718ca399; }
 
-/* Planet-wide email identity and the FolderRocket launch shortcut. */
-.appLogoButton { position:relative; transform:translateZ(0); }
-.appLogoButton .appLogo { transition:transform .18s ease,filter .18s ease; transform-origin:50% 70%; }
-.appLogoButton:hover .appLogo,.appLogoButton:focus-visible .appLogo { transform:translateY(-3px) rotate(-2deg); filter:drop-shadow(0 5px 4px #287fb455); }
-.appLogoButton.isLaunching .appLogo { animation:folderRocketTakeoff .39s cubic-bezier(.24,.73,.31,1) both; }
-@keyframes folderRocketTakeoff { 0%{transform:translateY(0) rotate(0) scale(1);opacity:1} 55%{transform:translateY(-13px) rotate(-7deg) scale(.98);filter:drop-shadow(0 8px 5px #287fb455)} 100%{transform:translateY(-34px) rotate(-11deg) scale(.88);opacity:.24} }
+/* Conversation is a persistent right-edge shortcut; the centered brand mark is inert. */
+.conversationSideRail { position:relative; z-index:9000; display:flex; width:40px; min-height:142px; align-items:center; flex-direction:column; gap:7px; padding:10px 6px; border:1px solid #4c98cb; border-right:0; border-radius:10px 0 0 10px; color:#245f89; background:#d8efff; box-shadow:-4px 5px 12px #1e30411f; cursor:pointer; }
+.conversationRailWrap { position:fixed; z-index:9000; top:42%; right:0; }
+.conversationRailPreview { position:absolute; top:50%; right:48px; display:grid; width:min(265px,calc(100vw - 70px)); gap:6px; transform:translateY(-50%); padding:12px 14px; border:1px solid #83b9d9; border-radius:12px; color:#24465f; background:#f5fbff; box-shadow:0 12px 32px #132a3a35; font-size:12px; }
+.conversationRailPreview strong { color:#173d5b; font-size:13px; }
+.conversationRailPreview span,.conversationRailPreview small { color:#526f85; line-height:1.4; }
+.conversationRailPreview b { color:#1673a7; }
+.emailSenderRecentGroup { margin-top:12px; padding-top:9px; border-top:1px solid #dbe6ee; }
+.emailSenderLoadMore { display:flex; width:100%; min-height:32px; align-items:center; justify-content:center; gap:6px; border:1px solid #c8d8e5; border-radius:8px; color:#315c79; background:#f4f9fc; cursor:pointer; font-size:11px; font-weight:750; }
+.emailSenderLoadMore:disabled { opacity:.58; cursor:wait; }
+.conversationUnreadBadge { position:absolute; top:-8px; right:5px; display:grid; min-width:19px; height:19px; place-items:center; padding:0 3px; border:2px solid #fff; border-radius:999px; color:#fff; background:#d8473f; font-size:9px; line-height:1; box-shadow:0 2px 5px #1e30413d; }
+.conversationSideRail span { font-size:10px; font-weight:900; letter-spacing:.08em; writing-mode:vertical-rl; }
+.conversationSideRail:hover,.conversationSideRail:focus-visible,.conversationSideRail.active { border-color:#277eaf; background:#c5e8fd; color:#164d72; outline-offset:2px; }
 .emailWorldAccountBadge { max-width:160px; overflow:hidden; padding:4px 7px; border:1px solid #bdd9e8; border-radius:7px; color:#315c75; background:#f0f8fc; font-size:9px; font-weight:800; text-overflow:ellipsis; white-space:nowrap; }
 .worldEmailAccountEditor,.worldObsidianEditor { display:grid; gap:8px; padding:12px; border:1px solid #d2e0eb; border-radius:10px; background:#fff; }
 .worldEmailAccountEditor h3,.worldObsidianEditor h3 { display:flex; align-items:center; gap:6px; margin:0; color:#31516b; font-size:12px; }
@@ -6148,41 +6126,96 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 /* Stable, compact Tree Rocket folder grid and its per-world origin selector. */
 .treeRocketOriginPicker { display:flex; flex:0 0 auto; align-items:center; gap:5px; color:#adc9df; font-size:9px; font-weight:850; }
 .treeRocketOriginPicker select { height:30px; padding:0 8px; border:1px solid #b3d9f04a; border-radius:7px; color:#e6f5ff; background:#122c49dc; font-size:10px; font-weight:800; }
+.treeRocketToolbar { display:flex; min-height:42px; flex-wrap:nowrap; align-items:center; gap:7px; overflow:hidden; }
+.treeRocketBrowseLabel { flex:0 0 auto; color:#adc9df; font-size:10px; font-weight:900; }
+.treeRocketModeButtons { display:flex; flex:0 0 auto; gap:3px; }
+.treeRocketModeButtons button,.treeRocketTabs button { min-height:30px; padding:4px 9px; border:1px solid #b3d9f04a; border-radius:7px; color:#d7eaf8; background:#122c49dc; cursor:pointer; font-size:10px; font-weight:850; }
+.treeRocketModeButtons button.active,.treeRocketTabs button.active { border-color:#85c8ed99; background:#235274d9; color:#fff; }
+.treeRocketModeButtons button:disabled { opacity:.55; cursor:default; }
+.treeRocketToolbar .treeRocketTabs { flex:0 0 auto; }
+.treeRocketToolbar .treeRocketSearch { max-width:none; min-width:120px; flex:1 1 260px; }
+.treeRocketBreadcrumbs { display:flex; min-width:0; width:min(1180px,calc(100% - clamp(32px,6vw,76px))); min-height:31px; align-items:center; gap:4px; margin:0 auto; overflow:auto; color:#a8c6de; }
+.treeRocketBreadcrumbs button { display:inline-flex; flex:0 0 auto; align-items:center; gap:4px; padding:4px 7px; border:0; border-radius:5px; color:#cfe7fa; background:transparent; cursor:pointer; font-size:10px; font-weight:800; }
+.treeRocketBreadcrumbs button:hover { background:#ffffff12; }
+.worldObsidianAutoSync { display:flex; align-items:flex-start; gap:8px; padding:8px; border:1px solid #d9e5ee; border-radius:8px; background:#f7fbfe; color:#3b5870; cursor:pointer; }
+.worldObsidianAutoSync input { margin-top:2px; }
+.worldObsidianAutoSync span { display:grid; gap:2px; }
+.worldObsidianAutoSync strong { font-size:10px; }
+.worldObsidianAutoSync small { color:#74889a; font-size:9px; font-weight:500; line-height:1.35; }
+.worldObsidianSources { padding:8px 10px; border:1px solid #d9e4ed; border-radius:8px; background:#fbfdff; }
+.worldObsidianSources summary { display:flex; align-items:center; gap:8px; color:#3c5a72; cursor:pointer; font-size:11px; font-weight:850; }
+.worldObsidianSources summary small { color:#778b9b; font-size:9px; font-weight:650; }
+.worldObsidianSourceActions,.worldObsidianThreadActions { display:flex; align-items:center; gap:6px; margin:8px 0; }
+.worldObsidianSourceActions button,.worldObsidianThreadActions button,.worldObsidianLoadMore { padding:4px 7px; border:1px solid #cad9e5; border-radius:6px; color:#3d607a; background:#fff; cursor:pointer; font-size:9px; font-weight:800; }
+.worldObsidianSourceGroups { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin-top:7px; }
+.worldObsidianSourceGroups fieldset { display:grid; align-content:start; gap:6px; min-width:0; padding:7px; border:1px solid #e0e8ef; border-radius:7px; }
+.worldObsidianSourceGroups legend { padding:0 4px; color:#60798e; font-size:9px; font-weight:900; }
+.worldObsidianSourceGroups fieldset>label,.worldObsidianThreadList>label { display:flex; align-items:flex-start; gap:6px; min-width:0; color:#405c73; cursor:pointer; }
+.worldObsidianSourceGroups fieldset>label input,.worldObsidianThreadList>label input { flex:0 0 auto; margin-top:2px; }
+.worldObsidianSourceGroups fieldset>label span,.worldObsidianThreadList>label span { display:grid; min-width:0; gap:2px; }
+.worldObsidianSourceGroups fieldset>label strong,.worldObsidianThreadList>label strong { overflow:hidden; font-size:9px; text-overflow:ellipsis; }
+.worldObsidianSourceGroups fieldset>label small,.worldObsidianThreadList>label small { color:#7a8c9a; font-size:8px; font-weight:500; line-height:1.3; }
+.worldObsidianThreads { display:grid; gap:5px; margin:3px 0 0 18px; padding:7px; border-radius:6px; background:#f4f8fc; }
+.worldObsidianThreads>strong { color:#49667e; font-size:9px; }
+.worldObsidianThreads>p { margin:0; font-size:9px; }
+.worldObsidianThreadMode { display:flex; flex-wrap:wrap; gap:8px; }
+.worldObsidianThreadMode label { display:flex; align-items:center; gap:4px; color:#4c6479; font-size:9px; }
+.worldObsidianThreadActions { margin:2px 0; }
+.worldObsidianThreadActions span { margin-right:auto; color:#718597; font-size:9px; }
+.worldObsidianThreadList { display:grid; max-height:160px; gap:5px; overflow:auto; padding:5px; border:1px solid #dce6ee; border-radius:6px; background:#fff; }
+.worldObsidianThreadStatus { display:flex; align-items:center; gap:4px; color:#70869a; font-size:9px; }
+.worldObsidianLoadMore { justify-self:start; }
+.worldObsidianSyncSummary { display:grid; gap:3px; padding:8px 9px; border-radius:7px; color:#5c7488; background:#f4f8fb; font-size:9px; line-height:1.35; overflow-wrap:anywhere; }
+.worldObsidianSyncSummary strong { color:#3d5c73; font-size:10px; }
+.obsidianAutoSyncWarning { position:fixed; z-index:10001; top:8px; right:52px; display:flex; max-width:min(560px,calc(100vw - 110px)); align-items:center; gap:9px; padding:8px 10px; border:1px solid #e7c58e; border-radius:8px; color:#714d17; background:#fff7e6; box-shadow:0 5px 16px #1a30441f; font-size:10px; }
+.obsidianAutoSyncWarning button { border:0; color:inherit; background:transparent; cursor:pointer; font-size:16px; }
+.obsidianAutoSyncWarning > span { min-width:0; flex:1 1 auto; overflow-wrap:anywhere; }
+.obsidianAutoSyncWarning .obsidianAutoSyncSettingsButton { flex:0 0 auto; padding:4px 7px; border:1px solid #d7b77e; border-radius:5px; background:#fff1d2; font-size:9px; font-weight:750; white-space:nowrap; }
 .treeRocketGraphCanvas:has(.rootNodes) .treeRocketChildren.rootNodes { grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),220px)); gap:14px; }
-.treeRocketChildren { grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),220px)); gap:14px; }
 .treeRocketSearchGraph { grid-template-columns:repeat(auto-fit,minmax(min(190px,100%),220px)); gap:14px; }
 .treeRocketNode { max-width:220px; min-height:124px; padding:15px 9px 8px; }
 .treeRocketRootNode { width:min(230px,100%); max-width:230px; min-height:124px; }
-.treeRocketGraphStage > .treeRocketRootNode { width:min(230px,100%); max-width:230px; }
-.treeRocketNodeEnter { gap:6px; padding:20px 8px 44px; }
-.treeRocketNodeIcon svg { width:21px; height:21px; }
-.treeRocketNodeEnter strong,.treeRocketRootNode .treeRocketNodeEnter strong { font-size:14px; line-height:1.22; }
-.treeRocketNodeEnter .treeRocketNodeCount { font-size:9px; }
-.treeRocketNodeActions { gap:3px; }
-.treeRocketNodeActions button { min-height:31px; gap:3px; padding:3px; font-size:9px; }
-@media(max-width:650px) { .worldEmailAccountFields { grid-template-columns:minmax(0,1fr); }.treeRocketOriginPicker { flex:1 1 100%; }.treeRocketNode { max-width:220px; min-height:120px; } }
-@media(prefers-reduced-motion:reduce) { .appLogoButton .appLogo,.appLogoButton:hover .appLogo,.appLogoButton:focus-visible .appLogo { transition:none; transform:none; filter:none; }.appLogoButton.isLaunching .appLogo { animation:none; } }
+@media(max-width:650px) { .worldEmailAccountFields { grid-template-columns:minmax(0,1fr); }.treeRocketToolbar { min-height:auto; flex-wrap:wrap; gap:5px; }.treeRocketToolbar .treeRocketSearch { min-width:100%; flex-basis:100%; order:2; }.treeRocketBrowseLabel { display:none; }.treeRocketBreadcrumbs { width:calc(100% - 16px); }.worldObsidianSourceGroups { grid-template-columns:minmax(0,1fr); }.treeRocketNode { max-width:220px; min-height:120px; } }
 
 /* Per-world graph and Gmail conversation views. */
-.appLogoButton { display:flex; align-items:center; justify-content:center; padding:0; border:0; background:transparent; cursor:pointer; }
-.worldCardActions { display:grid; gap:7px; }
+.sourcesAddButton { border-color:#8fc8ed; background:linear-gradient(180deg,#e9f7ff,#b8e2fa); color:#22618e; transition:transform .16s ease,background-color .16s ease,border-color .16s ease,box-shadow .16s ease; }
+.sourcesAddButton:hover { border-color:#58aee4; background:linear-gradient(180deg,#d9f1ff,#9bd5f7); box-shadow:0 2px 7px #4d9ed333; transform:translateY(-1px); }
+.sourcesAddButton:focus-visible,.pageNavigation .pageMenuItems button:focus-visible { outline:3px solid #77c5f2; outline-offset:2px; }
+.pageNavigation .pageMenuItems button { transition:background-color .14s ease,color .14s ease; }
+.pageNavigation .pageMenuItems button:not(.active):hover { background:linear-gradient(180deg,#e4f5ff,#c7eaff); color:#1e5c85; }
+.folderTableHead { font-size:11px; letter-spacing:.035em; }
+.treeRocketGraphHeading:has(.treeRocketDesktopHint) { flex-wrap:wrap; }
+.treeRocketDesktopHint { flex:0 0 100%; color:#bfd2e1; font-size:10px; line-height:1.35; }
+.emailConversationError { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.emailConversationError button { flex:0 0 auto; padding:4px 10px; border:1px solid #d79d94; border-radius:6px; background:#fff; color:#8b332a; cursor:pointer; font:inherit; font-weight:750; }
+.emailConversationError button:hover:not(:disabled) { background:#fff4f1; }
+.emailConversationError button:focus-visible { outline:3px solid #8bcaf0; outline-offset:2px; }
+@media (prefers-reduced-motion:reduce) {
+  .sourcesAddButton,.pageNavigation .pageMenuItems button { transition:none; }
+  .sourcesAddButton:hover { transform:none; }
+}
+.worldCardActions { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); align-items:stretch; gap:7px; }
+.worldCardActions .worldSelectButton,.worldCardActions .worldGraphButton { min-width:0; min-height:38px; margin-top:0; padding:7px 6px; font-size:clamp(10px,.82vw,12px); }
 .worldGraphButton,.worldGraphEnable { display:flex; align-items:center; justify-content:center; gap:7px; border:1px solid #b8d9ed; border-radius:10px; background:#f5fbff; color:#286082; padding:8px 12px; font-weight:750; cursor:pointer; }
+.worldCardActions .worldGraphButton { gap:5px; white-space:nowrap; }
 .worldGraphEnable { justify-content:flex-start; padding:12px; text-align:left; }
 .worldGraphEnable input { flex:none; }
 .worldGraphEnable span { display:grid; gap:4px; }
 .worldGraphEnable small { color:#60798c; font-weight:500; line-height:1.45; }
-.planetGraphPage { position:fixed; z-index:1800; inset:0; display:flex; flex-direction:column; overflow:hidden; padding:20px clamp(16px,4vw,64px) 24px; color:#edf6ff; background:radial-gradient(ellipse at 50% 44%,#132b48 0,#08182c 48%,#050d19 100%); }
+.planetGraphPage { position:fixed; z-index:1800; inset:0; display:flex; flex-direction:column; overflow-y:auto; overflow-x:hidden; padding:20px clamp(16px,4vw,64px) 24px; color:#edf6ff; background:radial-gradient(ellipse at 50% 44%,#132b48 0,#08182c 48%,#050d19 100%); }
 .planetGraphStars { position:absolute; inset:0; pointer-events:none; opacity:.28; background-image:radial-gradient(#fff 1px,transparent 1.5px),radial-gradient(#93caff 1px,transparent 1.5px); background-position:0 0,37px 61px; background-size:79px 79px,113px 113px; }
 .planetGraphHeader { position:relative; z-index:1; display:grid; grid-template-columns:minmax(190px,1fr) auto minmax(300px,1fr); align-items:center; gap:18px; width:min(100%,1500px); margin:0 auto 12px; }
 .planetGraphBack,.planetGraphHeaderActions>button,.planetGraphDetails button,.planetGraphEmpty button { display:flex; align-items:center; justify-content:center; gap:7px; min-height:38px; padding:7px 12px; border:1px solid #6b8ead80; border-radius:10px; color:#e9f5ff; background:#16304a; cursor:pointer; font-weight:700; }
 .planetGraphTitle { display:flex; align-items:center; gap:12px; white-space:nowrap; }
 .planetGraphTitle>svg { color:#82cbff; }
+.planetGraphTitle>img { display:block; width:30px; height:30px; flex:0 0 auto; object-fit:contain; }
 .planetGraphTitle h1 { margin:0; font-size:clamp(20px,2.6vw,32px); }
+.planetGraphTitle h1 { color:#fff; }
 .planetGraphTitle p { margin:3px 0 0; color:#a8c3d9; font-size:12px; }
 .planetGraphHeaderActions { display:flex; justify-content:flex-end; gap:8px; }
 .planetGraphSearch,.emailConversationSearch { display:flex; align-items:center; gap:8px; min-width:0; padding:0 10px; border:1px solid #7c9db877; border-radius:10px; background:#0b1d30; color:#9bbbd5; }
 .planetGraphSearch input,.emailConversationSearch input { width:100%; min-width:0; height:38px; border:0; outline:0; color:inherit; background:transparent; }
-.planetGraphWorkspace { position:relative; z-index:1; flex:1; min-height:0; width:min(100%,1500px); margin:auto; overflow:hidden; border:1px solid #6f99bd4d; border-radius:18px; background:radial-gradient(ellipse at center,#122c477d,#081526bd); }
+.planetGraphWorkspace { position:relative; z-index:1; flex:0 0 auto; height:clamp(380px,62vh,760px); min-height:360px; width:min(100%,1500px); margin:0 auto 14px; overflow:hidden; border:1px solid #6f99bd4d; border-radius:18px; background:radial-gradient(ellipse at center,#122c477d,#081526bd); }
 .planetGraphCanvas { display:block; width:100%; height:100%; touch-action:none; cursor:grab; }
 .planetGraphCanvas:active { cursor:grabbing; }
 .planetGraphEdge { stroke:#75bff755; stroke-width:1.5; }
@@ -6196,6 +6229,8 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .planetGraphNode.calendar-event circle,.planetGraphNode.reminder circle { fill:#4eaa88; stroke:#b4f1d8; }
 .planetGraphNode.search circle,.planetGraphNode.activity circle { fill:#5274bb; stroke:#c1d2ff; }
 .planetGraphNode text { text-anchor:middle; fill:#e5f3ff; font:12px system-ui,sans-serif; paint-order:stroke; stroke:#081526; stroke-width:4px; stroke-linejoin:round; pointer-events:none; }
+.planetGraphNode.dense[class*="knowledge-"] text { opacity:0; }
+.planetGraphNode.dense[class*="knowledge-"]:hover text,.planetGraphNode.dense[class*="knowledge-"]:focus text,.planetGraphNode.dense[class*="knowledge-"].selected text { opacity:1; }
 .planetGraphZoom { position:absolute; right:12px; bottom:12px; display:flex; align-items:center; gap:5px; padding:5px; border:1px solid #7696b66b; border-radius:10px; background:#09192be8; }
 .planetGraphZoom button { display:grid; place-items:center; min-width:30px; height:30px; border:0; border-radius:7px; color:#e8f5ff; background:#193650; cursor:pointer; }
 .planetGraphZoom span { min-width:42px; text-align:center; font-size:12px; }
@@ -6209,6 +6244,45 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .planetGraphError { color:#ffc0b5; }
 .planetGraphWarning,.planetGraphWarnings { color:#ffe1a1; }
 .planetGraphWarnings summary { cursor:pointer; }
+@media(max-width:520px) { .worldCardActions { grid-template-columns:minmax(0,1fr); } }
+.planetGraphTypeFilter { display:flex; align-items:center; gap:5px; padding:0 8px; border:1px solid #7c9db877; border-radius:10px; color:#c5d9e9; background:#0b1d30; font-size:11px; }
+.planetGraphTypeFilter select { max-width:120px; height:36px; border:0; outline:0; color:#e9f5ff; background:transparent; }
+.planetGraphTypeFilter option { color:#142337; }
+.planetGraphChat { position:relative; z-index:1; width:min(100%,1500px); flex:0 0 auto; margin:0 auto 16px; padding:14px; border:1px solid #6f99bd4d; border-radius:16px; background:#08192bd9; }
+.planetGraphChat>header { display:flex; align-items:center; gap:10px; margin-bottom:10px; color:#94d5ff; }
+.planetGraphChat>header h2 { margin:0; color:#edf6ff; font-size:16px; }
+.planetGraphChat>header p { margin:3px 0 0; color:#a8c3d9; font-size:11px; }
+.planetGraphChatMessages { display:flex; flex-direction:column; gap:8px; max-height:260px; overflow:auto; padding:4px 2px; }
+.planetGraphChatEmpty { margin:3px 0; color:#aec4d8; font-size:13px; }
+.planetGraphChatTurn { padding:9px 11px; border:1px solid #6f99bd35; border-radius:11px; background:#10253a; }
+.planetGraphChatTurn p { margin:3px 0 7px; font-size:13px; }
+.planetGraphChatQuestion { color:#93d4ff; font-weight:700; }
+.planetGraphCitations { display:flex; align-items:center; gap:6px; flex-wrap:wrap; color:#a9c6dd; font-size:11px; }
+.planetGraphCitations button { display:flex; align-items:center; gap:5px; max-width:260px; padding:4px 7px; overflow:hidden; border:1px solid #6e9fc655; border-radius:8px; color:#dff3ff; background:#17334d; cursor:pointer; text-overflow:ellipsis; white-space:nowrap; }
+.planetGraphConnections { position:relative; z-index:2; display:flex; align-items:center; gap:7px; flex-wrap:wrap; width:min(100%,1500px); margin:0 auto 10px; color:#b7d6ec; font-size:12px; }
+.planetGraphConnections>button { display:flex; align-items:center; gap:6px; max-width:260px; padding:5px 8px; border:1px solid #6e9fc655; border-radius:8px; color:#dff3ff; background:#17334d; cursor:pointer; }
+.planetGraphConnections>button span { color:#a7c0d3; font-size:10px; }
+.planetGraphConnections>button b { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.planetGraphChatForm { display:flex; gap:8px; margin-top:10px; }
+.planetGraphChatForm input { flex:1; min-width:0; height:40px; padding:0 11px; border:1px solid #769ab777; border-radius:10px; color:#edf6ff; background:#071525; }
+.planetGraphChatForm button { display:flex; align-items:center; gap:6px; min-height:40px; padding:0 13px; border:1px solid #65b6eb88; border-radius:10px; color:#f2faff; background:#18527a; cursor:pointer; font-weight:700; }
+.planetGraphChatForm button:disabled { opacity:.55; cursor:not-allowed; }
+.planetGraphHeaderActions .planetGraphAddChat { border-color:#68b9eb88; background:#174b70; }
+.planetGraphChatSelectorScrim { position:fixed; z-index:4; inset:0; display:grid; place-items:center; padding:20px; background:#020914ba; }
+.planetGraphChatSelector { display:flex; flex-direction:column; width:min(620px,100%); max-height:min(720px,88vh); overflow:hidden; border:1px solid #6384a177; border-radius:16px; color:#edf6ff; background:#10243a; box-shadow:0 24px 80px #0009; }
+.planetGraphChatSelector>header,.planetGraphChatSelector>footer { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:14px 16px; border-bottom:1px solid #ffffff20; }
+.planetGraphChatSelector>header h2,.planetGraphChatSelector>header p { margin:0; }
+.planetGraphChatSelector>header h2 { font-size:17px; }
+.planetGraphChatSelector>header p,.planetGraphChatSelector>footer span { margin-top:4px; color:#adc5d9; font-size:11px; }
+.planetGraphChatSelector>header button,.planetGraphChatSelector>footer button { display:flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid #7799b577; border-radius:8px; color:#edf6ff; background:#183852; cursor:pointer; }
+.planetGraphChatSelectorRows { min-height:0; overflow:auto; padding:8px 12px; }
+.planetGraphChatSelectorRows>label { display:flex; align-items:flex-start; gap:10px; padding:10px 5px; border-bottom:1px solid #ffffff14; cursor:pointer; }
+.planetGraphChatSelectorRows>label>input { margin-top:3px; }
+.planetGraphChatSelectorRows>label>span { display:grid; min-width:0; gap:3px; }
+.planetGraphChatSelectorRows strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.planetGraphChatSelectorRows small,.planetGraphChatSelectorRows em { overflow:hidden; color:#adc5d9; font-size:10px; font-style:normal; text-overflow:ellipsis; white-space:nowrap; }
+.planetGraphChatSelector>footer { border-top:1px solid #ffffff20; border-bottom:0; }
+.planetGraphChatSelector>footer span { margin:0; }
 .planetGraphEmpty { position:relative; z-index:1; display:grid; justify-items:center; align-content:center; flex:1; gap:10px; text-align:center; }
 .planetGraphEmpty h2,.planetGraphEmpty p { margin:0; }
 .planetGraphSpin { animation:planetGraphSpin 1s linear infinite; }
@@ -6222,10 +6296,36 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .emailConversationsTitle strong { font-size:16px; }
 .emailConversationsTitle small { color:#73889a; }
 .emailConversationsHeader .emailGraphButton { color:#2473a3; }
+.emailConversationsHeader .emailAddChatButton { color:#2473a3; background:#edf7fc; }
+.emailAddChatScrim { position:fixed; z-index:2100; inset:0; display:grid; place-items:center; padding:20px; background:#06111ccc; }
+.emailAddChatDialog { display:flex; flex-direction:column; width:min(620px,100%); max-height:min(720px,88vh); overflow:hidden; border:1px solid #d5e2eb; border-radius:16px; color:#243e51; background:#fff; box-shadow:0 24px 80px #0005; }
+.emailAddChatDialog>header,.emailAddChatDialog>footer { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:13px 16px; border-bottom:1px solid #e3ebf1; }
+.emailAddChatDialog>header h2,.emailAddChatDialog>header p { margin:0; }
+.emailAddChatDialog>header h2 { font-size:17px; }
+.emailAddChatDialog>header p,.emailAddChatDialog>footer span { margin-top:4px; color:#74899a; font-size:11px; }
+.emailAddChatDialog>header button,.emailAddChatDialog>footer button { display:flex; align-items:center; gap:6px; padding:6px 10px; border:1px solid #d5e1ea; border-radius:8px; color:#31526a; background:#f8fbfd; cursor:pointer; }
+.emailAddChatRows { min-height:0; overflow:auto; padding:8px 12px; }
+.emailAddChatRows>label { display:flex; align-items:flex-start; gap:10px; padding:10px 5px; border-bottom:1px solid #eaf0f4; cursor:pointer; }
+.emailAddChatRows>label>input { margin-top:3px; }
+.emailAddChatRows>label>span { display:grid; min-width:0; gap:3px; }
+.emailAddChatRows strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.emailAddChatRows small,.emailAddChatRows em { overflow:hidden; color:#71879a; font-size:10px; font-style:normal; text-overflow:ellipsis; white-space:nowrap; }
+.emailAddChatDialog>footer { border-top:1px solid #e3ebf1; border-bottom:0; }
+.emailAddChatDialog>footer span { margin:0; }
+.emailAddChatSearch { display:flex; align-items:center; gap:7px; }
+.emailAddChatSearch input { min-width:0; flex:1; }
+.emailAddChatSearch button,.emailLoadEarlierMessages { display:inline-flex; flex:0 0 auto; align-items:center; justify-content:center; gap:6px; padding:7px 10px; border:1px solid #d5e1ea; border-radius:8px; color:#31526a; background:#f8fbfd; cursor:pointer; font:inherit; font-size:11px; font-weight:750; }
+.emailAddChatSearch button:disabled,.emailLoadEarlierMessages:disabled { cursor:wait; opacity:.6; }
+.emailLoadEarlierMessages { display:flex; width:max-content; margin:0 auto 10px; }
+.emailAddChatLoadMore { display:flex; align-items:center; justify-content:center; gap:7px; flex:0 0 auto; margin:0 12px 8px; padding:9px; border:1px solid #d5e1ea; border-radius:8px; color:#31526a; background:#f8fbfd; cursor:pointer; }
+.emailAddChatLoadMore:disabled { cursor:wait; opacity:.65; }
 .emailConversationLayout { display:grid; grid-template-columns:minmax(250px,340px) minmax(0,1fr); flex:1; min-height:0; }
 .emailConversationList { display:flex; flex-direction:column; min-height:0; border-right:1px solid #e3ebf0; }
 .emailConversationSearch { margin:10px; border-color:#dce5ec; background:#fbfdfe; color:#748b9b; }
 .emailConversationRows { flex:1; min-height:0; overflow:auto; }
+.emailConversationGroup { min-width:0; }
+.emailConversationGroup>h3 { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:0; padding:7px 12px; color:#385971; background:#f4f8fb; font-size:10px; font-weight:800; }
+.emailConversationGroup>h3 small { color:#8396a5; font-size:9px; font-weight:600; }
 .emailConversationRow { display:grid; gap:4px; width:100%; padding:11px 13px; border:0; border-bottom:1px solid #eaf0f4; color:#314b60; text-align:left; background:#fff; cursor:pointer; }
 .emailConversationRow.active { background:#eaf6fd; box-shadow:inset 3px 0 #338bbd; }
 .emailConversationRowTop { display:flex; align-items:center; justify-content:space-between; gap:8px; }
@@ -6276,3 +6376,752 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 @media(max-width:850px){.planetGraphHeader{grid-template-columns:1fr auto;}.planetGraphTitle{grid-row:1;grid-column:1/-1;justify-self:center;}.planetGraphHeaderActions{grid-column:1/-1;}.planetGraphBack{grid-row:2}.emailConversationsPage{height:calc(100vh - 155px)}.emailConversationLayout{grid-template-columns:minmax(180px,250px) minmax(0,1fr)}}
 @media(max-width:620px){.planetGraphPage{padding:10px}.planetGraphHeader{gap:8px}.planetGraphTitle{justify-self:start}.planetGraphTitle h1{font-size:20px}.planetGraphBack{min-height:33px;padding:5px 8px;font-size:11px}.planetGraphHeaderActions{flex-wrap:wrap}.planetGraphSearch{flex:1 1 100%}.planetGraphWorkspace{border-radius:12px}.emailConversationsPage{height:calc(100vh - 145px);min-height:400px}.emailConversationLayout{grid-template-columns:1fr;grid-template-rows:minmax(120px,33%) minmax(0,1fr)}.emailConversationList{border-right:0;border-bottom:1px solid #e3ebf0}.emailConversationRows{display:flex;overflow-x:auto;overflow-y:hidden}.emailConversationRow{flex:0 0 235px;border-right:1px solid #eaf0f4}.emailConversationAccount{display:none}.emailThreadHeading{flex-wrap:wrap}.emailThreadHeading>div{flex:1 1 100%}.emailReplyTitle{display:grid}}
 @media(prefers-reduced-motion:reduce){.planetGraphSpin,.planetGraphNode circle{animation:none!important;transition:none!important}}
+
+/* Follow-up: keep the Applications view inside the workspace viewport. */
+.app:has(.applicationsView) { display:flex; height:100vh; height:100dvh; min-height:0; flex-direction:column; overflow:hidden; padding-bottom:0; }
+.app:has(.applicationsView) > .appHeader { flex:0 0 96px; }
+.app:has(.applicationsView) > .pageFrame { width:100%; min-height:0; height:100%; flex:1 1 0; overflow:hidden; }
+.applicationsView { width:100%; height:100%; min-height:0; overflow:hidden; }
+.applicationsWorkspace { display:flex; width:100%; height:100%; min-height:0; flex-direction:column; overflow:hidden; padding:16px 20px; }
+.applicationsWorkspace > header { flex:0 0 auto; }
+.applicationsWorkspace > .applicationsLayout { display:flex; min-height:0; flex:1 1 0; overflow:hidden; padding-top:12px; }
+.applicationsWorkspace .applicationsGrid { width:100%; min-width:0; min-height:0; overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; }
+@media(max-width:900px) { .applicationsWorkspace > header { flex:0 0 auto; }.applicationsWorkspace > .applicationsLayout { display:flex; min-height:0; flex:1 1 0; }.applicationsWorkspace .applicationsGrid { align-content:start; } }
+
+/* Tree Rocket Browse and view/search controls share a stable compact height. */
+.treeRocketToolbar { height:auto; min-height:42px; }
+.treeRocketBrowseSelect { display:flex; min-height:30px; flex:0 0 auto; align-items:center; gap:6px; padding:0 7px; border:1px solid #b3d9f04a; border-radius:7px; color:#adc9df; background:#122c49dc; font-size:10px; font-weight:850; }
+.treeRocketBrowseSelect select { min-width:106px; height:28px; padding:0 22px 0 7px; border:1px solid #b3d9f04a; border-radius:5px; color:#e6f5ff; background:#091a2e; font:inherit; }
+.treeRocketToolbar .treeRocketTabs,.treeRocketToolbar .treeRocketSearch { height:30px; min-height:30px; box-sizing:border-box; }
+.treeRocketToolbar .treeRocketTabs button,.treeRocketToolbar .treeRocketAppsRefresh { min-height:28px; box-sizing:border-box; }
+.treeRocketToolbar .treeRocketSearch input,.treeRocketToolbar .treeRocketSearch button { height:28px; min-height:28px; box-sizing:border-box; }
+@media(max-width:650px) { .treeRocketToolbar { height:auto; min-height:42px; flex-wrap:wrap; overflow:visible; }.treeRocketBrowseSelect { flex:1 1 180px; }.treeRocketToolbar .treeRocketTabs { flex:0 0 auto; }.treeRocketToolbar .treeRocketSearch { order:initial; min-width:100%; flex:1 1 100%; } }
+
+/* The graph introduction is one responsive informational strip, not an empty-state panel. */
+.planetGraphChat { min-height:0; }
+.planetGraphChat>header { align-items:flex-start; margin-bottom:8px; }
+.planetGraphChatIntro { display:flex; min-width:0; flex:1 1 auto; flex-wrap:wrap; align-items:baseline; gap:3px 14px; }
+.planetGraphChatIntro h2 { flex:0 0 auto; }
+.planetGraphChatIntro p { margin:0; color:#a8c3d9; font-size:11px; line-height:1.4; }
+.planetGraphChatMessages { min-height:0; }
+.planetGraphChat:has(.planetGraphChatTurn) .planetGraphChatMessages { max-height:260px; }
+.planetGraphChat:not(:has(.planetGraphChatTurn)) .planetGraphChatMessages { display:none; }
+@media(max-width:700px) { .planetGraphChatIntro { align-items:flex-start; flex-direction:column; gap:2px; }.planetGraphChatIntro h2 { margin-bottom:2px; } }
+
+/* Planet graph uses a bounded workspace: chat left, graph right, each scrolling internally. */
+.planetGraphPage { overflow:hidden; }
+.planetGraphSplitLayout { position:relative; z-index:1; display:grid; width:100%; min-height:0; flex:1 1 0; grid-template-columns:minmax(265px,.82fr) minmax(0,1.5fr); grid-template-rows:minmax(0,1fr) auto; gap:12px; }
+.planetGraphWorkspace { grid-column:2; grid-row:1; width:100%; height:100%; min-height:0; margin:0; }
+.planetGraphChat { display:grid; min-width:0; min-height:0; grid-column:1; grid-row:1 / span 2; grid-template-rows:auto minmax(0,1fr) auto; margin:0; overflow:hidden; }
+.planetGraphChatMessages { max-height:none!important; min-height:0; overflow:auto; }
+.planetGraphChat:not(:has(.planetGraphChatTurn)) .planetGraphChatMessages { display:flex; }
+.planetGraphConnections { grid-column:2; grid-row:2; max-height:clamp(80px,20vh,170px); overflow:auto; }
+.planetGraphWarnings,.planetGraphError,.planetGraphWarning { max-width:100%; }
+@media(max-width:760px) {
+  .planetGraphPage { height:100dvh; min-height:0; overflow:hidden; padding:8px; }
+  .planetGraphHeader { flex:0 0 auto; }
+  .planetGraphSplitLayout { flex:1 1 0; min-height:0; grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,.82fr) minmax(0,1fr) minmax(0,12dvh); gap:7px; overflow:hidden; }
+  .planetGraphSplitLayout:not(:has(.planetGraphConnections)) { grid-template-rows:minmax(0,.82fr) minmax(0,1fr); }
+  .planetGraphChat { grid-column:1; grid-row:1; min-height:0; padding:9px; }
+  .planetGraphChat>header { min-height:0; margin-bottom:4px; }
+  .planetGraphChatMessages { min-height:0; overflow:auto; }
+  .planetGraphWorkspace { grid-column:1; grid-row:2; min-height:0; height:100%; }
+  .planetGraphConnections { grid-column:1; grid-row:3; min-height:0; max-height:none; margin:0; overflow:auto; }
+}
+
+/* Planet settings disclose sections without unmounting their edited controls. */
+.worldSettingsDisclosure { min-width:0; border:1px solid #d2e0eb; border-radius:10px; background:#fff; }
+.worldSettingsDisclosure>summary { display:flex; min-height:42px; align-items:center; gap:9px; padding:9px 12px; border-radius:9px; color:#31516b; cursor:pointer; font-size:13px; font-weight:800; list-style:none; }
+.worldSettingsDisclosure>summary::-webkit-details-marker { display:none; }
+.worldSettingsDisclosure>summary::after { content:"＋"; margin-left:auto; color:#5f7890; font-size:14px; }
+.worldSettingsDisclosure[open]>summary::after { content:"−"; }
+.worldSettingsDisclosure>summary:focus-visible { outline:3px solid #86c9f2; outline-offset:2px; }
+.worldSettingsDisclosure>.worldSettingsDisclosureBody { display:grid; min-width:0; gap:10px; padding:0 10px 10px; }
+.worldSettingsDisclosure>.worldSettingsDisclosureBody>.worldEmailAccountEditor,.worldSettingsDisclosure>.worldSettingsDisclosureBody>.worldObsidianEditor,.worldSettingsDisclosure>.worldSettingsDisclosureBody>.worldAgentsEditor,.worldSettingsDisclosure>.worldSettingsDisclosureBody>.worldActivityEmailEditor { border-color:#e1eaf1; }
+
+/* Keep the page navigation in the same soft-blue family as the Sources add action. */
+.pageNavigation .pageMenu { border-color:#8fc8ed; background:linear-gradient(180deg,#e9f7ff,#b8e2fa); box-shadow:0 2px 7px rgba(52,132,183,.13); }
+.pageNavigation .pageMenuItems button { color:#285b7c; }
+.pageNavigation .pageMenuItems button:hover { background:linear-gradient(180deg,#dff3ff,#b8e5fc); color:#174f79; }
+.pageNavigation .pageMenuItems button.active { background:linear-gradient(180deg,#c8edff,#8ed1f5); color:#123b63; }
+
+/* Tree Rocket folder connections are measured from the root to visible folder cards. */
+.treeRocketEdges { position:absolute; z-index:0; inset:0; width:100%; height:100%; overflow:visible; pointer-events:none; }
+.treeRocketEdges path { fill:none; stroke:#8bd0edb8; stroke-width:2; vector-effect:non-scaling-stroke; }
+.treeRocketFileNode { min-height:112px; align-content:center; justify-items:center; padding:12px; }
+.treeRocketFileNode > strong { display:-webkit-box; width:100%; max-height:2.6em; overflow:hidden; color:#24445d; font-size:12px; line-height:1.3; text-align:center; text-overflow:ellipsis; overflow-wrap:anywhere; -webkit-box-orient:vertical; -webkit-line-clamp:2; }
+.treeRocketFileNodeIcon { display:grid; min-height:30px; place-items:center; }
+.treeRocketFileNode > button { display:inline-flex; min-height:26px; align-items:center; justify-content:center; gap:5px; padding:4px 7px; border:1px solid #c3d7e5; border-radius:7px; background:#f8fcff; color:#42647c; cursor:pointer; font-size:9px; font-weight:750; }
+.treeRocketLoadMoreFiles { grid-column:1/-1; }
+.treeRocketFileList .treeRocketLoadMore { width:100%; }
+@media(prefers-reduced-motion:reduce) { .treeRocketEdges path { transition:none; } }
+
+/* The conversation page fills the actual workspace below the fixed-height header. */
+.app:has(.emailConversationsPage) { display:flex; height:100vh; height:100dvh; min-height:0; flex-direction:column; overflow:hidden; padding-bottom:0; }
+.app:has(.emailConversationsPage) > .appHeader { flex:0 0 96px; }
+.app:has(.emailConversationsPage) > .pageFrame { display:flex; width:100%; min-width:0; min-height:0; height:auto; flex:1 1 0; overflow:hidden; }
+.emailConversationsPage { width:min(100%,1500px); height:100%; min-height:0; flex:1 1 0; }
+
+/* Keep page labels readable while preserving the compact shared navigation strip. */
+.pageNavigation .pageMenuItems button { min-height:36px; font-size:12px; }
+.planetGraphRelationshipGuide { position:relative; z-index:1; width:min(100%,1500px); margin:-3px auto 9px; padding:7px 10px; border:1px solid #6f99bd4d; border-radius:9px; color:#dceeff; background:#0c2036c9; font-size:11px; }
+.planetGraphRelationshipGuide summary { cursor:pointer; font-weight:750; }
+.planetGraphRelationshipGuide[open] { display:grid; grid-template-columns:minmax(210px,.34fr) minmax(0,1fr); align-items:start; gap:4px 14px; }
+.planetGraphRelationshipGuide[open] summary { padding-top:1px; }
+.planetGraphRelationshipGuide p { max-width:none; margin:0; color:#b8cee0; font-size:11px; line-height:1.45; }
+@media(max-width:700px) { .planetGraphRelationshipGuide[open] { grid-template-columns:minmax(0,1fr); gap:6px; } }
+
+/* Keep the graph exit control visually identical to the Change World back action. */
+.planetGraphBack.worldBackButton { display:inline-flex; width:max-content; min-height:38px; align-items:center; justify-content:center; gap:7px; padding:0 12px; border:1px solid rgba(177,210,241,.36); border-radius:9px; color:#e2f1ff; background:rgba(18,39,66,.77); font-size:12px; font-weight:750; backdrop-filter:blur(8px); }
+.planetGraphBack.worldBackButton:hover { border-color:#87c6f7; background:rgba(31,68,105,.86); }
+.planetGraphBack.worldBackButton:focus-visible { outline:3px solid #86c9f2; outline-offset:2px; }
+
+.planetKnowledgePanel { position:relative; z-index:1; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:9px; width:min(100%,1500px); margin:0 auto 10px; }
+.planetKnowledgePanel>div,.planetKnowledgeQuery { min-width:0; padding:10px 12px; border:1px solid #6f99bd55; border-radius:12px; background:#0b2036df; color:#e9f5ff; }
+.planetKnowledgePanel h2,.planetKnowledgeQuery h2 { margin:0; font-size:13px; }
+.planetKnowledgePanel p,.planetKnowledgeQuery p { margin:5px 0; color:#b4cbde; font-size:10px; line-height:1.45; }
+.planetKnowledgeScope>div { display:flex; flex-wrap:wrap; gap:4px; margin:7px 0; }
+.planetKnowledgeScope>div span { padding:3px 6px; border-radius:6px; background:#174568; color:#dff3ff; font-size:9px; }
+.planetKnowledgeScope>div span.disabled { background:#253644; color:#a8bac8; }
+.planetKnowledgePanel button,.planetKnowledgeQuery button { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:28px; padding:4px 8px; border:1px solid #6da8d17a; border-radius:7px; background:#153b59; color:#e8f6ff; cursor:pointer; font:inherit; font-size:10px; font-weight:750; }
+.planetKnowledgePanel button:disabled,.planetKnowledgeQuery button:disabled { cursor:not-allowed; opacity:.55; }
+.planetKnowledgePanel label { display:grid; gap:3px; margin:5px 0; color:#b4cbde; font-size:9px; }
+.planetKnowledgePanel select { max-width:100%; min-height:27px; border:1px solid #7397b477; border-radius:6px; padding:3px 7px; background:#07182a; color:#eaf6ff; }
+.planetKnowledgeRetained details { margin:5px 0; font-size:10px; }
+.planetKnowledgeRetained details ul { max-height:80px; overflow:auto; margin:4px 0; padding-left:18px; color:#ffe5b0; }
+.planetKnowledgeRetained>small { display:block; margin-top:7px; color:#9db9cf; font-size:9px; line-height:1.4; }
+.planetKnowledgeQuery { grid-column:1; grid-row:2; align-self:start; max-height:210px; overflow:auto; }
+.planetKnowledgeQuery>header { display:flex; align-items:flex-start; gap:8px; }
+.planetKnowledgeQuery>header>div { min-width:0; }
+.planetKnowledgeQuery form { display:flex; gap:6px; margin:8px 0; }
+.planetKnowledgeQuery input { min-width:0; flex:1; min-height:34px; padding:0 9px; border:1px solid #7397b477; border-radius:8px; background:#07182a; color:#eff8ff; }
+.planetKnowledgeQuery article { padding-top:5px; border-top:1px solid #ffffff20; }
+.planetKnowledgeQuery article pre { max-height:115px; overflow:auto; white-space:pre-wrap; overflow-wrap:anywhere; color:#d9eafa; font-size:9px; }
+.planetKnowledgeQuery article ul { margin:4px 0; padding-left:18px; color:#ffe5b0; font-size:10px; }
+.planetKnowledgeQuery details summary { cursor:pointer; color:#bfe7ff; font-size:10px; }
+.planetGraphSplitLayout { grid-template-rows:minmax(0,1fr) auto auto; }
+.planetGraphWorkspace { grid-column:2; grid-row:1; }
+.planetGraphChat { grid-column:1; grid-row:1; }
+.planetGraphConnections { grid-column:2; grid-row:2; }
+.planetGraphSplitLayout>.planetKnowledgeQuery { grid-column:1; grid-row:2; }
+.planetGraphSplitLayout>.planetGraphChat { grid-column:1; grid-row:1; }
+.planetGraphJobControls { display:flex; gap:6px; }
+@media(max-width:900px) { .planetKnowledgePanel { grid-template-columns:1fr; max-height:34vh; overflow:auto; }.planetGraphSplitLayout { grid-template-rows:minmax(0,1fr) auto auto; }.planetGraphSplitLayout>.planetGraphWorkspace { grid-column:1; grid-row:1; }.planetGraphSplitLayout>.planetGraphChat { grid-column:1; grid-row:2; }.planetGraphSplitLayout>.planetKnowledgeQuery { grid-column:1; grid-row:3; max-height:180px; }.planetGraphSplitLayout>.planetGraphConnections { grid-column:1; grid-row:4; } }
+.planetKnowledgePanel button:focus-visible,.planetKnowledgeQuery button:focus-visible,.planetKnowledgeQuery input:focus-visible,.planetKnowledgePanel select:focus-visible { outline:2px solid #8dd6ff; outline-offset:2px; }
+.worldKnowledgeCandidatePicker>p { margin:4px 0 7px; color:#587187; font-size:11px; line-height:1.4; }
+.worldKnowledgeCandidateSearch { display:grid; gap:4px; margin:6px 0; color:#49647b; font-size:11px; font-weight:700; }
+.worldKnowledgeCandidateSearch input { min-height:34px; padding:0 9px; border:1px solid #cad8e4; border-radius:7px; background:#fff; color:#263f55; font:inherit; }
+.worldKnowledgeCandidateSearch input:focus-visible { outline:2px solid #54a9dc; outline-offset:2px; }
+.worldKnowledgeCandidateCounts { padding:6px 8px; border:1px solid #a9c9dd; border-radius:7px; background:#f0f8fd; color:#294c64; font-weight:800; }
+.worldKnowledgeCandidateLimit { padding:6px 8px; border:1px solid #e1bd75; border-radius:7px; background:#fff7e7; color:#76521b; font-size:10px; line-height:1.4; }
+.planetGraphConnections>button { flex-direction:column; align-items:flex-start; }
+.planetGraphConnections>button small { max-width:100%; overflow-wrap:anywhere; color:#b9d0e1; font-size:9px; line-height:1.35; text-align:left; }
+
+/* Reorder replaces controls within the same grid tracks; it must not resize rows. */
+.folderTableRow,.folderTableRow.orderingFolder,.folderTableRow.orderingHead { grid-template-columns:17px 22px minmax(78px,1fr) minmax(62px,.9fr) minmax(92px,1.2fr) 54px; }
+.folderTableRow.orderingFolder .deleteFolder { display:inline-grid; visibility:hidden; }
+.folderTableRow.orderingFolder .folderOrderHandle { width:22px; min-width:22px; height:28px; }
+@media(max-width:900px) { .folderTableRow,.folderTableRow.orderingFolder,.folderTableRow.orderingHead { grid-template-columns:17px 20px minmax(62px,1fr) minmax(56px,.9fr) minmax(72px,1.15fr) 48px; } }
+@media(max-width:650px) {
+  .folderTableRow,.folderTableRow.orderingHead { grid-template-columns:17px 22px minmax(0,1.15fr) minmax(0,.9fr) minmax(0,1fr) 54px; grid-template-rows:auto auto; }
+  .folderTableRow.orderingFolder { grid-template-columns:17px 22px minmax(0,1.15fr) minmax(0,.9fr) minmax(0,1fr) 54px; grid-template-rows:auto auto; }
+  .folderTableRow.orderingFolder > .folderNameInput { grid-column:3; grid-row:1; }
+  .folderTableRow.orderingFolder > .pathInput { grid-column:4; grid-row:1; }
+  .folderTableRow.orderingFolder > input[aria-label="Folder description"] { grid-column:3/6; grid-row:2; }
+  .folderTableRow.orderingFolder > .folderRowActions { grid-column:6; grid-row:1/3; }
+}
+
+/* Keep the hidden delete heading in its track so Name and Path align with their inputs. */
+.folderTableRow,.folderTableRow.orderingFolder,.folderTableRow.orderingHead { column-gap:8px; }
+.folderTableRow.orderingHead > span:nth-child(2) { display:block; visibility:hidden; }
+.folderTableHead > span:nth-child(3),.folderTableHead > span:nth-child(4),.folderTableHead > span:nth-child(5) { box-sizing:border-box; padding-inline:6px; text-align:left; }
+
+/* Main-page navigation shares the blue add-control palette without affecting post-it actions. */
+.pageNavigation .pageMenuItems { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); }
+.pageNavigation .pageMenuItems > button { min-height:36px; }
+@media(max-width:900px) {
+  .appHeader { height:140px; }
+  .app:has(.applicationsView) > .appHeader,.app:has(.emailConversationsPage) > .appHeader { flex-basis:140px; }
+  .appLogo { top:1px; width:min(220px,34vw); max-width:34%; height:42px; }
+  .appWorldIdentity { top:7px; left:10px; max-width:calc(50% - 130px); }
+  .appAiStatus { top:44px; }
+  .pageNavigation { left:10px; right:10px; bottom:4px; }
+  .pageNavigation .pageMenuItems > button { min-height:36px; padding-inline:3px; font-size:clamp(8px,2vw,10px); }
+  .pageNavigation .pageMenuItems > button svg { width:13px; height:13px; flex-basis:13px; }
+  .appHeaderTools { top:64px; right:10px; bottom:auto; left:10px; max-width:calc(100% - 20px); overflow-x:auto; scrollbar-width:none; }
+  .appHeaderTools::-webkit-scrollbar { display:none; }
+}
+@media(max-width:500px) {
+  .appWorldIdentity > span:last-child { display:none; }
+}
+
+/* Keep Insert path and the reorder-only Style action in the same Path cell geometry. */
+.folderTableRow .pathInput { min-width:0; min-height:31px; box-sizing:border-box; }
+.folderTableRow .pathSplitControl { min-height:29px; }
+.folderTableRow .pathSplitControl button { height:29px; box-sizing:border-box; }
+.folderTableRow.orderingFolder .folderPathPreview,.folderTableRow.orderingFolder .folderAppearanceButton { height:29px; min-height:29px; box-sizing:border-box; }
+
+/* Tree Rocket keeps folders fixed while file results scroll in their own left rail. */
+.treeRocketBody.withSidebar { display:grid; grid-template-columns:minmax(210px,270px) minmax(0,1fr); grid-template-rows:minmax(0,1fr); align-items:stretch; gap:12px; }
+.treeRocketBody.withSidebar > .treeRocketGraph,.treeRocketBody.withSidebar > .treeRocketAppsPanel { grid-column:2; grid-row:1; min-width:0; }
+.treeRocketBody.withSidebar > .treeRocketFiles { position:relative; z-index:2; inset:auto; grid-column:1; grid-row:1; width:auto; height:auto; max-height:none; min-height:0; align-self:stretch; }
+.treeRocketBody.withSidebar > .treeRocketFiles > .treeRocketFileList { min-height:0; overflow:auto; overscroll-behavior:contain; }
+.treeRocketGraphStage { display:grid; grid-template-columns:minmax(170px,.34fr) minmax(0,1fr); align-items:stretch; justify-items:stretch; gap:clamp(10px,1.5vw,20px); overflow:hidden; }
+.treeRocketGraphStage > .treeRocketRootNode { width:100%; max-width:205px; min-height:118px; align-self:start; justify-self:start; }
+.treeRocketBranch { width:100%; min-width:0; height:100%; padding-top:0; }
+.treeRocketBranch > .treeRocketChildrenHeading { width:max-content; max-width:100%; margin:0 0 8px; }
+.treeRocketChildren.hasParent { align-content:start; justify-content:start; grid-template-columns:repeat(auto-fit,minmax(min(164px,100%),184px)); gap:14px; padding:6px 4px 16px; }
+.treeRocketChildren.rootNodes { justify-content:start; grid-template-columns:repeat(auto-fit,minmax(min(164px,100%),184px)); gap:14px; }
+.treeRocketNode,.treeRocketRootNode { width:100%; max-width:184px; min-height:118px; grid-template-rows:minmax(44px,1fr) auto auto; gap:4px; padding:15px 8px 7px; transition:none; }
+.treeRocketFolderTab { z-index:2; pointer-events:none; }
+.treeRocketNode:hover,.treeRocketNode:focus-within { transform:none; }
+.treeRocketNodeEnter { position:absolute; z-index:1; inset:0; width:100%; height:100%; min-height:0; align-items:start; padding:23px 8px 42px; }
+.treeRocketNodeEnter:hover { background:#fff5cd30; }
+.treeRocketNodeEnter strong { font-size:clamp(13px,1vw,15px); line-height:1.2; }
+.treeRocketNodeMeta { display:flex; min-width:0; flex-wrap:wrap; align-items:center; gap:4px 5px; color:#70879a; font-size:9px; }
+.treeRocketNodeMeta > span { display:inline-flex; min-width:0; align-items:center; gap:4px; white-space:nowrap; }
+.treeRocketNodeMeta > .treeRocketFolderCount { margin-left:auto; }
+.treeRocketNodeMeta > span svg { flex:0 0 auto; color:#5585a1; }
+.treeRocketSeeFiles { display:inline-flex; min-height:24px; flex:0 0 auto; align-items:center; justify-content:center; padding:2px 7px; border:1px solid #9ec8db; border-radius:6px; background:#eef9ff; color:#316982; cursor:pointer; font:inherit; font-size:9px; font-weight:850; }
+.treeRocketSeeFiles:hover,.treeRocketSeeFiles[aria-expanded="true"] { border-color:#6bb3d2; background:#dff3fc; color:#1f5b76; }
+.treeRocketSeeFiles:disabled { cursor:wait; opacity:.55; }
+.treeRocketNodeMeta,.treeRocketNodeActions { position:relative; z-index:2; }
+.treeRocketNodeActions { gap:4px; }
+.treeRocketNodeActions button { min-height:29px; padding:4px; font-size:9px; }
+.treeRocketRootNode { max-width:205px; min-height:124px; margin:0; }
+.treeRocketRootNode .treeRocketNodeEnter strong { font-size:15px; }
+.treeRocketGraphCanvas:has(.rootNodes) .treeRocketChildren.rootNodes { justify-content:start; grid-template-columns:repeat(auto-fit,minmax(min(164px,100%),184px)); gap:14px; }
+.treeRocketFiles { border:1px solid #9dccdf8c; border-radius:12px; box-shadow:0 8px 22px #010a1b6b; }
+.treeRocketFiles > header { padding:9px; }
+.treeRocketFiles > header strong { font-size:11px; }
+.treeRocketNodeEnter:focus-visible { z-index:3; outline-offset:-4px; }
+.treeRocketSeeFiles:focus-visible,.treeRocketNodeActions button:focus-visible { z-index:4; position:relative; }
+.worldEmailAccountCatalog { display:grid; gap:5px; padding:8px 9px; border:1px solid #d7e5ee; border-radius:8px; background:#f7fbfd; }
+.worldEmailAccountCatalog > strong { color:#476780; font-size:10px; }
+.worldEmailAccountCatalog > p { margin:0; color:#70869a; font-size:9px; line-height:1.4; }
+.worldEmailAccountCatalog ul { display:grid; gap:4px; margin:0; padding:0; list-style:none; }
+.worldEmailAccountCatalog li { display:flex; min-width:0; align-items:center; justify-content:space-between; gap:8px; padding:5px 7px; border:1px solid #e0eaf0; border-radius:6px; background:#fff; }
+.worldEmailAccountCatalog li > span { min-width:0; overflow:hidden; color:#294f68; font-size:10px; font-weight:800; text-overflow:ellipsis; white-space:nowrap; }
+.worldEmailAccountCatalog li > small { flex:0 0 auto; color:#648198; font-size:8px; text-align:right; }
+.worldEmailAccountCatalog li > div { display:grid; flex:0 0 auto; gap:2px; justify-items:end; }
+.worldEmailAccountCatalog li > div > small { color:#648198; font-size:8px; line-height:1.3; text-align:right; }
+.worldEmailAccountCatalog li > div > .accountConnected { color:#27704e; font-weight:800; }
+.worldEmailAccountCatalog li > div > .accountDisconnected { color:#a34a38; font-weight:800; }
+.emailConversationsTitle { min-width:0; }
+.emailConversationsTitle > span { min-width:0; }
+.emailConversationSelectedAccount { max-width:min(44vw,400px); overflow:hidden; color:#52748c!important; font-weight:750; text-overflow:ellipsis; white-space:nowrap; }
+@media(max-width:600px) {
+  .appHeader,.app:has(.applicationsView) > .appHeader,.app:has(.emailConversationsPage) > .appHeader { height:156px; flex-basis:156px; }
+  .pageNavigation { bottom:0; }
+  .emailConversationSelectedAccount { max-width:38vw; font-size:8px!important; }
+  .worldEmailAccountCatalog li { align-items:flex-start; flex-direction:column; gap:2px; }
+  .worldEmailAccountCatalog li > small { text-align:left; }
+  .worldEmailAccountCatalog li > div { justify-items:start; }
+  .worldEmailAccountCatalog li > div > small { text-align:left; }
+}
+
+/* Dashboard navigation uses one compact row for the five primary destinations. */
+.appHeader { height:136px; }
+.app:has(.applicationsView) > .appHeader,.app:has(.emailConversationsPage) > .appHeader { height:136px; flex-basis:136px; }
+.pageNavigation .pageMenuItems { display:grid; width:100%; grid-template-columns:repeat(5,minmax(0,1fr)); grid-template-rows:minmax(34px,auto); gap:2px; }
+.pageNavigation .pageMenuItems > button { grid-column:auto; grid-row:1; width:100%; min-height:34px; height:100%; border:0; border-radius:5px; }
+@media(min-width:601px) and (max-width:900px) {
+  .appHeader,.app:has(.applicationsView) > .appHeader,.app:has(.emailConversationsPage) > .appHeader { height:180px; flex-basis:180px; }
+}
+@media(max-width:600px) {
+  .pageNavigation .pageMenuItems { grid-template-rows:minmax(27px,auto); }
+  .pageNavigation .pageMenuItems > button { min-height:27px; }
+}
+@media(max-width:900px) {
+  .treeRocketBody.withSidebar { grid-template-columns:minmax(190px,230px) minmax(0,1fr); gap:8px; }
+  .treeRocketGraphStage { grid-template-columns:minmax(150px,.42fr) minmax(0,1fr); gap:8px; }
+  .treeRocketChildren.hasParent { grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),166px)); }
+}
+@media(max-width:650px) {
+  .treeRocketBody.withSidebar { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(140px,30vh) minmax(0,1fr); gap:8px; }
+  .treeRocketBody.withSidebar > .treeRocketFiles { grid-column:1; grid-row:1; }
+  .treeRocketBody.withSidebar > .treeRocketGraph { grid-column:1; grid-row:2; }
+  .treeRocketGraphStage { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); align-content:start; overflow:auto; }
+  .treeRocketGraphStage > .treeRocketRootNode { width:min(184px,100%); min-height:112px; }
+  .treeRocketBranch { min-height:0; }
+  .treeRocketBranch > .treeRocketChildrenHeading { margin:2px 0 8px; }
+  .treeRocketChildren.hasParent { grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),166px)); gap:12px; }
+  .treeRocketGraphCanvas:has(.rootNodes) .treeRocketChildren.rootNodes { grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),166px)); gap:12px; }
+  .treeRocketNode,.treeRocketRootNode { max-width:166px; min-height:112px; }
+}
+.emailMessageAttachments > button { display:grid; min-width:0; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:5px; padding:5px 8px; border:1px solid #c7dbe7; border-radius:7px; background:#eef7fb; color:#3c6178; cursor:pointer; font:inherit; }
+.emailMessageAttachments > button > span { min-width:0; overflow:hidden; padding:0; background:transparent; color:inherit; text-overflow:ellipsis; white-space:nowrap; }
+.emailMessageAttachments > button > small { color:#738b9c; font-size:9px; }
+.emailMessageAttachments > button:disabled { cursor:wait; opacity:.55; }
+.emailInlineImageMetadata { display:grid; gap:5px; margin-top:8px; padding:7px 9px; border:1px solid #dce8ef; border-radius:7px; background:#f7fafc; color:#60788a; font-size:10px; }
+.emailInlineImageMetadata > strong { display:flex; align-items:center; gap:5px; color:#496b81; font-size:10px; }
+.emailInlineImageMetadata ul { display:flex; flex-wrap:wrap; gap:5px; margin:0; padding:0; list-style:none; }
+.emailInlineImageMetadata li { display:grid; min-width:120px; gap:2px; padding:4px 6px; border-radius:5px; background:#eaf2f6; }
+.emailInlineImageMetadata li span { overflow:hidden; color:#415e72; text-overflow:ellipsis; white-space:nowrap; }
+.emailInlineImageMetadata li small { color:#778d9b; font-size:8px; }
+.dailyRecapPanel .dailyPlanetInbox { padding:7px 9px; border:1px solid #dce5ed; border-radius:6px; background:#f6f9fc; color:#526c80; }
+.dailyRecapPanel .dailyPlanetInbox strong { color:#304d65; }
+.planetGraphSourceStatuses { display:grid; gap:7px; min-width:0; margin:7px 0; padding:9px 11px; border:1px solid #83b3d15c; border-radius:9px; background:#08213bc4; color:#e7f4ff; }
+.planetGraphSourceStatuses > header { display:flex; flex-wrap:wrap; align-items:baseline; gap:5px 12px; }
+.planetGraphSourceStatuses > header strong { font-size:11px; }
+.planetGraphSourceStatuses > header small { color:#aac5d8; font-size:9px; }
+.planetGraphSourceStatuses ul { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr)); gap:5px; margin:0; padding:0; list-style:none; }
+.planetGraphSourceStatus { display:grid; min-width:0; grid-template-columns:auto minmax(0,1fr) auto; align-items:center; gap:7px; padding:6px 7px; border:1px solid #83b3d138; border-radius:7px; background:#102b47bd; }
+.planetGraphSourceStatusBadge { padding:3px 5px; border-radius:5px; background:#284c67; color:#d9edfa; font-size:8px; font-weight:850; text-transform:uppercase; }
+.planetGraphSourceStatus.complete .planetGraphSourceStatusBadge { background:#174a3c; color:#c5f4dc; }
+.planetGraphSourceStatus.partial .planetGraphSourceStatusBadge,.planetGraphSourceStatus.indexing .planetGraphSourceStatusBadge { background:#624c1d; color:#ffe6a5; }
+.planetGraphSourceStatus.failed .planetGraphSourceStatusBadge { background:#632e38; color:#ffd5d7; }
+.planetGraphSourceStatus > div { display:grid; min-width:0; gap:2px; }
+.planetGraphSourceStatus > div strong,.planetGraphSourceStatus > div small { overflow:hidden; text-overflow:ellipsis; }
+.planetGraphSourceStatus > div strong { font-size:9px; }
+.planetGraphSourceStatus > div small { color:#abc2d4; font-size:8px; line-height:1.35; }
+.planetGraphSourceStatus > button { display:inline-flex; min-height:25px; align-items:center; gap:4px; padding:3px 6px; border:1px solid #88bfdc7a; border-radius:5px; background:#174568; color:#e7f6ff; cursor:pointer; font:inherit; font-size:8px; font-weight:800; }
+.planetGraphSourceStatus > button:disabled { cursor:wait; opacity:.55; }
+.planetGraphSourceStatus > button:focus-visible { outline:2px solid #8dd6ff; outline-offset:2px; }
+.planetGraphHeaderActions { position:relative; align-items:center; overflow:visible; }
+.planetGraphNoticeControl { position:relative; z-index:5; flex:0 0 auto; }
+.planetGraphNoticeButton { display:inline-flex; min-height:36px; align-items:center; justify-content:center; gap:6px; padding:0 9px; border:1px solid #e0b66b88; border-radius:9px; background:#483718bd; color:#ffe5b0; cursor:pointer; font:inherit; font-size:10px; font-weight:800; white-space:nowrap; }
+.planetGraphNoticeButton:hover,.planetGraphNoticeButton[aria-expanded="true"] { border-color:#ffd47f; background:#604a20; color:#fff1ce; }
+.planetGraphNoticeButton b { display:grid; min-width:18px; height:18px; place-items:center; padding:0 4px; border-radius:999px; background:#f3c66e; color:#35250d; font-size:9px; line-height:1; }
+.planetGraphNoticeButton:focus-visible,.planetGraphNoticePanel button:focus-visible { outline:3px solid #8dd6ff; outline-offset:2px; }
+.planetGraphNoticePanel { position:absolute; top:calc(100% + 8px); right:0; z-index:20; display:grid; width:min(500px,calc(100vw - 32px)); max-height:min(66vh,560px); gap:9px; box-sizing:border-box; overflow:auto; padding:12px; border:1px solid #93b8d47d; border-radius:12px; background:#081a2bf5; color:#e9f5ff; box-shadow:0 18px 44px #0009; overscroll-behavior:contain; }
+.planetGraphNoticePanel > header { position:sticky; top:-12px; z-index:2; display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin:-12px -12px 0; padding:12px; border-bottom:1px solid #7b9db33d; background:#081a2bf5; }
+.planetGraphNoticePanel > header > div { display:grid; min-width:0; gap:3px; }
+.planetGraphNoticePanel > header strong { color:#f1f8ff; font-size:12px; }
+.planetGraphNoticePanel > header small { color:#afc7d9; font-size:9px; line-height:1.4; }
+.planetGraphNoticePanel > header > button { display:grid; width:25px; height:25px; flex:0 0 auto; place-items:center; border:1px solid #88a9c377; border-radius:6px; background:#112b43; color:#e8f5ff; cursor:pointer; font-size:17px; line-height:1; }
+.planetGraphNoticeError,.planetGraphNoticeMessage { margin:0; padding:8px 9px; border:1px solid #d38c8580; border-radius:8px; background:#512a2b80; color:#ffd2cb; font-size:10px; line-height:1.4; }
+.planetGraphNoticeMessage { border-color:#d6b26680; background:#49381780; color:#ffe7b3; }
+.planetGraphNoticePanel .planetGraphSourceStatuses { max-height:34vh; overflow:auto; margin:0; padding:8px; }
+.planetGraphNoticeWarnings { display:grid; gap:5px; padding:8px 9px; border:1px solid #d6b26680; border-radius:8px; background:#49381755; color:#ffe7b3; font-size:10px; }
+.planetGraphNoticeWarnings ul { display:grid; gap:4px; margin:0; padding-left:17px; color:#f1dba9; font-size:9px; line-height:1.4; }
+@media(max-width:700px) { .planetGraphNoticePanel { right:-4px; width:min(480px,calc(100vw - 20px)); }.planetGraphHeaderActions { flex-wrap:wrap; }.planetGraphNoticeControl { margin-left:auto; } }
+
+@media(max-width:600px) {
+  .appHeader,.app:has(.applicationsView) > .appHeader,.app:has(.emailConversationsPage) > .appHeader { height:156px; flex-basis:156px; }
+  .pageNavigation { bottom:0; }
+  .pageNavigation .pageMenuItems { grid-template-rows:minmax(27px,auto); }
+  .pageNavigation .pageMenuItems > button { min-height:27px; }
+}
+
+/* Final navigation and Planet Graph layout rules. */
+.pageNavigation .pageMenu { overflow-x:auto; overflow-y:hidden; overscroll-behavior-x:contain; scrollbar-width:thin; }
+.pageNavigation .pageMenuItems { display:flex; width:max(100%,456px); min-width:456px; flex:0 0 auto; grid-template-columns:none; grid-template-rows:none; gap:0; }
+.pageNavigation .pageMenuItems > button { width:auto; min-width:76px; min-height:36px; height:36px; flex:1 0 76px; grid-column:auto; padding:4px 7px; overflow:hidden; white-space:nowrap; overflow-wrap:normal; text-overflow:ellipsis; }
+.pageNavigation .pageMenuItems > button svg { flex:0 0 14px; }
+.planetGraphSplitLayout { grid-template-columns:minmax(260px,.78fr) minmax(0,1.6fr); grid-template-rows:minmax(0,1fr) auto; align-items:stretch; }
+.planetGraphSplitLayout > .planetKnowledgeQuery { display:flex; min-width:0; min-height:0; max-height:none; flex-direction:column; grid-column:1; grid-row:1 / span 2; margin:0; overflow:hidden; }
+.planetKnowledgeQuery > header,.planetKnowledgeQuery form { flex:0 0 auto; }
+.planetKnowledgeQuery article { min-height:0; flex:1 1 auto; overflow:auto; overscroll-behavior:contain; }
+.planetGraphSplitLayout > .planetGraphWorkspace { display:grid; grid-column:2; grid-row:1; width:100%; height:100%; min-height:0; margin:0; }
+.planetGraphCanvas { min-height:0; }
+.planetGraphCanvasEmpty { position:absolute; z-index:2; top:50%; left:50%; max-width:min(320px,calc(100% - 32px)); transform:translate(-50%,-50%); margin:0; padding:9px 12px; border:1px solid #7399b05c; border-radius:9px; color:#c5d8e8; background:#07182acc; font-size:11px; text-align:center; pointer-events:none; }
+.planetGraphSplitLayout > .planetGraphConnections { grid-column:2; grid-row:2; max-height:clamp(80px,20vh,170px); margin:0; overflow:auto; }
+.planetGraphHeaderActions .planetGraphTypeFilter { min-width:90px; }
+.planetGraphHeaderActions .planetGraphTypeFilter > span { font-size:9px; }
+.planetGraphJobControls { display:flex; flex-wrap:wrap; align-items:center; gap:6px; padding:7px 8px; border:1px solid #d6b26680; border-radius:8px; background:#49381755; color:#ffe7b3; font-size:10px; }
+.planetGraphJobControls > span { flex:1 1 100%; }
+.planetGraphJobControls > button { display:inline-flex; min-height:27px; align-items:center; gap:4px; padding:3px 8px; border:1px solid #e0b66b88; border-radius:6px; background:#483718bd; color:#ffe5b0; cursor:pointer; font:inherit; font-weight:750; }
+.planetGraphJobControls > button:disabled { cursor:wait; opacity:.55; }
+.planetKnowledgeReadiness { margin:0; padding:7px 8px; border:1px solid #83b3d15c; border-radius:7px; background:#102b47bd; color:#d9edfa; font-size:9px; font-weight:800; }
+.planetKnowledgeReadiness.partial,.planetKnowledgeReadiness.indexing,.planetKnowledgeReadiness.stale { border-color:#d6b26680; background:#49381755; color:#ffe7b3; }
+.planetKnowledgeReadiness.error { border-color:#d38c8580; background:#512a2b80; color:#ffd2cb; }
+.planetKnowledgeGaps { display:grid; gap:5px; padding:8px 9px; border:1px solid #d6b26680; border-radius:8px; background:#49381755; color:#ffe7b3; font-size:9px; }
+.planetKnowledgeGaps ul { display:grid; gap:4px; margin:0; padding-left:17px; color:#f1dba9; line-height:1.4; }
+.planetManagedMarkdownStatus { color:#aac5d8; font-size:9px; }
+.pageNavigation .pageMenuItems > button:focus-visible,.planetGraphHeaderActions button:focus-visible,.planetGraphHeaderActions select:focus-visible,.planetGraphHeaderActions input:focus-visible,.planetKnowledgeQuery button:focus-visible,.planetKnowledgeQuery input:focus-visible,.planetKnowledgeQuery summary:focus-visible { outline:2px solid #8dd6ff; outline-offset:2px; }
+@media(max-width:900px) {
+  .planetGraphSplitLayout { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(150px,.52fr) minmax(0,1fr) auto; }
+  .planetGraphSplitLayout > .planetKnowledgeQuery { grid-column:1; grid-row:1; }
+  .planetGraphSplitLayout > .planetGraphWorkspace { grid-column:1; grid-row:2; }
+  .planetGraphSplitLayout > .planetGraphConnections { grid-column:1; grid-row:3; max-height:clamp(65px,16vh,135px); }
+}
+@media(max-width:520px) {
+  .pageNavigation .pageMenuItems > button { min-height:32px; height:32px; padding-inline:9px; font-size:10px; }
+  .planetGraphHeaderActions { justify-content:flex-start; }
+  .planetGraphHeaderActions .planetGraphSearch { flex:1 1 100%; }
+  .planetGraphSplitLayout { grid-template-rows:minmax(140px,.46fr) minmax(0,1fr) auto; }
+  .planetKnowledgeQuery { padding:8px; }
+}
+
+/* Keep the logo anchored while presenting navigation as consistent, reachable tabs. */
+.appHeader,.app:has(.applicationsView) > .appHeader,.app:has(.emailConversationsPage) > .appHeader { height:112px; flex-basis:112px; }
+.pageNavigation .pageMenu { max-width:100%; overflow-x:auto; overflow-y:hidden; border-radius:9px; scrollbar-width:thin; scrollbar-color:#5b93b655 transparent; }
+.pageNavigation .pageMenuItems { display:flex; width:max(100%,520px); min-width:520px; grid-template-columns:none; grid-template-rows:none; gap:3px; padding:3px; }
+.pageNavigation .pageMenuItems > button { grid-column:auto; min-width:100px; min-height:36px; height:36px; flex:1 0 100px; padding:4px 9px; border:1px solid transparent; border-radius:7px; overflow:visible; text-overflow:clip; white-space:normal; overflow-wrap:normal; }
+.pageNavigation .pageMenuItems > button:not(.active) { background:rgba(255,255,255,.48); }
+.pageNavigation .pageMenuItems > button.active { border-color:#72b9e3; box-shadow:inset 0 1px #ffffff9c,0 2px 5px #2878a322; }
+.pageNavigation .pageMenuItems > button:focus-visible { z-index:1; outline:3px solid #328ac1; outline-offset:1px; }
+@media(min-width:601px) and (max-width:900px) {
+  .appHeader,.app:has(.applicationsView) > .appHeader,.app:has(.emailConversationsPage) > .appHeader { height:124px; flex-basis:124px; }
+}
+@media(max-width:600px) {
+  .appHeader,.app:has(.applicationsView) > .appHeader,.app:has(.emailConversationsPage) > .appHeader { height:132px; flex-basis:132px; }
+  .pageNavigation { bottom:3px; }
+  .pageNavigation .pageMenuItems { width:max(100%,500px); min-width:500px; }
+.pageNavigation .pageMenuItems > button { min-width:94px; flex-basis:94px; padding-inline:6px; font-size:9px; }
+}
+
+/* File Studio queues claim space only while populated; each queue expands independently. */
+.processingPage .conversionStack > .conversionToolCard { min-height:0; }
+.processingPage .conversionStack { overflow-x:hidden!important; overflow-y:auto!important; overscroll-behavior:contain; }
+.processingPage .conversionStack > .conversionToolCard.queueEmpty { flex:0 0 auto!important; min-height:0!important; }
+.processingPage .conversionStack > .conversionToolCard.hasQueuedFiles { flex:1 1 0!important; min-height:155px!important; }
+.processingPage .conversionToolCard.queueEmpty .conversionQueue { display:none; }
+.processingPage .conversionToolCard .conversionQueue { flex:1 1 0; min-height:0; overflow-y:auto; overscroll-behavior:contain; }
+.processingPage .conversionToolCard > .convertButton { position:static; z-index:auto; flex:0 0 40px; margin-top:8px; }
+.processingPage .conversionToolCard .conversionCount,.processingPage .conversionToolCard .conversionProgress,.processingPage .conversionToolCard .formatReport { flex:0 0 auto; max-height:90px; overflow:auto; overflow-wrap:anywhere; }
+.processingPage .changeFormatPanel .formatReport { white-space:pre-wrap; }
+
+/* Tree Rocket cards stay compact; the file preview owns its own scroll. */
+.treeRocketNode,.treeRocketRootNode { max-width:160px; min-height:100px; padding:13px 7px 6px; }
+.treeRocketNode:focus-visible { outline:3px solid #61b9f0; outline-offset:3px; }
+.treeRocketSearchGraph { grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),200px)); gap:12px; }
+.treeRocketFiles { min-width:0; }
+.treeRocketFileList { min-height:0; overflow:auto; overscroll-behavior:contain; }
+
+/* Keep open source menus above sibling cards in the dashboard grid. */
+.dashboardSourceBlock.sourceBlockMenuOpen { z-index:100; }
+.dashboardSourceBlock.sourceBlockMenuOpen .sourceBlockMenu { z-index:10050; }
+
+/* Bring page bodies closer to the header while the logo keeps its top:1px anchor. */
+.app > .pageFrame { position:relative; top:-8px; }
+
+/* Keep the dashboard add menu above its independently scrolling source column. */
+.sourcePicker.sourcePickerPortal { position:fixed; z-index:12000; inset:auto; right:auto; bottom:auto; width:184px; max-height:min(420px,calc(100vh - 24px)); overflow-y:auto; overscroll-behavior:contain; }
+.sourcesColumnHeader { display:flex; min-height:22px; align-items:center; padding:0 3px; color:#55728b; }
+.sourcesColumnHeader strong { overflow:hidden; font-size:10px; font-weight:800; letter-spacing:.04em; text-overflow:ellipsis; white-space:nowrap; }
+.sourcePicker.sourcePickerPortal button { min-height:32px; display:flex; align-items:center; gap:9px; }
+.sourcePickerIcon { width:18px; height:18px; flex:0 0 18px; display:block; }
+.sourcePicker.sourcePickerPortal button > span { width:18px; height:18px; flex:0 0 18px; display:grid; place-items:center; }
+.conversionRenameHeader { display:flex; align-items:center; gap:8px; }
+.conversionRenameDeleteLast { flex:0 0 auto; padding:6px 9px; }
+.treeRocketChildren.hasParent::before,.treeRocketChildren.hasParent::after,
+.treeRocketChildren.hasParent > .treeRocketFolderCard::before { content:none !important; display:none !important; }
+.treeRocketChildrenHeading strong { max-width:min(55%,360px); white-space:normal; overflow-wrap:anywhere; text-align:left; }
+.pageNavigation .pageMenuItems { display:grid; width:100%; min-width:0; max-width:100%; grid-template-columns:repeat(5,minmax(0,1fr)); grid-template-rows:auto; gap:4px; overflow:visible; }
+.pageNavigation .pageMenuItems > button { width:auto; min-width:0; min-height:38px; height:auto; flex:initial; grid-column:auto; padding:5px 6px; white-space:normal; overflow-wrap:anywhere; line-height:1.15; text-align:center; }
+.app > .pageFrame { top:-12px; }
+.planetGraphHeaderActions { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; min-width:0; }
+.planetGraphHeaderActions > button,.planetGraphHeaderActions select,.planetGraphHeaderActions input { min-height:38px; box-sizing:border-box; }
+.planetGraphSearch { min-height:38px; align-items:center; }
+@media(max-width:900px) {
+  .pageNavigation .pageMenuItems { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .pageNavigation .pageMenuItems > button { min-height:34px; }
+}
+@media(max-width:520px) {
+  .pageNavigation .pageMenuItems { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .pageNavigation .pageMenuItems > button { min-height:32px; font-size:10px; }
+}
+
+/* Final Dashboard navigation: fit the tabs to the header slot without an inner scrollbar. */
+.pageNavigation .pageMenu { min-width:0; overflow:visible; }
+.pageNavigation .pageMenuItems {
+  display:grid;
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  flex:1 1 auto;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  grid-template-rows:auto;
+  align-items:stretch;
+  gap:4px;
+  padding:3px;
+}
+.pageNavigation .pageMenuItems > button {
+  display:flex;
+  width:auto;
+  min-width:0;
+  min-height:36px;
+  height:auto;
+  flex:initial;
+  grid-column:auto;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  padding:5px 6px;
+  border:1px solid transparent;
+  border-radius:7px;
+  overflow:visible;
+  line-height:1.15;
+  text-align:center;
+  text-overflow:clip;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+.pageNavigation .pageMenuItems > button svg { width:14px; height:14px; flex:0 0 14px; }
+.pageNavigation .pageMenuItems > button:not(.active) { background:rgba(255,255,255,.48); }
+.pageNavigation .pageMenuItems > button.active { border-color:#72b9e3; box-shadow:inset 0 1px #ffffff9c,0 2px 5px #2878a322; }
+.pageNavigation .pageMenuItems > button:focus-visible { z-index:1; outline:3px solid #328ac1; outline-offset:1px; }
+@media(max-width:900px) {
+  .appHeader,.app:has(.applicationsView) > .appHeader,.app:has(.emailConversationsPage) > .appHeader { height:188px; flex-basis:188px; }
+  .pageNavigation { top:101px; right:10px; bottom:auto; left:10px; }
+  .pageNavigation .pageMenuItems { grid-template-columns:repeat(5,minmax(0,1fr)); }
+  .pageNavigation .pageMenuItems > button { grid-column:auto; min-height:34px; padding-inline:4px; gap:3px; font-size:clamp(8px,1.25vw,10px); }
+}
+@media(max-width:520px) {
+  .pageNavigation .pageMenuItems { grid-template-columns:repeat(5,minmax(0,1fr)); gap:2px; }
+  .pageNavigation .pageMenuItems > button { grid-column:auto; min-height:32px; flex-direction:column; padding:3px 2px; gap:2px; font-size:8px; overflow-wrap:normal; word-break:normal; hyphens:none; }
+  .pageNavigation .pageMenuItems > button svg { width:12px; height:12px; flex-basis:12px; }
+}
+
+/* Give the navigation its own row while the desktop header columns are narrow. */
+@media(min-width:901px) and (max-width:1400px) {
+  .appHeader,.app:has(.applicationsView) > .appHeader,.app:has(.emailConversationsPage) > .appHeader { height:188px; flex-basis:188px; }
+  .pageNavigation { top:101px; right:10px; bottom:auto; left:10px; }
+}
+
+/* Tree Rocket cards keep the title, counts, and actions in separate rows. */
+.treeRocketNode,.treeRocketRootNode { min-height:126px; grid-template-rows:minmax(42px,1fr) auto auto; align-content:stretch; gap:6px; padding:17px 8px 7px; }
+.treeRocketNodeEnter { position:relative; z-index:1; inset:auto; width:100%; height:auto; min-height:0; grid-template-columns:23px minmax(0,1fr); align-items:start; gap:4px 6px; padding:2px 3px; }
+.treeRocketNodeIcon svg { width:19px; height:19px; }
+.treeRocketNodeTitle { min-width:0; }
+.treeRocketNodeEnter strong,.treeRocketRootNode .treeRocketNodeEnter strong { display:-webkit-box; max-height:3.6em; overflow:hidden; font-size:13px; line-height:1.2; text-overflow:ellipsis; overflow-wrap:anywhere; white-space:normal; -webkit-box-orient:vertical; -webkit-line-clamp:3; }
+.treeRocketNodeMeta { display:flex; min-width:0; flex-wrap:wrap; align-items:center; gap:3px 9px; padding:0 3px; color:#705632; font-size:9px; line-height:1.2; }
+.treeRocketNodeMeta > span { display:inline-flex; min-width:0; align-items:center; gap:4px; white-space:nowrap; }
+.treeRocketNodeMeta > span svg { flex:0 0 auto; }
+.treeRocketNodeActions { display:flex; min-height:27px; align-items:stretch; justify-content:space-between; gap:5px; }
+.treeRocketNodeActions button,.treeRocketNodeActions button:last-child { min-width:0; min-height:27px; flex:1 1 0; align-items:center; justify-content:center; gap:4px; padding:3px 5px; font-size:9px; line-height:1.1; text-align:center; }
+
+/* Pull page bodies upward while keeping the absolutely positioned logo at top:1px. */
+.treeRocketNodeActions button span:not(.treeRocketVisuallyHidden) { min-width:0; overflow-wrap:anywhere; }
+.treeRocketNodeActions .treeRocketAddedButton { width:29px; min-width:29px; max-width:29px; flex:0 0 29px; padding:3px; }
+.treeRocketNodeActions .treeRocketAddedButton svg { width:14px; height:14px; }
+.treeRocketNodeActions .treeRocketSeeFiles { min-height:27px; flex:1 1 0; padding:3px 5px; font-size:9px; line-height:1.1; }
+.treeRocketFiles { position:relative; z-index:1; inset:auto; width:auto; height:auto; max-height:none; min-width:0; min-height:0; align-self:stretch; overflow:hidden; }
+.treeRocketBody.withSidebar { display:grid; grid-template-columns:minmax(0,1fr) minmax(220px,300px); grid-template-rows:minmax(0,1fr); align-items:stretch; gap:12px; }
+.treeRocketBody.withSidebar > .treeRocketGraph,.treeRocketBody.withSidebar > .treeRocketAppsPanel { grid-column:1; grid-row:1; min-width:0; }
+.treeRocketBody.withSidebar > .treeRocketFiles { grid-column:2; grid-row:1; }
+.treeRocketBody.withSidebar > .treeRocketGraph { width:100%; }
+.treeRocketGraphStage { grid-template-columns:minmax(150px,205px) minmax(0,1fr); gap:12px; }
+.treeRocketGraphStage > .treeRocketRootNode { width:100%; max-width:205px; min-width:0; }
+.treeRocketNodeEnter:focus-visible { z-index:3; outline-offset:1px; }
+.treeRocketSeeFiles:focus-visible,.treeRocketNodeActions button:focus-visible { z-index:4; position:relative; }
+.treeRocketFilesFloating { position:fixed; z-index:15100; inset:auto; display:grid; width:min(360px,calc(100vw - 24px)); height:auto; max-height:calc(100vh - 24px); min-height:0; grid-template-rows:auto minmax(0,1fr); box-sizing:border-box; overflow:hidden; border:1px solid #9dccdf; border-radius:12px; background:linear-gradient(155deg,#f7fbff,#e7f3f5); box-shadow:0 18px 45px #010a1bad; pointer-events:auto; }
+.treeRocketFilesFloating > .treeRocketFileList { min-height:0; overflow:auto; overscroll-behavior:contain; }
+.treeRocketNode,.treeRocketRootNode { max-width:212px; }
+.treeRocketNodeEnter strong,.treeRocketRootNode .treeRocketNodeEnter strong { font-size:13px; }
+.treeRocketGraphCanvas:has(.rootNodes) .treeRocketChildren.rootNodes { grid-template-columns:repeat(auto-fit,minmax(min(184px,100%),212px)); gap:14px; }
+.treeRocketSearchGraph { grid-template-columns:repeat(auto-fit,minmax(min(184px,100%),212px)); }
+@media(max-width:900px) {
+  .treeRocketBody.withSidebar { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr) minmax(130px,28vh); gap:8px; }
+  .treeRocketBody.withSidebar > .treeRocketGraph,.treeRocketBody.withSidebar > .treeRocketAppsPanel { grid-column:1; grid-row:1; }
+  .treeRocketBody.withSidebar > .treeRocketFiles { grid-column:1; grid-row:2; }
+  .treeRocketGraphStage { grid-template-columns:minmax(130px,184px) minmax(0,1fr); gap:8px; }
+}
+@media(max-width:650px) {
+  .treeRocketBody.withSidebar { grid-template-rows:minmax(0,1fr) minmax(120px,26vh); }
+  .treeRocketGraphCanvas { width:100%; min-width:0; padding:14px 8px 24px; }
+  .treeRocketGraphCanvas:has(.rootNodes) .treeRocketChildren.rootNodes,
+  .treeRocketChildren.hasParent,
+  .treeRocketSearchGraph { grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),176px)); justify-content:start; gap:12px; }
+  .treeRocketGraphStage { grid-template-columns:minmax(0,1fr); grid-template-rows:auto minmax(0,1fr); align-content:start; overflow:auto; }
+  .treeRocketGraphStage > .treeRocketRootNode { width:min(184px,100%); max-width:184px; }
+  .treeRocketNode,.treeRocketRootNode { min-width:0; max-width:176px; min-height:120px; }
+  .treeRocketNodeActions button,.treeRocketNodeActions button:last-child { font-size:8px; }
+}
+
+/* File Studio: keep the output selector beside its heading and allow long queues to scroll. */
+.processingPage .conversionPanel > .localConversionHeading {
+  display:flex;
+  min-width:0;
+  min-height:48px;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:nowrap;
+  gap:6px;
+}
+.processingPage .localConversionHeading .conversionCardHeading { flex:1 1 auto; }
+.processingPage .conversionPanel .localFormatChoice {
+  display:flex!important;
+  width:auto;
+  min-width:88px;
+  flex:0 1 112px;
+  align-items:center;
+  padding:3px 5px;
+}
+.processingPage .conversionPanel .localFormatChoice .formatSelectShell { grid-template-columns:16px minmax(0,1fr); gap:3px; }
+.processingPage .conversionPanel .localFormatChoice select { width:100%; min-width:0; height:27px; padding:3px; font-size:10px; }
+.processingPage .conversionPanel .localConversionQueue { flex:1 1 0; min-height:0; max-height:none; overflow-y:auto; overscroll-behavior:contain; scrollbar-gutter:stable; }
+.convertedFileRename { display:flex; min-width:0; align-items:end; gap:5px; padding:6px 9px 8px; background:#f4fbf6; }
+.convertedFileRename label { display:grid; min-width:0; flex:1 1 auto; gap:3px; color:#416b54; font-size:9px; font-weight:800; }
+.convertedFileRename input { width:100%; min-width:0; box-sizing:border-box; padding:5px 7px; border:1px solid #a8cdb3; border-radius:5px; background:#fff; color:#294c35; font:inherit; }
+.convertedFileRename small { overflow:hidden; color:#718779; font-size:8px; font-weight:600; text-overflow:ellipsis; white-space:nowrap; }
+.convertedFileRename button { min-height:27px; flex:0 0 auto; padding:4px 8px; border:1px solid #bdd8c5; border-radius:5px; background:#e6f4ea; color:#276244; cursor:pointer; font-size:9px; font-weight:800; }
+.convertedFileRename button:last-child { border-color:#d5dde3; background:#f6f8fa; color:#526373; }
+.convertedFileRename button:disabled { cursor:wait; opacity:.55; }
+
+/* Five primary destinations always occupy one row; narrow labels truncate without splitting words. */
+.pageNavigation .pageMenuItems {
+  display:grid;
+  width:100%;
+  min-width:0;
+  max-width:100%;
+  grid-template-columns:repeat(5,minmax(0,1fr));
+  grid-template-rows:minmax(34px,auto);
+  gap:3px;
+}
+.pageNavigation .pageMenuItems > button {
+  min-width:0;
+  min-height:34px;
+  grid-column:auto;
+  flex-direction:column;
+  gap:2px;
+  padding:3px 4px;
+  overflow:hidden;
+  font-size:9px;
+  line-height:1;
+  flex-wrap:nowrap;
+  white-space:nowrap;
+  overflow-wrap:normal;
+  word-break:normal;
+  hyphens:none;
+  text-overflow:ellipsis;
+}
+.pageNavigation .pageNavigationLabel { display:block; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+@media(max-width:900px) {
+  .pageNavigation .pageMenuItems { grid-template-columns:repeat(5,minmax(0,1fr)); grid-template-rows:minmax(32px,auto); }
+}
+@media(max-width:520px) {
+  .pageNavigation .pageMenuItems { grid-template-columns:repeat(5,minmax(0,1fr)); grid-template-rows:minmax(32px,auto); }
+  .pageNavigation .pageMenuItems > button { min-height:32px; padding-inline:1px; gap:2px; font-size:clamp(6px,2.1vw,9px); }
+  .pageNavigation .pageMenuItems > button svg { width:12px; height:12px; flex-basis:12px; }
+}
+@media(max-width:390px) {
+  .pageNavigation .pageMenuItems > button { flex-direction:column; gap:2px; }
+}
+
+/* Keep stale nth-child placements from moving tabs below the shared row. */
+.pageNavigation .pageMenuItems > button:nth-child(1) { grid-column:1; grid-row:1; }
+.pageNavigation .pageMenuItems > button:nth-child(2) { grid-column:2; grid-row:1; }
+.pageNavigation .pageMenuItems > button:nth-child(3) { grid-column:3; grid-row:1; }
+.pageNavigation .pageMenuItems > button:nth-child(4) { grid-column:4; grid-row:1; }
+.pageNavigation .pageMenuItems > button:nth-child(5) { grid-column:5; grid-row:1; }
+.pageNavigation .pageNavigationLabel { display:block; }
+
+/* Bound only the populated Local conversion card so its queue can scroll at narrow widths. */
+@media(max-width:1050px) {
+  .processingPage .conversionStack > .conversionPanel.hasQueuedFiles {
+    height:clamp(260px,42vh,360px);
+    min-height:260px!important;
+    max-height:360px!important;
+    align-self:start;
+  }
+}
+@media(max-width:720px) {
+  .processingPage > .conversionStack > .conversionPanel.hasQueuedFiles {
+    height:clamp(260px,42vh,360px)!important;
+    min-height:260px!important;
+    max-height:360px!important;
+    flex:0 0 auto!important;
+  }
+}
+
+/* Shared destinations now sit between the header and page columns. */
+.app > .appHeader,.app:has(.applicationsView) > .appHeader,.app:has(.emailConversationsPage) > .appHeader { height:116px!important; flex-basis:116px!important; }
+.pageNavigation { position:relative; inset:auto; z-index:4; width:min(var(--page-max-width),100%); min-width:0; margin:0 auto 8px; }
+.pageNavigation .pageMenu { overflow:hidden; }
+.pageNavigation .pageMenuItems { display:grid; width:100%; min-width:0; grid-template-columns:repeat(5,minmax(0,1fr)); grid-template-rows:minmax(38px,auto); gap:4px; padding:3px; box-sizing:border-box; }
+.pageNavigation .pageMenuItems > button { grid-column:auto; grid-row:1; display:flex; width:auto; min-width:0; min-height:38px; height:100%; flex-direction:column; flex-wrap:nowrap; align-items:center; justify-content:center; gap:3px; padding:4px 6px; border:1px solid transparent; border-radius:7px; overflow:hidden; font-size:clamp(9px,1vw,12px); line-height:1.1; white-space:normal; overflow-wrap:normal; word-break:normal; }
+.pageNavigation .pageNavigationLabel { display:block; min-width:0; overflow:visible; text-align:center; text-overflow:clip; white-space:normal; }
+.pageNavigation .pageMenuItems > button:focus-visible { position:relative; z-index:2; outline:3px solid #328ac1; outline-offset:1px; }
+.app > .pageFrame { top:-4px; }
+@media(max-width:900px) {
+  .app > .appHeader,.app:has(.applicationsView) > .appHeader,.app:has(.emailConversationsPage) > .appHeader { display:flex; height:100px!important; flex-basis:100px!important; flex-direction:column; align-items:stretch; justify-content:flex-end; }
+  .app > .appHeader .appHeaderTools { position:relative; inset:auto; align-self:stretch; box-sizing:border-box; width:100%; max-width:100%; height:34px; flex:0 0 34px; margin:0 0 4px; padding-inline:10px; overflow-x:auto; scrollbar-width:none; }
+  .app > .appHeader .appHeaderTools::-webkit-scrollbar { display:none; }
+  .app > .pageFrame { top:-2px; }
+  .pageNavigation { margin-bottom:6px; }
+  .pageNavigation .pageMenuItems { grid-template-rows:minmax(36px,auto); gap:3px; padding:2px; }
+  .pageNavigation .pageMenuItems > button { min-height:36px; padding-inline:4px; font-size:clamp(8px,1.35vw,11px); }
+}
+@media(max-width:520px) {
+  .app > .appHeader,.app:has(.applicationsView) > .appHeader,.app:has(.emailConversationsPage) > .appHeader { height:100px!important; flex-basis:100px!important; }
+  .pageNavigation .pageMenuItems { grid-template-rows:minmax(42px,auto); gap:2px; padding:2px; }
+  .pageNavigation .pageMenuItems > button { min-height:42px; gap:2px; padding:3px 1px; font-size:clamp(7px,2.2vw,9px); }
+  .pageNavigation .pageMenuItems > button svg { width:12px; height:12px; flex-basis:12px; }
+  .pageNavigation .pageNavigationLabel { overflow-wrap:anywhere; }
+}
+
+/* Keep all three File Studio tools within their own column at the narrowest grid sizes. */
+.processingPage { grid-template-columns:minmax(230px,.82fr) minmax(0,1.55fr) minmax(255px,.95fr); }
+.processingPage .conversionStack,.processingPage .conversionStack > * { box-sizing:border-box; width:100%; min-width:0; max-width:100%; }
+.processingPage .conversionToolCard > h2,.processingPage .conversionToolCard .conversionCardHeading,.processingPage .conversionToolCard .formatChoiceField,.processingPage .conversionToolCard .formatSelectShell { min-width:0; max-width:100%; }
+.processingPage .conversionToolCard > h2 { flex-wrap:wrap; overflow-wrap:anywhere; }
+.processingPage .conversionToolCard select,.processingPage .conversionToolCard input { min-width:0; max-width:100%; }
+.processingPage .conversionToolCard .conversionQueue,.processingPage .conversionToolCard .formatFileQueue,.processingPage .fireMountainFiles { min-width:0; max-width:100%; overflow-x:hidden; }
+.processingPage .conversionToolCard .formatQueueRow { min-width:0; grid-template-columns:minmax(0,auto) minmax(0,1fr) auto 21px; }
+.processingPage .conversionToolCard .formatQueueName,.processingPage .fireMountainFileName { min-width:0; overflow:hidden; text-overflow:ellipsis; overflow-wrap:anywhere; }
+.processingPage .conversionStack > .fireMountainCard { min-width:0; }
+@media(max-width:1050px) and (min-width:721px) {
+  .processingPage { grid-template-columns:minmax(200px,.8fr) minmax(0,1.2fr); }
+}
+
+/* The add and completed states share one fixed icon button footprint. */
+.treeRocketNodeActions .treeRocketAddFolderButton,.treeRocketNodeActions .treeRocketAddedButton { display:grid; width:29px; min-width:29px; max-width:29px; height:27px; min-height:27px; max-height:27px; flex:0 0 29px; place-items:center; box-sizing:border-box; padding:0; }
+.treeRocketNodeActions .treeRocketAddFolderButton svg,.treeRocketNodeActions .treeRocketAddedButton svg { width:14px; height:14px; }
+
+/* Desktop branch view keeps both selectable roots visible above its children. */
+.treeRocketGraphStage.desktopRootStage { display:flex; min-width:0; flex-direction:column; gap:12px; }
+.treeRocketGraphStage.desktopRootStage > .desktopRootChoices { display:grid; width:100%; min-width:0; grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),260px)); justify-content:start; align-items:start; gap:14px; margin:0; padding:0 0 8px; }
+.treeRocketGraphStage.desktopRootStage > .desktopRootChoices > .selectedDesktopRoot { position:relative; top:8px; border-color:#75c7f2; background:linear-gradient(145deg,#d8f2ff,#a1d8f5 62%,#71bce1); box-shadow:0 0 0 2px #72c4f144,0 9px 22px #03101f75; }
+.treeRocketGraphStage.desktopRootStage > .desktopRootChoices > .selectedDesktopRoot .treeRocketNodeEnter strong { color:#123b5d; }
+.treeRocketSubfoldersMeta { display:inline-flex; min-width:0; align-items:center; gap:5px; color:#d9efff; }
+.treeRocketSubfoldersMeta small { color:#a9d4ef; font-size:8px; font-weight:900; letter-spacing:.1em; }
+.treeRocketSubfoldersMeta b { font-size:9px; white-space:nowrap; }
+.treeRocketNodeTitle.hasSubfolders { display:flex; min-width:0; align-items:baseline; flex-wrap:wrap; gap:2px 6px; }
+.treeRocketNodeTitle.hasSubfolders > strong { flex:0 1 auto; }
+.selectedDesktopRoot .treeRocketSubfoldersMeta { color:#123b5d; }
+.selectedDesktopRoot .treeRocketSubfoldersMeta small { color:#315f7d; }
+@media(max-width:640px) {
+  .treeRocketGraphStage.desktopRootStage > .desktopRootChoices { grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr)); gap:10px; }
+}
+
+/* Keep the selected Desktop title and its Subfolders summary on one visible line. */
+.treeRocketGraphStage.desktopRootStage > .desktopRootChoices { grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),320px)); }
+.treeRocketGraphStage.desktopRootStage > .desktopRootChoices > .treeRocketRootNode { width:100%; min-width:0; max-width:320px; }
+.treeRocketGraphStage.desktopRootStage .treeRocketNodeTitle.hasSubfolders { flex-wrap:nowrap; gap:6px; white-space:nowrap; }
+.treeRocketGraphStage.desktopRootStage .treeRocketNodeTitle.hasSubfolders > strong { display:block; max-width:none; max-height:none; flex:0 0 auto; overflow:visible; white-space:nowrap; -webkit-line-clamp:unset; -webkit-box-orient:initial; }
+.treeRocketGraphStage.desktopRootStage .treeRocketSubfoldersMeta { flex:0 0 auto; }
+/* This canvas-level rule has greater specificity than the generic 212px root grid. */
+.treeRocketGraphCanvas:has(.desktopRootStage) .treeRocketGraphStage.desktopRootStage > .treeRocketChildren.rootNodes.desktopRootChoices { grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),320px)); }
+
+/* R23-R26: retain the large centered wordmark above one bottom-aligned header row. */
+.app > .appHeader,.app:has(.applicationsView) > .appHeader,.app:has(.emailConversationsPage) > .appHeader { display:block!important; position:relative; box-sizing:border-box; height:132px!important; min-height:132px; flex:0 0 132px!important; }
+.appLogo { top:1px; left:50%; width:390px; max-width:56%; height:93px; object-fit:contain; transform:translateX(-50%); }
+@media(max-width:1350px) { .appLogo { width:340px; height:94px; } }
+@media(max-width:1050px) { .appLogo { width:285px; height:84px; } }
+.pageNavigation { position:absolute!important; inset:auto auto 3px var(--header-column-edge)!important; z-index:4; width:max-content; min-width:0; max-width:none; margin:0; }
+.pageNavigation .pageMenu { display:flex; width:max-content; min-width:0; max-width:none; overflow:visible; border:0; border-radius:0; background:transparent; box-shadow:none; }
+.pageNavigation .pageMenuItems { display:flex; width:max-content; min-width:0; align-items:stretch; gap:6px; padding:0; }
+.pageNavigation .pageMenuItems > button { display:inline-flex; width:max-content; min-width:max-content; height:34px; min-height:34px; flex:0 0 auto; flex-direction:row; align-items:center; justify-content:center; gap:5px; padding:0 9px; border:1px solid #9ab6d0; border-radius:7px; background:linear-gradient(180deg,#f9fcff,#eaf4ff); box-shadow:none; color:#214867; cursor:pointer; font-size:10px; font-weight:800; line-height:1; text-align:center; white-space:nowrap; overflow:visible; }
+.pageNavigation .pageMenuItems > button:last-child { border-right:1px solid #9ab6d0; }
+.pageNavigation .pageMenuItems > button svg { width:14px; height:14px; flex:0 0 14px; color:#287bb6; }
+.pageNavigation .pageMenuItems > button:hover { border-color:#4e95ce; background:#e5f3ff; color:#214867; }
+.pageNavigation .pageMenuItems > button.active { border-color:#62a7d4; background:linear-gradient(180deg,#dff2ff,#c3e5fa); color:#123b63; box-shadow:inset 0 1px #ffffff9c,0 2px 5px #2878a322; }
+.pageNavigation .pageMenuItems > button:focus-visible { position:relative; z-index:2; outline:3px solid #328ac1; outline-offset:2px; }
+.pageNavigation .pageNavigationLabel { display:block; width:auto; min-width:max-content; overflow:visible; text-align:center; text-overflow:clip; white-space:nowrap; }
+.appHeaderTools { position:absolute!important; inset:auto var(--header-column-edge) 3px auto!important; z-index:20; display:flex; width:max-content; max-width:none; align-items:stretch; gap:6px; height:34px; overflow:visible; white-space:nowrap; }
+.appAiStatus { top:12px; right:var(--header-column-edge); left:auto; transform:none; }
+.app > .pageFrame { top:0; }
+.accountZoomLimitHint { display:block; margin-top:5px; color:#65788b; font-size:10px; line-height:1.35; }
+
+/* R19/R21: source count and one Computer subfolder summary stay inline without repeating the root name. */
+.treeRocketOriginCount { display:inline-flex; min-width:0; flex:0 0 auto; align-items:center; color:#d9efff; font-size:10px; font-weight:800; white-space:nowrap; }
+.treeRocketBreadcrumbSubfolders { display:inline-flex; min-width:0; flex:0 1 auto; align-items:center; gap:6px; margin-left:5px; padding:3px 8px; border:1px solid #7db5db55; border-radius:8px; background:#0b1d31; color:#d9efff; font-size:9px; white-space:nowrap; }
+.treeRocketBreadcrumbSubfolders strong { color:#a9d4ef; font-size:8px; letter-spacing:.1em; }
+.treeRocketBreadcrumbSubfolders b { max-width:min(220px,18vw); overflow:hidden; text-overflow:ellipsis; }
+.treeRocketBreadcrumbSubfolders i { font-style:normal; }
+@media(max-width:850px) { .treeRocketBreadcrumbSubfolders { gap:4px; padding-inline:5px; } .treeRocketBreadcrumbSubfolders b { max-width:18vw; } }
+
+/* R20: keep the selected Computer root tab and child folder tabs inside the scrollable stage. */
+.treeRocketGraph.hasOpenBranch .treeRocketGraphCanvas { overflow:visible; }
+.treeRocketGraph.hasOpenBranch .treeRocketGraphStage:not(.desktopRootStage) { overflow:visible; padding-top:12px; }
+.treeRocketGraph.hasOpenBranch .treeRocketGraphStage:not(.desktopRootStage) > .treeRocketBranch { min-height:0; overflow:visible; }
+.treeRocketGraph.hasOpenBranch .treeRocketGraphStage:not(.desktopRootStage) > .treeRocketBranch > .treeRocketChildren.hasParent { padding-top:17px; }
+
+/* A dismissed unchanged warning remains available as a compact, consultable status. */
+.obsidianAutoSyncCompact { position:fixed; z-index:10030; top:8px; right:12px; display:grid; max-width:min(460px,calc(100vw - 24px)); gap:5px; }
+.obsidianAutoSyncCompact > button,.obsidianAutoSyncCompact > div { padding:7px 10px; border:1px solid #d2ad64; border-radius:8px; background:#fff8e9; color:#76520a; box-shadow:0 4px 14px #1c293326; font-size:11px; font-weight:750; }
+.obsidianAutoSyncCompact > div { display:flex; align-items:center; gap:8px; }
+.obsidianAutoSyncCompact > div button { flex:0 0 auto; border:1px solid #dab867; border-radius:6px; background:#fff; color:#654500; cursor:pointer; padding:5px 7px; }

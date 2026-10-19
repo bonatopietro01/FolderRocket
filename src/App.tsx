@@ -1,5 +1,5 @@
 import {lazy, Suspense, useCallback, useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent, type ReactNode} from "react";
-import {BriefcaseBusiness, FolderCog, GripHorizontal, LayoutDashboard, Orbit, Plus, Rocket, RotateCcw, Shapes, WandSparkles, Mail} from "lucide-react";
+import {BriefcaseBusiness, FolderCog, GripHorizontal, LayoutDashboard, Orbit, Plus, Rocket, Shapes, WandSparkles, Mail} from "lucide-react";
 import {AccountMenu, type FolderRocketUser} from "./components/AuthGate";
 import {API_BASE_URL} from "./api";
 import "./App.css";
@@ -25,6 +25,7 @@ import DailyAgendaRail from "./components/DailyAgendaRail";
 import ChangeWorld, {Planet as WorldPlanet} from "./components/ChangeWorld";
 import DiagnosticsCenter from "./components/DiagnosticsCenter";
 import {captureDiagnostic, setDiagnosticWorld} from "./diagnostics";
+import {clearObsidianAutoSyncPause, dismissObsidianIncompleteSync, recordObsidianIncompleteSync, recordObsidianSyncSuccess, shouldPauseObsidianAutoSync, shouldShowObsidianIncompleteSync, type ObsidianKnowledgeSummary, type ObsidianReasonSummary} from "./obsidianSyncRetry";
 import {activeWorldStorageScope, loadWorkspaceWorldState, worldsStorageKey, type WorldAssistantCapability, type WorldAssistantModel, type WorkspaceWorld, type WorldTreeRootMode} from "./worlds";
 import {buildWorldObsidianClientRecords, readWorldActivitySnapshot, selectWorldActivitySnapshot} from "./worldActivitySnapshot";
 import PlanetGraph from "./components/PlanetGraph";
@@ -61,6 +62,57 @@ const FLOATING_BOOKMARK_WIDTH_KEY = "folderrocket-floating-bookmark-width";
 const FLOATING_BOOKMARK_HEIGHT_KEY = "folderrocket-floating-bookmark-height";
 const MIN_DASHBOARD_HEIGHT = 440;
 const MAX_DASHBOARD_HEIGHT = 1400;
+type ObsidianSyncReply = {status?:string;lastSyncAt?:string;written?:number;unchanged?:number;conflicts?:number;warnings?:string[]};
+type ObsidianSyncResponse = {ok:boolean;status:number;result?:ObsidianSyncReply;config?:WorkspaceWorld["obsidian"];message?:string;code?:string;reasonSummary?:ObsidianReasonSummary;readinessFingerprint?:string;summary?:string};
+const obsidianSyncInFlight = new Map<string, {signature:string;request:Promise<ObsidianSyncResponse>}>();
+
+function requestObsidianSync(userId:string, worldId:string, storageScope:string, signature=""): Promise<ObsidianSyncResponse> {
+    const key=`${userId}:${worldId}`;
+    const existing=obsidianSyncInFlight.get(key);
+    if(existing) return existing.signature===signature ? existing.request : existing.request.catch(()=>undefined).then(()=>requestObsidianSync(userId,worldId,storageScope,signature));
+    const request=fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(worldId)}/obsidian/sync`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({records:buildWorldObsidianClientRecords(storageScope)})})
+        .then(async response=>{
+            const data=await response.json().catch(()=>({})) as {result?:ObsidianSyncReply;config?:WorkspaceWorld["obsidian"];message?:string;code?:string;reasonSummary?:ObsidianReasonSummary;readinessFingerprint?:string;summary?:string};
+            if(response.ok) clearObsidianAutoSyncPause(key);
+            return {ok:response.ok,status:response.status,result:data.result,config:data.config,message:typeof data.message==="string"?data.message:"",code:typeof data.code==="string"?data.code:undefined,reasonSummary:data.reasonSummary,readinessFingerprint:typeof data.readinessFingerprint==="string"?data.readinessFingerprint:undefined,summary:typeof data.summary==="string"?data.summary:undefined};
+        });
+    obsidianSyncInFlight.set(key,{signature,request});
+    void request.finally(()=>{if(obsidianSyncInFlight.get(key)?.request===request)obsidianSyncInFlight.delete(key);}).catch(()=>{});
+    return request;
+}
+
+function getObsidianSyncSignature(world:WorkspaceWorld) {
+    return JSON.stringify({obsidian:{enabled:world.obsidian?.enabled===true,autoSync:world.obsidian?.autoSync===true,vaultPath:world.obsidian?.vaultPath||"",sourceSelection:world.obsidian?.sourceSelection||{}},emailProvider:world.emailAccount?.provider||"",emailBlockId:world.emailAccount?.blockId||""});
+}
+
+function describeObsidianIncompleteSync(response:ObsidianSyncResponse) {
+    const knownReasons:Record<string,string>={
+        source_index_incomplete:"Some selected sources are still being prepared.",
+        selected_source_limit:"Some selected sources exceed the current source limit.",
+        content_unavailable:"Some selected content could not be read.",
+        knowledge_limit:"The selected material exceeds the current knowledge limit.",
+        source_selection_changed:"The selected sources changed while sync was checking them."
+    };
+    const blockers=(response.reasonSummary?.blockers||[]).filter(blocker=>blocker&&typeof blocker.label==="string"&&typeof blocker.action==="string").slice(0,8);
+    if (blockers.length) return blockers.map(blocker=>`${blocker.label}: ${blocker.action}`).join(" · ").slice(0,900);
+    const summary=typeof response.summary==="string"?response.summary.trim().slice(0,300):"";
+    const reasonLines=(Array.isArray(response.reasonSummary?.reasonCodes)?response.reasonSummary.reasonCodes:[])
+        .filter((code):code is string=>typeof code==="string"&&Boolean(knownReasons[code]))
+        .map(code=>{
+            const count=response.reasonSummary?.counts?.[code];
+            return `${knownReasons[code]}${typeof count==="number"&&Number.isInteger(count)&&count>0?` (${count})`:""}`;
+        });
+    const explanation=reasonLines.join(" ")||summary||"Some selected sources are not ready yet.";
+    return `${explanation} The last complete custom-vault revision is preserved. Review this planet’s source settings, then retry Sync now.`;
+}
+
+async function getObsidianKnowledgeSummary(worldId:string, signal?:AbortSignal):Promise<ObsidianKnowledgeSummary|null> {
+    const response=await fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(worldId)}/knowledge?summary=1`,{credentials:"include",signal});
+    if(!response.ok) throw new Error(`Unable to check selected Obsidian sources (HTTP ${response.status}).`);
+    const data=await response.json().catch(()=>null) as Partial<ObsidianKnowledgeSummary>|null;
+    if(!data||data.worldId!==worldId||!(["ready","indexing","blocked"] as unknown[]).includes(data.status)||typeof data.readinessFingerprint!=="string") throw new Error("The selected Obsidian source status could not be verified.");
+    return data as ObsidianKnowledgeSummary;
+}
 
 function getMinimumDashboardHeight() {
     return typeof window === "undefined"
@@ -177,7 +229,7 @@ function migrateDefaultWorldZoom(userId: string, worlds: WorkspaceWorld[]) {
     } catch { /* A storage restriction must not prevent FolderRocket from opening. */ }
 }
 
-function WorldWorkspace({user, onLogout, world, worlds, worldNames, onOpenWorlds, onViewGraph, onWorldAiModeChange, onTreeRootModeChange, settingsPreloaded}: {user: FolderRocketUser; onLogout: () => Promise<void>; world: WorkspaceWorld; worlds: WorkspaceWorld[]; worldNames: Record<string, string>; onOpenWorlds: () => void; onViewGraph: (world:WorkspaceWorld,threadId?:string)=>void; onWorldAiModeChange: (enabled: boolean) => Promise<void>; onTreeRootModeChange: (mode:WorldTreeRootMode)=>Promise<void>; settingsPreloaded: boolean}) {
+function WorldWorkspace({user, onLogout, world, worlds, worldNames, onOpenWorlds, onOpenWorldSettings, onViewGraph, onWorldAiModeChange, onTreeRootModeChange, settingsPreloaded, worldAccountReady}: {user: FolderRocketUser; onLogout: () => Promise<void>; world: WorkspaceWorld; worlds: WorkspaceWorld[]; worldNames: Record<string, string>; onOpenWorlds: () => void; onOpenWorldSettings: () => void; onViewGraph: (world:WorkspaceWorld,threadId?:string)=>void; onWorldAiModeChange: (enabled: boolean) => Promise<void>; onTreeRootModeChange: (mode:WorldTreeRootMode)=>Promise<void>; settingsPreloaded: boolean; worldAccountReady:"ready"|"error"|"missing"|undefined}) {
     const workspaceScope = activeWorldStorageScope(user.id, world.id);
     const foldersStorageKey = `${FOLDERS_KEY}-${workspaceScope}`;
     const widthsStorageKey = `${DASHBOARD_WIDTHS_KEY}-${workspaceScope}`;
@@ -193,32 +245,195 @@ function WorldWorkspace({user, onLogout, world, worlds, worldNames, onOpenWorlds
     const dashboardSettingsUrl = `${API_BASE_URL}/settings/dashboard?worldId=${encodeURIComponent(world.id)}`;
     const settingsPreloadedRef = useRef(settingsPreloaded);
     const isCargoShipWindow = new URLSearchParams(window.location.search).has("folderrocketCargoShip");
+
     const [page, setPage] = useState<"dashboard" | "folders" | "processing" | "applications" | "daily" | "email">(() => sessionStorage.getItem(`folderrocket-obsidian-open-email-${user.id}`) === world.id ? "email" : "dashboard");
+    const [conversationRailPreview,setConversationRailPreview]=useState(false);
+    const [conversationNotification,setConversationNotification]=useState<{scope:string;kind:"checking"|"ready"|"unsupported"|"error";message:string;count:number|null}>({scope:"",kind:"checking",message:"Checking email notifications…",count:null});
+    const notificationScope=`${world.id}:${world.emailAccount?.provider||"none"}:${world.emailAccount?.blockId||"none"}`;
+    const scopedConversationNotification=conversationNotification.scope===notificationScope?conversationNotification:{kind:"checking" as const,message:"Checking email notifications…"};
+    const conversationNotificationStatus=world.emailAccount?.provider!=="gmail"?{kind:"unsupported" as const,message:"New-email count is unavailable: no Gmail account is selected for this planet."}:page==="email"&&scopedConversationNotification.kind!=="error"&&scopedConversationNotification.kind!=="unsupported"?{...scopedConversationNotification,message:"Open Conversations to view and acknowledge individual emails."}:scopedConversationNotification;
+    const conversationUnreadCount=conversationNotificationStatus.kind==="ready"?conversationNotification.count: null;
+    useEffect(()=>{
+        let current=true;
+        if(world.emailAccount?.provider!=="gmail") return ()=>{current=false;};
+        const controller=new AbortController();
+        const check=async()=>{try{const response=await fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(world.id)}/email/notifications`,{credentials:"include",signal:controller.signal});const data=await response.json().catch(()=>({}));if(!current)return;if(response.status===501||data.code==="provider_unsupported"||data.supported===false){setConversationNotification({scope:notificationScope,kind:"unsupported",count:null,message:"Email notification counts are not supported for this account."});return;}if(!response.ok){const message=response.status===401||response.status===403?"Gmail authorization or selected account needs attention.":`Could not check email notifications (HTTP ${response.status}).`;setConversationNotification({scope:notificationScope,kind:"error",count:null,message});return;}const expectedAccountId=world.emailAccount?.provider==="gmail"?world.emailAccount.blockId:"";if(data.configured!==true||!expectedAccountId||data.accountId!==expectedAccountId){setConversationNotification({scope:notificationScope,kind:"error",count:null,message:"The selected Gmail account for this planet could not be verified."});return;}const count=Number(data.count);if(data.supported!==true||!Number.isFinite(count)||count<0){setConversationNotification({scope:notificationScope,kind:"error",count:null,message:"The email notification service returned an invalid status. No unread count is being shown."});return;}setConversationNotification({scope:notificationScope,kind:"ready",count:Math.floor(count),message:count?`${Math.floor(count)} new email${count===1?"":"s"}.`:"No new emails."});}catch{if(current&&!controller.signal.aborted)setConversationNotification({scope:notificationScope,kind:"error",count:null,message:"Could not reach the email notification service. Check your connection and Gmail account."});}};
+        const refreshAfterThreadAck=(event:Event)=>{const detail=(event as CustomEvent<{scope?:string;accountBlockId?:string}>).detail;if(detail?.scope===notificationScope&&detail.accountBlockId===world.emailAccount?.blockId)void check();};
+        window.addEventListener("folderrocket-refresh-conversation-notifications",refreshAfterThreadAck);
+        void check();const timer=window.setInterval(()=>{if(!document.hidden)void check();},30_000);
+        return ()=>{current=false;controller.abort();window.clearInterval(timer);window.removeEventListener("folderrocket-refresh-conversation-notifications",refreshAfterThreadAck);};
+    },[page,notificationScope,world.emailAccount?.provider,world.emailAccount?.blockId,world.id]);
     const [emailFocusThreadId,setEmailFocusThreadId]=useState("");
-    const [logoLaunching,setLogoLaunching]=useState(false);
-    const logoLaunchTimer=useRef<number|null>(null);
-    const logoLaunchLocked=useRef(false);
     const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
     const [applicationChecking, setApplicationChecking] = useState(false);
     const [dashboardSaveError, setDashboardSaveError] = useState("");
     const [folderPathNotice, setFolderPathNotice] = useState("");
+    const [obsidianAutoSyncWarning, setObsidianAutoSyncWarning] = useState("");
+    const [obsidianAutoSyncLastMessage, setObsidianAutoSyncLastMessage] = useState("");
+    const [obsidianAutoSyncNeedsSettings, setObsidianAutoSyncNeedsSettings] = useState(false);
+    const [obsidianAutoSyncFingerprint, setObsidianAutoSyncFingerprint] = useState("");
+    const [obsidianAutoSyncStatusOpen, setObsidianAutoSyncStatusOpen] = useState(false);
     const [folders, setFolders] = useState<Folder[]>(() => readFolders(foldersStorageKey, user.workspacePath, user.role === "admin"));
+    const obsidianAutoSyncState = useRef({timer:0,inFlight:false,pending:false});
+    const scheduleObsidianAutoSync = useRef<() => void>(() => {});
+    const obsidianAutoSyncKey = `${user.id}:${world.id}`;
 
-    const navigate=useCallback((next: "dashboard" | "folders" | "processing" | "applications" | "daily" | "email") => {
-        if (next !== page && page === "applications" && applicationChecking && !window.confirm("A file check is still running. Leaving Applications will stop it, and you will need to press Continue checking when you return. Leave Applications?")) return;
-        setPage(next);
-    },[applicationChecking,page]);
-    useEffect(()=>()=>{if(logoLaunchTimer.current!==null)window.clearTimeout(logoLaunchTimer.current);},[]);
-    const launchConversation=useCallback(()=>{
-        if(logoLaunchLocked.current)return;
-        if(window.matchMedia("(prefers-reduced-motion: reduce)").matches){navigate("email");return;}
-        logoLaunchLocked.current=true;setLogoLaunching(true);
-        logoLaunchTimer.current=window.setTimeout(()=>{navigate("email");setLogoLaunching(false);logoLaunchLocked.current=false;logoLaunchTimer.current=null;},390);
-    },[navigate]);
     useEffect(()=>{const pendingKey=`folderrocket-obsidian-open-email-${user.id}`;if(sessionStorage.getItem(pendingKey)===world.id)sessionStorage.removeItem(pendingKey);},[user.id,world.id]);
     useEffect(()=>{const open=(event:Event)=>{const detail=(event as CustomEvent<{worldId?:string;threadId?:string}>).detail;if(detail?.worldId!==world.id)return;setEmailFocusThreadId(detail.threadId||"");setPage("email");};window.addEventListener("folderrocket-open-email-thread",open);return()=>window.removeEventListener("folderrocket-open-email-thread",open);},[world.id]);
+
+    const obsidianSyncSignature = getObsidianSyncSignature(world);
+    useEffect(()=>{
+        let current=true;
+        const onSyncStatus=(event:Event)=>{
+            const detail=(event as CustomEvent<{worldId?:string;manual?:boolean;blocked?:boolean;readinessFingerprint?:string;reasonSummary?:ObsidianReasonSummary;message?:string}>).detail;
+            if(detail?.worldId!==world.id)return;
+            if(detail.blocked&&detail.readinessFingerprint){
+                recordObsidianIncompleteSync(obsidianAutoSyncKey,obsidianSyncSignature,detail.readinessFingerprint);
+                setObsidianAutoSyncFingerprint(detail.readinessFingerprint);
+                setObsidianAutoSyncNeedsSettings(true);
+                const incomplete:ObsidianSyncResponse={ok:false,status:409,reasonSummary:detail.reasonSummary,readinessFingerprint:detail.readinessFingerprint};
+                const described=describeObsidianIncompleteSync(incomplete);
+                const hasSpecificReasons=Boolean(detail.reasonSummary?.blockers?.length||detail.reasonSummary?.reasonCodes?.some(code=>["source_index_incomplete","selected_source_limit","content_unavailable","knowledge_limit","source_selection_changed"].includes(code)));
+                const message=hasSpecificReasons?described:(detail.message||described);
+                setObsidianAutoSyncLastMessage(message);
+                if(shouldShowObsidianIncompleteSync(obsidianAutoSyncKey,obsidianSyncSignature,detail.readinessFingerprint)) setObsidianAutoSyncWarning(message);
+                return;
+            }
+            if(!detail.manual)return;
+            void getObsidianKnowledgeSummary(world.id).then(summary=>{
+                if(!summary||!current)return;
+                recordObsidianSyncSuccess(obsidianAutoSyncKey,obsidianSyncSignature);
+                setObsidianAutoSyncWarning("");setObsidianAutoSyncLastMessage("");setObsidianAutoSyncFingerprint("");setObsidianAutoSyncNeedsSettings(false);setObsidianAutoSyncStatusOpen(false);
+            }).catch(()=>{});
+        };
+        window.addEventListener("folderrocket:obsidian-sync-status",onSyncStatus);
+        return()=>{current=false;window.removeEventListener("folderrocket:obsidian-sync-status",onSyncStatus);};
+    },[world.id,obsidianAutoSyncKey,obsidianSyncSignature]);
+    useEffect(() => {
+        const state = obsidianAutoSyncState.current;
+        window.clearTimeout(state.timer);
+        state.timer = 0;
+        if (isCargoShipWindow || !world.obsidian?.enabled || world.obsidian.autoSync !== true) {
+            state.pending = false;
+            scheduleObsidianAutoSync.current = () => {};
+            return;
+        }
+        let alive = true;
+        let failureReported = false;
+        const schedule = () => {
+            window.clearTimeout(state.timer);
+            state.timer = window.setTimeout(() => {
+                state.timer = 0;
+                if (!alive) return;
+                if (document.visibilityState !== "visible" || !document.hasFocus()) return;
+                if (state.inFlight) { state.pending = true; return; }
+                state.inFlight = true;
+                void getObsidianKnowledgeSummary(world.id)
+                    .then(response => {
+                        if (!alive) return;
+                        if (!response) return;
+                        const fingerprint=response.readinessFingerprint;
+                        if(response.status!=="ready") {
+                            setObsidianAutoSyncFingerprint(fingerprint);
+                            const incomplete:ObsidianSyncResponse={ok:false,status:409,code:"KNOWLEDGE_INCOMPLETE",reasonSummary:response.reasonSummary,readinessFingerprint:fingerprint};
+                            recordObsidianIncompleteSync(obsidianAutoSyncKey,obsidianSyncSignature,fingerprint);
+                            const message=describeObsidianIncompleteSync(incomplete);
+                            setObsidianAutoSyncLastMessage(message);
+                            if(shouldShowObsidianIncompleteSync(obsidianAutoSyncKey,obsidianSyncSignature,fingerprint)) setObsidianAutoSyncWarning(message);
+                            setObsidianAutoSyncNeedsSettings(true);
+                            return;
+                        }
+                        setObsidianAutoSyncFingerprint("");
+                        setObsidianAutoSyncWarning("");
+                        setObsidianAutoSyncLastMessage("");
+                        setObsidianAutoSyncNeedsSettings(false);
+                        setObsidianAutoSyncStatusOpen(false);
+                        if(shouldPauseObsidianAutoSync(obsidianAutoSyncKey,obsidianSyncSignature,fingerprint)) return;
+                        return requestObsidianSync(user.id,world.id,workspaceScope,obsidianSyncSignature).then(syncResponse=>{
+                            if(!alive)return;
+                            if(!syncResponse.ok) {
+                                if(syncResponse.code==="KNOWLEDGE_INCOMPLETE") {
+                                    const blockedFingerprint=syncResponse.readinessFingerprint||fingerprint;
+                                    setObsidianAutoSyncFingerprint(blockedFingerprint);
+                                    recordObsidianIncompleteSync(obsidianAutoSyncKey,obsidianSyncSignature,blockedFingerprint);
+                                    const message=describeObsidianIncompleteSync(syncResponse);
+                                    setObsidianAutoSyncLastMessage(message);
+                                    if(shouldShowObsidianIncompleteSync(obsidianAutoSyncKey,obsidianSyncSignature,blockedFingerprint)) setObsidianAutoSyncWarning(message);
+                                    setObsidianAutoSyncNeedsSettings(true);
+                                } else {
+                                    setObsidianAutoSyncWarning("Automatic Obsidian sync failed. The last successful vault data is preserved; try Sync now or check Diagnostics.");
+                                    setObsidianAutoSyncNeedsSettings(false);
+                                }
+                                if(!failureReported){failureReported=true;captureDiagnostic(user.id,{type:"http",category:"obsidian-auto-sync",message:syncResponse.message||"Automatic Obsidian sync failed.",route:`/worlds/${world.id}/obsidian/sync`,method:"POST",status:syncResponse.status,worldId:world.id});}
+                                return;
+                            }
+                            recordObsidianSyncSuccess(obsidianAutoSyncKey,obsidianSyncSignature);
+                            failureReported=false;
+                            setObsidianAutoSyncWarning("");
+                            setObsidianAutoSyncLastMessage("");
+                            setObsidianAutoSyncFingerprint("");
+                            setObsidianAutoSyncNeedsSettings(false);
+                            setObsidianAutoSyncStatusOpen(false);
+                            window.dispatchEvent(new CustomEvent("folderrocket:obsidian-sync-status",{detail:{worldId:world.id,config:syncResponse.config,result:syncResponse.result}}));
+                        });
+                    })
+                    .catch((reason:unknown) => {
+                        if (!alive) return;
+                        setObsidianAutoSyncWarning(reason instanceof Error?reason.message:"Automatic Obsidian sync failed. The last successful vault data is preserved; try Sync now or check Diagnostics.");
+                        setObsidianAutoSyncNeedsSettings(false);
+                        if (!failureReported) {
+                            failureReported = true;
+                            captureDiagnostic(user.id,{type:"http",category:"obsidian-auto-sync",message:"Automatic Obsidian sync request failed.",route:`/worlds/${world.id}/obsidian/sync`,method:"POST",worldId:world.id});
+                        }
+                    })
+                    .finally(() => {
+                        state.inFlight = false;
+                        if (state.pending) { state.pending = false; scheduleObsidianAutoSync.current(); }
+                    });
+            }, 1200);
+        };
+        scheduleObsidianAutoSync.current = schedule;
+        const onStorage = (event:StorageEvent) => {
+            if (event.key?.includes(workspaceScope) && (event.key.includes("daily-job") || event.key.includes("sticky-notes") || event.key.includes("daily-calendars") || event.key.includes("folders"))) schedule();
+        };
+        const onScopedEvent = (event:Event) => {
+            const detail = (event as CustomEvent<{storageScope?:string}>).detail;
+            if (detail?.storageScope && detail.storageScope !== workspaceScope) return;
+            schedule();
+        };
+        const onResume = () => {if (document.visibilityState === "visible" && document.hasFocus()) schedule();};
+        window.addEventListener("folderrocket:daily-activity", onScopedEvent);
+        window.addEventListener("folderrocket:sticky-notes-updated", onScopedEvent);
+        window.addEventListener("folderrocket-calendar-context", onScopedEvent);
+        window.addEventListener("folderrocket-files-moved", schedule);
+        window.addEventListener("storage", onStorage);
+        window.addEventListener("focus", onResume);
+        document.addEventListener("visibilitychange", onResume);
+        schedule();
+        const periodic = window.setInterval(schedule, 5 * 60 * 1000);
+        return () => {
+            alive = false;
+            window.clearTimeout(state.timer);
+            state.timer = 0;
+            window.clearInterval(periodic);
+            window.removeEventListener("folderrocket:daily-activity", onScopedEvent);
+            window.removeEventListener("folderrocket:sticky-notes-updated", onScopedEvent);
+            window.removeEventListener("folderrocket-calendar-context", onScopedEvent);
+            window.removeEventListener("folderrocket-files-moved", schedule);
+            window.removeEventListener("storage", onStorage);
+            window.removeEventListener("focus", onResume);
+            document.removeEventListener("visibilitychange", onResume);
+            scheduleObsidianAutoSync.current = () => {};
+        };
+    }, [isCargoShipWindow,world.id,world.obsidian?.enabled,world.obsidian?.autoSync,obsidianSyncSignature,obsidianAutoSyncKey,workspaceScope,user.id]);
+    useEffect(() => {scheduleObsidianAutoSync.current();}, [folders]);
     const [dashboardWidths, setDashboardWidths] = useState<DashboardWidths | null>(() => readDashboardWidths(widthsStorageKey));
     const [dashboardHeight, setDashboardHeight] = useState<number | null>(() => readDashboardHeight(heightStorageKey));
+    const navigate=useCallback((next: "dashboard" | "folders" | "processing" | "applications" | "daily" | "email") => {
+        if (next !== page && page === "applications" && applicationChecking && !window.confirm("A file check is still running. Leaving Applications will stop it, and you will need to press Continue checking when you return. Leave Applications?")) return;
+        if (next === "dashboard" && page === "dashboard") { setDashboardWidths(null); setDashboardHeight(null); }
+        setPage(next);
+    },[applicationChecking,page]);
     const [dashboardLayout, setDashboardLayout] = useState<"three-column" | "folders-top">(() => localStorage.getItem(`${DASHBOARD_LAYOUT_KEY}-${workspaceScope}`) === "folders-top" ? "folders-top" : "three-column");
     const [searchFolderIds, setSearchFolderIds] = useState<string[]>(() => readSearchFolderSelection(searchStorageKey));
     const [sourceBlocks, setSourceBlocks] = useState<DashboardSourceBlockData[]>(() => readSourceBlocks(sourceBlocksStorageKey));
@@ -228,6 +443,7 @@ function WorldWorkspace({user, onLogout, world, worlds, worldNames, onOpenWorlds
     const [aiConfigured, setAiConfigured] = useState(false);
     const [aiMode, setAiMode] = useState(() => localStorage.getItem(`${AI_MODE_KEY}-${workspaceScope}`) === "on");
     const [appZoom, setAppZoom] = useState(() => readAppZoom(appZoomStorageKey));
+    const [appZoomLimits, setAppZoomLimits] = useState<{min:number;max:number;fits:boolean}>({min:.75,max:1.5,fits:true});
     const [floatingToolsScale, setFloatingToolsScale] = useState(() => readFloatingToolsScale(floatingToolsScaleStorageKey));
     const [floatingBookmarkScale, setFloatingBookmarkScale] = useState(() => readFloatingToolsScale(floatingBookmarkScaleStorageKey));
     const [floatingBookmarkWidth, setFloatingBookmarkWidth] = useState(() => readBookmarkDimension(floatingBookmarkWidthStorageKey, 96, 64, 220));
@@ -294,37 +510,44 @@ function WorldWorkspace({user, onLogout, world, worlds, worldNames, onOpenWorlds
         return () => { active = false; window.clearTimeout(timer); window.clearInterval(interval); window.removeEventListener("folderrocket:daily-activity", sync); window.removeEventListener("folderrocket:sticky-notes-updated", sync); window.removeEventListener("folderrocket-calendar-context", sync); window.removeEventListener("storage", onStorage); };
     }, [world.activityNotifications?.enabled, selectedDigestSources, world.id, workspaceScope]);
     useEffect(() => {
+        const snapshotsEnabled = world.obsidian?.sourceSelection?.snapshots !== false;
         if (!world.graphEnabled) return;
         let timer=0;
         let interval=0;
         let active=true;
         let inFlight=false;
+        const controller=new AbortController();
         const uploadSnapshot=()=>{
+            if(!snapshotsEnabled||!active||controller.signal.aborted)return;
             window.clearTimeout(timer);
             timer=window.setTimeout(()=>{
-                if(!active||inFlight)return;
+                if(!active||controller.signal.aborted||inFlight)return;
                 inFlight=true;
-                void fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(world.id)}/graph/snapshot`,{method:"POST",credentials:"include",keepalive:true,headers:{"Content-Type":"application/json"},body:JSON.stringify({snapshot:readWorldActivitySnapshot(workspaceScope)})})
+                void fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(world.id)}/graph/snapshot`,{method:"POST",credentials:"include",keepalive:true,headers:{"Content-Type":"application/json"},body:JSON.stringify({snapshot:readWorldActivitySnapshot(workspaceScope)}),signal:controller.signal})
+                    .then(response=>{if(!response.ok)return;})
                     .catch(()=>{})
                     .finally(()=>{inFlight=false;});
             },300);
         };
         const uploadActivity=(event:Event)=>{
+            if(!active||controller.signal.aborted)return;
             const activity=(event as CustomEvent<{kind?:string;summary?:string}>).detail;
             if(!activity||typeof activity.kind!=="string"||typeof activity.summary!=="string"||!activity.summary.trim())return;
             const operationId=typeof crypto.randomUUID==="function"?crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`;
-            void fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(world.id)}/graph/activity`,{method:"POST",credentials:"include",keepalive:true,headers:{"Content-Type":"application/json"},body:JSON.stringify({activity:{worldId:world.id,operationId,at:new Date().toISOString(),kind:activity.kind.slice(0,48),summary:activity.summary.slice(0,240)}})}).catch(()=>{});
+            void fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(world.id)}/graph/activity`,{method:"POST",credentials:"include",keepalive:true,headers:{"Content-Type":"application/json"},body:JSON.stringify({activity:{worldId:world.id,operationId,at:new Date().toISOString(),kind:activity.kind.slice(0,48),summary:activity.summary.slice(0,240)}}),signal:controller.signal}).catch(()=>{});
             uploadSnapshot();
         };
         const onStorage=(event:StorageEvent)=>{if(event.key?.includes(workspaceScope)&&(event.key.includes("daily-job")||event.key.includes("sticky-notes")||event.key.includes("daily-calendars")))uploadSnapshot();};
-        uploadSnapshot();
-        interval=window.setInterval(uploadSnapshot,60_000);
         window.addEventListener("folderrocket:daily-activity",uploadActivity);
-        window.addEventListener("folderrocket:sticky-notes-updated",uploadSnapshot);
-        window.addEventListener("folderrocket-calendar-context",uploadSnapshot);
-        window.addEventListener("storage",onStorage);
-        return()=>{active=false;window.clearTimeout(timer);window.clearInterval(interval);window.removeEventListener("folderrocket:daily-activity",uploadActivity);window.removeEventListener("folderrocket:sticky-notes-updated",uploadSnapshot);window.removeEventListener("folderrocket-calendar-context",uploadSnapshot);window.removeEventListener("storage",onStorage);};
-    },[world.graphEnabled,world.id,workspaceScope]);
+        if(snapshotsEnabled){
+            uploadSnapshot();
+            interval=window.setInterval(uploadSnapshot,60_000);
+            window.addEventListener("folderrocket:sticky-notes-updated",uploadSnapshot);
+            window.addEventListener("folderrocket-calendar-context",uploadSnapshot);
+            window.addEventListener("storage",onStorage);
+        }
+        return()=>{active=false;controller.abort();window.clearTimeout(timer);window.clearInterval(interval);window.removeEventListener("folderrocket:daily-activity",uploadActivity);window.removeEventListener("folderrocket:sticky-notes-updated",uploadSnapshot);window.removeEventListener("folderrocket-calendar-context",uploadSnapshot);window.removeEventListener("storage",onStorage);};
+    },[world.graphEnabled,world.obsidian?.sourceSelection?.snapshots,world.id,workspaceScope]);
     const previousUsbIds = useRef<string[]>([]);
     useEffect(() => {
         const drives = usbStatus.drives ?? [];
@@ -401,15 +624,34 @@ function WorldWorkspace({user, onLogout, world, worlds, worldNames, onOpenWorlds
     useEffect(() => {
         if (!window.folderRocketDesktop || isCargoShipWindow) return;
         let active = true;
-        void window.folderRocketDesktop.setZoomFactor(initialAppZoomRef.current).then(value => { if (active) setAppZoom(Math.max(.75, Math.min(1.5, value))); });
-        const unsubscribe = window.folderRocketDesktop.onZoomChanged(value => { if (active) setAppZoom(Math.max(.75, Math.min(1.5, value))); });
+        const desktop = window.folderRocketDesktop;
+        const refreshZoomLimits = async () => {
+            if (!desktop.zoomLimits) return;
+            try {
+                const limits = await desktop.zoomLimits();
+                if (active) setAppZoomLimits({min:Math.max(.75,Math.min(1.5,limits.min)),max:Math.max(.75,Math.min(1.5,limits.max)),fits:Boolean(limits.fits)});
+            } catch { /* Keep the browser-compatible zoom range if desktop display limits are unavailable. */ }
+        };
+        void (async () => {
+            await refreshZoomLimits();
+            try {
+                const value = await desktop.setZoomFactor(initialAppZoomRef.current);
+                if (active) setAppZoom(Math.max(.75, Math.min(1.5, value)));
+            } catch { /* Preserve the saved zoom state if Electron is restarting its display metrics. */ }
+        })();
+        const unsubscribe = desktop.onZoomChanged(value => {
+            if (active) setAppZoom(Math.max(.75, Math.min(1.5, value)));
+            void refreshZoomLimits();
+        });
         return () => { active = false; unsubscribe(); };
     }, [isCargoShipWindow]);
 
     function setDesktopZoom(next: number) {
-        const zoom = Math.max(.75, Math.min(1.5, Math.round(next * 100) / 100));
+        const zoom = Math.max(.75, Math.min(appZoomLimits.max, Math.round(next * 100) / 100));
         if (!window.folderRocketDesktop) { setAppZoom(zoom); return; }
-        void window.folderRocketDesktop.setZoomFactor(zoom).then(setAppZoom);
+        void window.folderRocketDesktop.setZoomFactor(zoom).then(value => { setAppZoom(value); return window.folderRocketDesktop?.zoomLimits?.(); }).then(limits => {
+            if (limits) setAppZoomLimits({min:Math.max(.75,Math.min(1.5,limits.min)),max:Math.max(.75,Math.min(1.5,limits.max)),fits:Boolean(limits.fits)});
+        });
     }
 
     useEffect(() => {
@@ -562,7 +804,6 @@ function WorldWorkspace({user, onLogout, world, worlds, worldNames, onOpenWorlds
         window.addEventListener("pointerup", stop);
         window.addEventListener("pointercancel", stop);
     }
-    function resetDashboardLayout() { setDashboardWidths(null); setDashboardHeight(null); }
     function updateColumnBlocks(column: "left" | "right", update: (current: DashboardSourceBlockData[]) => DashboardSourceBlockData[]) {
         if (column === "left") setSourceBlocks(update);
         else setRightSourceBlocks(update);
@@ -585,7 +826,7 @@ function WorldWorkspace({user, onLogout, world, worlds, worldNames, onOpenWorlds
 
     function renderSourceBlock(column: "left" | "right", block: DashboardSourceBlockData) {
         const deferred = (content: ReactNode) => <Suspense fallback={<p className="sourceLoading">Loading…</p>}>{content}</Suspense>;
-        if (block.type === "gmail") return <GmailSourcePanel key={`${world.id}-${block.id}-${world.emailAccount?.provider === "gmail" ? world.emailAccount.blockId : "none"}`} storageScope={`${workspaceScope}-${block.id}`} alertBlockId={block.id} accountBlockId={world.emailAccount?.provider === "gmail" ? world.emailAccount.blockId : null} accountCatalogKey={user.id} worldId={world.id} worldName={world.name} worldNames={worldNames} aiEnabled={aiEnabled} worldAccountLocked worldAccountEmail={world.emailAccount?.provider === "gmail" ? world.emailAccount.email || "" : ""} onManageWorldAccount={onOpenWorlds} />;
+        if (block.type === "gmail") return <GmailSourcePanel key={`${world.id}-${block.id}-${world.emailAccount?.provider === "gmail" ? world.emailAccount.blockId : "none"}`} storageScope={`${workspaceScope}-${block.id}`} alertBlockId={block.id} accountBlockId={world.emailAccount?.provider === "gmail" ? world.emailAccount.blockId : null} accountCatalogKey={user.id} worldId={world.id} worldName={world.name} worldNames={worldNames} aiEnabled={aiEnabled} worldAccountLocked worldAccountStatus={worldAccountReady === "ready" ? "ready" : worldAccountReady === "error" || worldAccountReady === "missing" ? "error" : "loading"} worldAccountReady={worldAccountReady === "ready"} worldAccountEmail={world.emailAccount?.provider === "gmail" ? world.emailAccount.email || "" : ""} onManageWorldAccount={onOpenWorlds} />;
         if (block.type === "outlook") return <OutlookSourcePanel key={`${world.id}-${block.id}-${world.emailAccount?.provider === "outlook" ? world.emailAccount.blockId : "none"}`} storageScope={`${workspaceScope}-${block.id}`} alertBlockId={block.id} accountBlockId={world.emailAccount?.provider === "outlook" ? world.emailAccount.blockId : null} accountCatalogKey={user.id} worldId={world.id} aiEnabled={aiEnabled} worldAccountLocked worldAccountEmail={world.emailAccount?.provider === "outlook" ? world.emailAccount.email || "" : ""} onManageWorldAccount={onOpenWorlds} />;
         if (block.type === "teams") return deferred(<TeamsSourcePanel key={`${world.id}-${block.id}-${block.accountBlockId === null ? "none" : block.accountBlockId || "default"}`} blockId={block.id} accountBlockId={block.accountBlockId} onAccountBlockIdChange={accountBlockId => updateSourceBlock(column, block.id, {accountBlockId})} />);
         if (block.type === "calendar") return deferred(<GoogleCalendarSourcePanel storageScope={workspaceScope} alertBlockId={block.id} weekStart={block.calendarWeekStart} onWeekStartChange={calendarWeekStart => updateSourceBlock(column, block.id, {calendarWeekStart})} />);
@@ -621,25 +862,30 @@ function WorldWorkspace({user, onLogout, world, worlds, worldNames, onOpenWorlds
     const dashboardFolderGroups = dashboardLayout === "folders-top" ? folderDescriptionGroups(folders) : folderProjectGroups(folders);
     if (isCargoShipWindow) return <CargoShip {...cargoShipProps} standalone />;
     return <div className="app" style={{"--nav-column-width":dashboardWidths?`${dashboardWidths.left}px`:"calc((min(100vw - 56px, 1420px) - 24px) / 3)"} as CSSProperties}><FolderAppearanceStyles folders={folders}/>
+        {obsidianAutoSyncWarning&&<div className="obsidianAutoSyncWarning" role="status"><span>{obsidianAutoSyncWarning}</span>{obsidianAutoSyncNeedsSettings&&<button type="button" className="obsidianAutoSyncSettingsButton" onClick={onOpenWorldSettings}>Review planet settings</button>}<button type="button" onClick={()=>{if(obsidianAutoSyncFingerprint)dismissObsidianIncompleteSync(obsidianAutoSyncKey,obsidianSyncSignature,obsidianAutoSyncFingerprint);setObsidianAutoSyncWarning("");setObsidianAutoSyncNeedsSettings(false);}} aria-label="Dismiss automatic Obsidian sync status">×</button></div>}
+        {!obsidianAutoSyncWarning&&obsidianAutoSyncFingerprint&&<div className="obsidianAutoSyncCompact"><button type="button" onClick={()=>setObsidianAutoSyncStatusOpen(value=>!value)} aria-expanded={obsidianAutoSyncStatusOpen}>Obsidian source status needs attention</button>{obsidianAutoSyncStatusOpen&&<div role="status"><span>{obsidianAutoSyncLastMessage||"Automatic sync is waiting for the selected source data. The last complete vault revision is preserved."}</span><button type="button" onClick={onOpenWorldSettings}>Review source settings</button></div>}</div>}
         <header className="appHeader">
-            <button type="button" className={`appLogoButton${logoLaunching?" isLaunching":""}`} onClick={launchConversation} title="Launch Conversation" aria-label="Launch Conversation" aria-busy={logoLaunching}><img className="appLogo" src={folderRocketWordmark} alt="FolderRocket"/></button>
+            <img className="appLogo" src={folderRocketWordmark} alt="FolderRocket"/>
+            <nav className="pageNavigation" aria-label="Pages"><div className="pageMenu" role="group"><div className="pageMenuItems">
+                    <button className={page === "dashboard" ? "active" : ""} type="button" aria-label="Dashboard" title="Dashboard" aria-current={page === "dashboard" ? "page" : undefined} onClick={() => navigate("dashboard")}><LayoutDashboard size={15}/><span className="pageNavigationLabel">Dashboard</span></button>
+                    <button className={page === "folders" ? "active" : ""} type="button" aria-label="Folder Management" title="Folder Management" aria-current={page === "folders" ? "page" : undefined} onClick={() => navigate("folders")}><FolderCog size={15}/><span className="pageNavigationLabel">Folder Management</span></button>
+                    <button className={page === "processing" ? "active" : ""} type="button" aria-label="File Studio" title="File Studio" aria-current={page === "processing" ? "page" : undefined} onClick={() => navigate("processing")}><WandSparkles size={15}/><span className="pageNavigationLabel">File Studio</span></button>
+                    <button className={page === "applications" ? "active" : ""} type="button" aria-label="Applications" title="Applications" aria-current={page === "applications" ? "page" : undefined} onClick={() => navigate("applications")}><Shapes size={15}/><span className="pageNavigationLabel">Applications</span></button>
+                    <button className={page === "daily" ? "active" : ""} type="button" aria-label="Daily Job" title="Daily Job" aria-current={page === "daily" ? "page" : undefined} onClick={() => navigate("daily")}><BriefcaseBusiness size={15}/><span className="pageNavigationLabel">Daily Job</span></button>
+                </div></div>
+            </nav>
             <div className="appWorldIdentity" role="img" aria-label={`Pianeta attivo: ${world.name}`} title={`Pianeta attivo: ${world.name}`}><WorldPlanet world={world}/><span>{world.name}</span></div>
             <div className={aiEnabled ? "appAiStatus active" : "appAiStatus inactive"} role="status" aria-live="polite"><span className="appAiStatusDot"/>{aiEnabled ? "AI ON" : "AI OFF"}</div>
-            <nav className="appNavigation">
+            <nav className="appHeaderQuickActions" aria-label="Quick actions">
                 {aiEnabled && <button type="button" className="notesAiQuickAdd" onClick={() => setAiNoteAddRequest(current => current + 1)} title="Create an AI post-it" aria-label="Create an AI post-it"><span>AI</span></button>}
                 <button type="button" className={aiEnabled ? "notesQuickAdd withAi" : "notesQuickAdd"} onClick={() => setNoteAddRequest(current => current + 1)} title="Add a post-it" aria-label="Add a post-it"><Plus size={19}/></button><button type="button" className="notesReminderQuickAdd" onClick={() => setReminderAddRequest(current => current + 1)} title="Create a reminder post-it" aria-label="Create a reminder post-it"><span>!</span></button>
-                <div className="pageMenu" role="group" aria-label="Pages"><div className="pageMenuItems">
-                    <button className={page === "dashboard" ? "active" : ""} type="button" onClick={() => navigate("dashboard")}><LayoutDashboard size={15}/>Dashboard</button>
-                    <button className={page === "folders" ? "active" : ""} type="button" onClick={() => navigate("folders")}><FolderCog size={15}/>Folder management</button>
-                    <button className={page === "processing" ? "active" : ""} type="button" onClick={() => navigate("processing")}><WandSparkles size={15}/>File Studio</button>
-                    <button className={page === "applications" ? "active" : ""} type="button" onClick={() => navigate("applications")}><Shapes size={15}/>Applications</button>
-                    <button className={page === "daily" ? "active" : ""} type="button" onClick={() => navigate("daily")}><BriefcaseBusiness size={15}/>Daily Job</button>
-                    <button className={page === "email" ? "active" : ""} type="button" onClick={() => navigate("email")}><Mail size={15}/>Conversations</button>
-                </div></div>
-                {page === "dashboard" && <button type="button" className="dashboardResetButton" onClick={resetDashboardLayout} title="Restore default dashboard size" aria-label="Restore default dashboard size"><RotateCcw size={14} /></button>}
             </nav>
-            <div className="appHeaderTools"><button type="button" className="worldChangeLauncher" onClick={onOpenWorlds} title="Fly To Another Planet"><Orbit size={14}/><span>Fly To Another Planet</span></button><CargoShip {...cargoShipProps} /><AccountMenu user={user} onLogout={onLogout} onOpenDiagnostics={() => setDiagnosticsOpen(true)} appZoom={appZoom} onAppZoomChange={setDesktopZoom} aiConfigured={aiConfigured} aiMode={aiMode} onAIModeChange={setAiMode} onAIStatusChange={setAiConfigured} dashboardLayout={dashboardLayout} onDashboardLayoutChange={setDashboardLayout} floatingToolsScale={floatingToolsScale} onFloatingToolsScaleChange={setFloatingToolsScale} bookmarkScale={floatingBookmarkScale} onBookmarkScaleChange={setFloatingBookmarkScale} bookmarkWidth={floatingBookmarkWidth} onBookmarkWidthChange={setFloatingBookmarkWidth} bookmarkHeight={floatingBookmarkHeight} onBookmarkHeightChange={setFloatingBookmarkHeight} /><DiagnosticsCenter userId={user.id} worldNames={worldNames} open={diagnosticsOpen} onOpenChange={setDiagnosticsOpen}/></div>
+            <div className="appHeaderTools"><button type="button" className="worldChangeLauncher" onClick={onOpenWorlds} title="Fly To Another Planet"><Orbit size={14}/><span>Fly To Another Planet</span></button><CargoShip {...cargoShipProps} /><AccountMenu user={user} onLogout={onLogout} onOpenDiagnostics={() => setDiagnosticsOpen(true)} appZoom={appZoom} appZoomMax={appZoomLimits.max} appZoomFits={appZoomLimits.fits} onAppZoomChange={setDesktopZoom} aiConfigured={aiConfigured} aiMode={aiMode} onAIModeChange={setAiMode} onAIStatusChange={setAiConfigured} dashboardLayout={dashboardLayout} onDashboardLayoutChange={setDashboardLayout} floatingToolsScale={floatingToolsScale} onFloatingToolsScaleChange={setFloatingToolsScale} bookmarkScale={floatingBookmarkScale} onBookmarkScaleChange={setFloatingBookmarkScale} bookmarkWidth={floatingBookmarkWidth} onBookmarkWidthChange={setFloatingBookmarkWidth} bookmarkHeight={floatingBookmarkHeight} onBookmarkHeightChange={setFloatingBookmarkHeight} /><DiagnosticsCenter userId={user.id} worldNames={worldNames} open={diagnosticsOpen} onOpenChange={setDiagnosticsOpen}/></div>
         </header>
+        <div className="conversationRailWrap" onMouseEnter={()=>setConversationRailPreview(true)} onMouseLeave={()=>setConversationRailPreview(false)} onFocus={()=>setConversationRailPreview(true)} onBlur={event=>{if(!event.currentTarget.contains(event.relatedTarget as Node|null))setConversationRailPreview(false);}}>
+            <button type="button" className={`conversationSideRail${page==="email"?" active":""}${conversationNotificationStatus.kind==="error"?" notificationError":""}`} onClick={()=>navigate("email")} aria-current={page==="email"?"page":undefined} aria-label={`Open Conversations. ${conversationNotificationStatus.message}`} title={conversationNotificationStatus.message}><Mail size={18}/>{conversationUnreadCount!==null&&conversationUnreadCount>0&&<b className="conversationUnreadBadge" aria-label={`${conversationUnreadCount} new email${conversationUnreadCount===1?"":"s"}`}>{conversationUnreadCount>99?"99+":conversationUnreadCount}</b>}<span>CONVERSATION</span></button>
+            {conversationRailPreview&&<aside className="conversationRailPreview" role="status"><strong>Conversations</strong><span>{conversationNotificationStatus.message}</span>{conversationUnreadCount!==null&&conversationUnreadCount>0&&<b>{conversationUnreadCount} unread</b>}<small>Activate the tab to open your planet’s email chats.</small></aside>}
+        </div>
         {dashboardSaveError&&<div className="appSaveError" role="alert">{dashboardSaveError} Your local copy is still available.</div>}{folderPathNotice&&<div className="appSaveError folderPathNotice" role="status"><span>{folderPathNotice}</span><button type="button" onClick={()=>setFolderPathNotice("")} aria-label="Chiudi avviso">×</button></div>}<DailyAgendaRail storageScope={workspaceScope} onOpenDailyJob={()=>navigate("daily")}/><StickyNotes key={workspaceScope} storageScope={workspaceScope} folders={folders} aiEnabled={aiEnabled} floatingScale={floatingToolsScale} bookmarkScale={floatingBookmarkScale} bookmarkWidth={floatingBookmarkWidth} bookmarkHeight={floatingBookmarkHeight} addRequest={noteAddRequest} aiAddRequest={aiNoteAddRequest} /><div className="pageFrame"><main ref={dashboardRef} style={dashboardStyle} className={`dashboard${page !== "dashboard" ? " pageHidden" : ""}${dashboardLayout === "folders-top" ? " dashboardFoldersTop" : ""}`}>
             <DashboardSourceColumn className="sourcesColumn" title="Sources" blocks={sourceBlocks} onAdd={type => addSourceBlock("left", type)} onDelete={id => deleteSourceBlock("left", id)} onMove={(id, direction) => moveSourceBlock("left", id, direction)} onResize={(id, height) => updateSourceBlock("left", id, {height})} renderBlock={block => renderSourceBlock("left", block)} />
             <div className="dashboardResizer" role="separator" aria-label="Ridimensiona colonne sinistra e centrale" onPointerDown={event => startColumnResize("left", event)} />
@@ -655,7 +901,7 @@ function WorldWorkspace({user, onLogout, world, worlds, worldNames, onOpenWorlds
             <div className="dashboardResizer" role="separator" aria-label="Resize center and right columns" onPointerDown={event => startColumnResize("right", event)} />
             <DashboardSourceColumn className="rightSourcesColumn" title="Sources" blocks={rightSourceBlocks} onAdd={type => addSourceBlock("right", type)} onDelete={id => deleteSourceBlock("right", id)} onMove={(id, direction) => moveSourceBlock("right", id, direction)} onResize={(id, height) => updateSourceBlock("right", id, {height})} renderBlock={block => renderSourceBlock("right", block)} />
             <button type="button" className="dashboardHeightResizer" onPointerDown={startDashboardHeightResize} title="Drag to set dashboard height" aria-label="Set dashboard height"><GripHorizontal size={15} /></button>
-        </main>{page === "folders" && <div className="folderPage"><Suspense fallback={<p className="sourceLoading">Loading folders…</p>}><FolderManagement folders={folders} onAdd={addFolder} onUpdate={updateFolder} onDelete={deleteFolder} onReorder={moveFolder} aiEnabled={aiEnabled} worldId={world.id} treeRootMode={world.treeRootMode||"computer"} onTreeRootModeChange={onTreeRootModeChange} /></Suspense></div>}{page === "processing" && <div className="processingView"><Suspense fallback={<p className="sourceLoading">Loading File Studio…</p>}><ProcessingWorkspace folders={folders} onUpdate={updateFolder} storageScope={workspaceScope} /></Suspense></div>}{page === "applications" && <div className="applicationsView"><Suspense fallback={<p className="sourceLoading">Loading applications…</p>}><ApplicationsWorkspace storageScope={workspaceScope} folders={folders} onScanningChange={setApplicationChecking} onVirtualFilesAdd={(folderId,items)=>updateFolder(folderId,{virtualFiles:[...(folders.find(folder=>folder.id===folderId)?.virtualFiles??[]),...items.filter(item=>!(folders.find(folder=>folder.id===folderId)?.virtualFiles??[]).some(existing=>existing.path===item.path))]})}/></Suspense></div>}{page === "daily" && <Suspense fallback={<p className="sourceLoading">Loading Daily Job…</p>}><DailyJob storageScope={workspaceScope} worldId={world.id} onOpenWorkspace={kind=>navigate(kind==="studio"?"processing":kind==="applications"?"applications":"dashboard")}/></Suspense>}{page === "email"&&<EmailConversations world={world} worlds={worlds} focusThreadId={emailFocusThreadId||undefined} onBack={()=>navigate("dashboard")} onViewGraph={threadId=>onViewGraph(world,threadId)} onGoToDashboard={()=>navigate("dashboard")}/>}</div>
+        </main>{page === "folders" && <div className="folderPage"><Suspense fallback={<p className="sourceLoading">Loading folders…</p>}><FolderManagement folders={folders} onAdd={addFolder} onUpdate={updateFolder} onDelete={deleteFolder} onReorder={moveFolder} aiEnabled={aiEnabled} worldId={world.id} treeRootMode={world.treeRootMode||"computer"} onTreeRootModeChange={onTreeRootModeChange} /></Suspense></div>}{page === "processing" && <div className="processingView"><Suspense fallback={<p className="sourceLoading">Loading File Studio…</p>}><ProcessingWorkspace folders={folders} onUpdate={updateFolder} storageScope={workspaceScope} /></Suspense></div>}{page === "applications" && <div className="applicationsView"><Suspense fallback={<p className="sourceLoading">Loading applications…</p>}><ApplicationsWorkspace storageScope={workspaceScope} folders={folders} onScanningChange={setApplicationChecking} onVirtualFilesAdd={(folderId,items)=>updateFolder(folderId,{virtualFiles:[...(folders.find(folder=>folder.id===folderId)?.virtualFiles??[]),...items.filter(item=>!(folders.find(folder=>folder.id===folderId)?.virtualFiles??[]).some(existing=>existing.path===item.path))]})}/></Suspense></div>}{page === "daily" && <Suspense fallback={<p className="sourceLoading">Loading Daily Job…</p>}><DailyJob storageScope={workspaceScope} worldId={world.id} planetEmailAccount={world.emailAccount} onOpenWorkspace={kind=>navigate(kind==="studio"?"processing":kind==="applications"?"applications":"dashboard")}/></Suspense>}{page === "email"&&<EmailConversations key={world.id} world={world} worlds={worlds} focusThreadId={emailFocusThreadId||undefined} onBack={()=>navigate("dashboard")} onViewGraph={threadId=>onViewGraph(world,threadId)} onGoToDashboard={()=>navigate("dashboard")}/>}</div>
     </div>;
 }
 
@@ -666,8 +912,10 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
         return state;
     });
     const [worlds, setWorlds] = useState(initialWorldState.worlds);
+    const [worldSettingsReady, setWorldSettingsReady] = useState<Record<string, "ready" | "error" | "missing">>({});
     const [activeWorldId, setActiveWorldId] = useState(initialWorldState.activeWorldId);
     const [worldPickerOpen, setWorldPickerOpen] = useState(false);
+    const [worldSettingsTargetId,setWorldSettingsTargetId]=useState<string|undefined>();
     const [graphTargetWorld,setGraphTargetWorld]=useState<WorkspaceWorld|null>(null);
     const [graphReturnToPicker,setGraphReturnToPicker]=useState(false);
     const [graphFocusThreadId,setGraphFocusThreadId]=useState("");
@@ -695,15 +943,16 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
         void Promise.all(initialWorldState.worlds.map(async localWorld=>{
             try{
                 const response=await fetch(`${API_BASE_URL}/settings/worlds/${encodeURIComponent(localWorld.id)}`,{credentials:"include",signal:controller.signal});
-                if(!response.ok)return null;
+                if(!response.ok){const failure=await response.clone().json().catch(()=>({})) as {code?:string};const missingSettings=response.status===404&&failure.code==="WORLD_SETTINGS_NOT_FOUND";return {id:localWorld.id,world:null,error:!missingSettings,missingSettings};}
                 const data=await response.json() as {world?:Partial<WorkspaceWorld>};
                 let obsidian:WorkspaceWorld["obsidian"];
                 try {const obsidianResponse=await fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(localWorld.id)}/obsidian`,{credentials:"include",signal:controller.signal});if(obsidianResponse.ok){const obsidianData=await obsidianResponse.json() as {config?:WorkspaceWorld["obsidian"]};obsidian=obsidianData.config;}} catch { /* Keep the local world settings if Obsidian settings are unavailable. */ }
-                return data.world?{id:localWorld.id,world:{...data.world,...(obsidian?{obsidian}:{})}}:null;
-            }catch{return null;}
+                return data.world?{id:localWorld.id,world:{...data.world,...(obsidian?{obsidian}:{})},error:false}:{id:localWorld.id,world:null,error:true};
+            }catch{return {id:localWorld.id,world:null,error:true};}
         })).then(remoteWorlds=>{
             if(!current)return;
-            const byId=new Map(remoteWorlds.filter((item):item is {id:string;world:Partial<WorkspaceWorld>}=>Boolean(item)).map(item=>[item.id,item.world]));
+            setWorldSettingsReady(Object.fromEntries(remoteWorlds.map(item=>[item.id,item.error ? "error" : item.missingSettings ? "missing" : "ready"])));
+            const byId=new Map(remoteWorlds.filter((item):item is {id:string;world:Partial<WorkspaceWorld>;error:boolean}=>Boolean(item?.world)).map(item=>[item.id,item.world]));
             setWorlds(existing=>existing.map(world=>{
                 const remote=byId.get(world.id);if(!remote)return world;
                 return {...world,...(remote.emailAccount!==undefined?{emailAccount:remote.emailAccount}:{}),...(remote.treeRootMode?{treeRootMode:remote.treeRootMode}:{}),...(remote.obsidian?{obsidian:remote.obsidian}:{})};
@@ -715,7 +964,6 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     useEffect(()=>{selectWorldRef.current=selectWorld;});
 
     useEffect(()=>{
-        let requestController:AbortController|null=null;
         const unsubscribe=window.folderRocketDesktop?.onObsidianCommand(command=>{
             if(command.action==="open"){
                 const target=worlds.find(item=>item.id===command.worldId);
@@ -732,19 +980,16 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
             if(command.action!=="sync")return;
             if(command.worldId!==activeWorld.id){setObsidianCommandNotice("Obsidian requested a sync for another planet. Switch to that planet to synchronize its vault.");return;}
             if(!activeWorld.obsidian?.enabled){setObsidianCommandNotice("Obsidian sync is disabled for this planet. Enable it in Fly To Another Planet settings.");return;}
-            requestController?.abort();
-            const controller=new AbortController();requestController=controller;
             setObsidianCommandNotice("Synchronizing this planet’s Obsidian vault…");
-            void fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(activeWorld.id)}/obsidian/sync`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({records:buildWorldObsidianClientRecords(activeWorldStorageScope(user.id,activeWorld.id))}),signal:controller.signal}).then(async response=>{
-                const data=await response.json().catch(()=>({})) as {result?:{status?:string;written?:number;unchanged?:number;conflicts?:number;warnings?:string[]};message?:string};
-                if(!response.ok)throw new Error(data.message||"Vault synchronization failed.");
-                const result=data.result;
+            void requestObsidianSync(user.id,activeWorld.id,activeWorldStorageScope(user.id,activeWorld.id),getObsidianSyncSignature(activeWorld)).then(response=>{
+                if(!response.ok)throw new Error("Vault synchronization failed.");
+                const result=response.result;
                 const detail=result?.warnings?.length?` Warnings: ${result.warnings.join(" ")}`:"";
                 setObsidianCommandNotice(`${result?.status||"Vault synchronized"}: ${result?.written||0} written, ${result?.unchanged||0} unchanged, ${result?.conflicts||0} conflicts.${detail}`);
-            }).catch(error=>{if(!controller.signal.aborted)setObsidianCommandNotice(error instanceof Error?error.message:"Vault synchronization failed.");});
+            }).catch(()=>setObsidianCommandNotice("Vault synchronization failed. The last successful vault data is preserved; check Diagnostics."));
         });
-        return()=>{requestController?.abort();unsubscribe?.();};
-    },[activeWorld.id,activeWorld.obsidian?.enabled,user.id,worlds]);
+        return()=>{unsubscribe?.();};
+    },[activeWorld, user.id, worlds]);
 
     useEffect(() => {
         setDiagnosticWorld(activeWorld.id);
@@ -866,6 +1111,7 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
         localStorage.setItem(`${AI_MODE_KEY}-${activeWorldStorageScope(user.id, updated.id)}`, updated.aiEnabled ? "on" : "off");
         window.dispatchEvent(new CustomEvent("folderrocket-world-ai-mode", {detail:{worldId:updated.id, enabled:updated.aiEnabled}}));
         setWorlds(current => current.map(world => world.id === updated.id ? updated : world));
+        if (previous) setWorldSettingsReady(current => ({...current,[updated.id]:"ready"}));
         if(updated.graphEnabled&&!previous?.graphEnabled){
             void fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(updated.id)}/graph/index`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({snapshot:readWorldActivitySnapshot(activeWorldStorageScope(user.id,updated.id))})}).catch(()=>{});
         }
@@ -876,6 +1122,7 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
         const response = await fetch(`${API_BASE_URL}/settings/worlds/${encodeURIComponent(activeWorldIdForCallbacks)}`, {method:"PUT", credentials:"include", headers:{"Content-Type":"application/json"}, body:JSON.stringify({aiEnabled:enabled})});
         if (!response.ok) throw new Error("Impossibile sincronizzare l’attivazione AI del pianeta.");
         setWorlds(current => current.map(world => world.id === activeWorldIdForCallbacks ? {...world, aiEnabled: enabled} : world));
+        setWorldSettingsReady(current => ({...current,[activeWorldIdForCallbacks]:"ready"}));
     }, [activeWorldIdForCallbacks]);
 
     async function invokeWorldAssistant(worldId: string, profileId: string, kind: "agent" | "skill", name: string, instructions: string, prompt: string, model: WorldAssistantModel, capabilities: WorldAssistantCapability[]) {
@@ -914,10 +1161,10 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     if (!activeWorld) return null;
     return <div className="worldApplicationRoot">
         {obsidianCommandNotice&&<div className="obsidianCommandNotice" role="status" aria-live="polite"><span>{obsidianCommandNotice}</span><button type="button" onClick={()=>setObsidianCommandNotice("")} aria-label="Dismiss Obsidian status">×</button></div>}
-        <WorldWorkspace key={`${user.id}-${activeWorld.id}`} user={user} onLogout={onLogout} world={activeWorld} worlds={worlds} worldNames={worldNames} onOpenWorlds={() => setWorldPickerOpen(true)} onViewGraph={(world,threadId)=>{setWorldPickerOpen(false);setGraphReturnToPicker(false);setGraphFocusThreadId(threadId||"");setGraphTargetWorld(world);}} onWorldAiModeChange={updateWorldAiMode} onTreeRootModeChange={mode=>updateWorld({...activeWorld,treeRootMode:mode})} settingsPreloaded={preloadedSettingsWorldId === activeWorld.id}/>
-        {worldPickerOpen && !isCargoShipWindow && <ChangeWorld worlds={worlds} activeWorldId={activeWorld.id} storageScope={activeWorldStorageScope(user.id, activeWorld.id)} onSelect={selectWorld} onViewGraph={world=>{setGraphFocusThreadId("");setGraphReturnToPicker(true);setGraphTargetWorld(world);}} onInvokeAssistant={invokeWorldAssistant} switchError={worldSwitchError} onBack={() => setWorldPickerOpen(false)} onAdd={addWorld} onUpdate={updateWorld} onDelete={deleteWorld}/>}
+        <WorldWorkspace key={`${user.id}-${activeWorld.id}`} user={user} onLogout={onLogout} world={activeWorld} worlds={worlds} worldNames={worldNames} onOpenWorlds={() => setWorldPickerOpen(true)} onOpenWorldSettings={() => {setWorldSettingsTargetId(activeWorld.id);setWorldPickerOpen(true);}} onViewGraph={(world,threadId)=>{setWorldPickerOpen(false);setGraphReturnToPicker(false);setGraphFocusThreadId(threadId||"");setGraphTargetWorld(world);}} onWorldAiModeChange={updateWorldAiMode} onTreeRootModeChange={mode=>updateWorld({...activeWorld,treeRootMode:mode})} settingsPreloaded={preloadedSettingsWorldId === activeWorld.id} worldAccountReady={worldSettingsReady[activeWorld.id]}/>
+        {worldPickerOpen && !isCargoShipWindow && <ChangeWorld worlds={worlds} activeWorldId={activeWorld.id} userId={user.id} storageScope={activeWorldStorageScope(user.id, activeWorld.id)} initialEditWorldId={worldSettingsTargetId} onSyncObsidian={(worldId,signature)=>requestObsidianSync(user.id,worldId,activeWorldStorageScope(user.id,worldId),signature||getObsidianSyncSignature(worlds.find(item=>item.id===worldId)||activeWorld))} onSelect={selectWorld} onViewGraph={world=>{setWorldPickerOpen(false);setGraphFocusThreadId("");setGraphReturnToPicker(true);setGraphTargetWorld(world);}} onInvokeAssistant={invokeWorldAssistant} switchError={worldSwitchError} onBack={() => {setWorldPickerOpen(false);setWorldSettingsTargetId(undefined);}} onAdd={addWorld} onUpdate={updateWorld} onDelete={deleteWorld}/>}
         {graphTargetWorld&&!isCargoShipWindow&&<PlanetGraph key={`${user.id}:${graphTargetWorld.id}`} userId={user.id} world={worlds.find(item=>item.id===graphTargetWorld.id)||graphTargetWorld} active={activeWorld.id===graphTargetWorld.id} focusThreadId={graphFocusThreadId} worldNames={worldNames} onClose={()=>{setGraphTargetWorld(null);setWorldPickerOpen(graphReturnToPicker);setGraphReturnToPicker(false);setGraphFocusThreadId("");}} onOpenConversation={threadId=>{const target=worlds.find(item=>item.id===graphTargetWorld.id);setGraphTargetWorld(null);setWorldPickerOpen(false);setGraphReturnToPicker(false);setGraphFocusThreadId("");if(target?.id===activeWorld.id)window.dispatchEvent(new CustomEvent("folderrocket-open-email-thread",{detail:{worldId:target.id,threadId}}));}} onEnable={async()=>{const current=worlds.find(item=>item.id===graphTargetWorld.id);if(current)await updateWorld({...current,graphEnabled:true});}}/>}
-        {worldTravelTarget && <div className="worldTravelScreen" role="status" aria-live="polite" aria-busy="true" style={{"--planet-color":worldTravelTarget.color,"--world-travel-duration":"700ms"} as CSSProperties}><div className="worldTravelStars"/><p className="worldTravelStatus">Preparazione dell’ambiente</p><div className="worldTravelDestination"><span className={`worldPlanet ${worldTravelTarget.style}${worldTravelTarget.aiEnabled ? " aiEnabled" : ""}`}><i/><b/><em/>{worldTravelTarget.aiEnabled && <span className="worldAiSatelliteOrbit"><i/></span>}</span><strong>{worldTravelTarget.name}</strong></div><div className="worldTravelShip" aria-hidden="true"><Rocket size={44}/></div></div>}
+        {worldTravelTarget && <div className="worldTravelScreen" role="status" aria-live="polite" aria-busy="true" style={{"--planet-color":worldTravelTarget.color,"--world-travel-duration":"700ms"} as CSSProperties}><div className="worldTravelStars"/><p className="worldTravelStatus">Preparazione dell’ambiente</p><div className="worldTravelDestination"><WorldPlanet world={worldTravelTarget}/><strong>{worldTravelTarget.name}</strong></div><div className="worldTravelShip" aria-hidden="true"><Rocket size={44}/></div></div>}
     </div>;
 }
 

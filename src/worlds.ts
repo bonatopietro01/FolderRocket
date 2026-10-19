@@ -1,4 +1,4 @@
-export type WorldPlanetStyle = "rocky" | "ringed" | "glowing";
+export type WorldPlanetStyle = "planet" | "rocky" | "ringed" | "glowing" | "asteroid" | "black-hole" | "galaxy";
 export type WorldAssistantModel = "gpt-4.1-mini" | "gpt-4.1";
 export type WorldAssistantCapability = "search-files" | "draft-post-it";
 
@@ -35,10 +35,43 @@ export interface WorldEmailAccount {
 }
 export interface WorldObsidianSettings {
     enabled: boolean;
+    autoSync?: boolean;
     vaultPath: string;
+    sourceSelection?: WorldObsidianSourceSelection;
     lastSyncAt?: string;
     status?: string;
+    lastResult?: {total?: number; written?: number; unchanged?: number; conflicts?: number; warnings?: string[] } | null;
 }
+export interface WorldObsidianSourceSelection {
+    version: 2;
+    folders: boolean;
+    email: boolean;
+    alerts: boolean;
+    activity: boolean;
+    snapshots: boolean;
+    clientNotes: boolean;
+    attachments: boolean;
+    threadMode: "all" | "selected";
+    threadIds: string[];
+    folderMode: "all" | "selected";
+    folderIds: string[];
+    fileTypeMode: "all" | "selected";
+    fileTypes: string[];
+    includeSubfolders: boolean;
+    excludedFileIds: string[];
+}
+export const DEFAULT_OBSIDIAN_SOURCE_SELECTION: WorldObsidianSourceSelection = {
+    version: 2, folders: true, email: true, alerts: true, activity: true, snapshots: true, clientNotes: true, attachments: true, threadMode: "all", threadIds: [], folderMode: "all", folderIds: [], fileTypeMode: "all", fileTypes: [], includeSubfolders: true, excludedFileIds: []
+};
+
+const WORLD_GRAPH_FILE_TYPES = [".pdf", ".doc", ".docx", ".rtf", ".txt", ".xls", ".xlsx", ".csv", ".ppt", ".pptx", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".mp3", ".mp4", ".mov", ".avi", ".mkv"];
+function normalizeObsidianSourceSelection(value: unknown): WorldObsidianSourceSelection {
+    const source = value && typeof value === "object" ? value as Partial<WorldObsidianSourceSelection> : {};
+    const legacy = (source.version ?? 1) < 2;
+    return {version: 2, folders: source.folders !== false, email: source.email !== false, alerts: source.alerts !== false, activity: source.activity !== false, snapshots: source.snapshots !== false, clientNotes: source.clientNotes !== false, attachments: source.attachments !== false, threadMode: source.threadMode === "selected" ? "selected" : "all", threadIds: Array.isArray(source.threadIds) ? [...new Set(source.threadIds.filter((id): id is string => typeof id === "string" && id.length > 0 && id.length <= 300))].slice(0, 500) : [], folderMode: !legacy && source.folderMode === "selected" ? "selected" : "all", folderIds: Array.isArray(source.folderIds) ? [...new Set(source.folderIds.filter((id): id is string => typeof id === "string" && /^[a-zA-Z0-9_-]{1,120}$/.test(id)))].slice(0, 200) : [], fileTypeMode: !legacy && source.fileTypeMode === "selected" ? "selected" : "all", fileTypes: Array.isArray(source.fileTypes) ? [...new Set(source.fileTypes.filter((value): value is string => typeof value === "string" && WORLD_GRAPH_FILE_TYPES.includes(value.toLowerCase())).map(value => value.toLowerCase()))] : [], includeSubfolders: legacy ? true : source.includeSubfolders !== false, excludedFileIds: Array.isArray(source.excludedFileIds) ? [...new Set(source.excludedFileIds.filter((id): id is string => typeof id === "string" && id.length > 0 && id.length <= 500))].slice(0, 500) : []};
+}
+
+function finiteCount(value: unknown) { return Number.isFinite(value) ? Math.max(0, Math.round(Number(value))) : 0; }
 export type WorldTreeRootMode = "computer" | "desktop";
 
 export type WorldDigestProvider = "gmail" | "outlook" | "";
@@ -89,8 +122,8 @@ export function activeWorldStorageScope(userId: string, worldId: string) {
 
 export function createDefaultWorlds(): WorkspaceWorld[] {
     return [
-        {id: "work", name: "Lavoro", color: "#5dbdff", style: "ringed", aiEnabled: false, graphEnabled: false, emailAccount: null, treeRootMode: "computer", obsidian: {enabled: false, vaultPath: ""}, agents: [], skills: [], permissions: {schemaVersion: 1, configured: false}},
-        {id: "personal", name: "Personale", color: "#c28cff", style: "glowing", aiEnabled: false, graphEnabled: false, emailAccount: null, treeRootMode: "computer", obsidian: {enabled: false, vaultPath: ""}, agents: [], skills: [], permissions: {schemaVersion: 1, configured: false}}
+        {id: "work", name: "Lavoro", color: "#5dbdff", style: "ringed", aiEnabled: false, graphEnabled: false, emailAccount: null, treeRootMode: "computer", obsidian: {enabled: false, autoSync: false, vaultPath: "", sourceSelection: {...DEFAULT_OBSIDIAN_SOURCE_SELECTION}}, agents: [], skills: [], permissions: {schemaVersion: 1, configured: false}},
+        {id: "personal", name: "Personale", color: "#c28cff", style: "glowing", aiEnabled: false, graphEnabled: false, emailAccount: null, treeRootMode: "computer", obsidian: {enabled: false, autoSync: false, vaultPath: "", sourceSelection: {...DEFAULT_OBSIDIAN_SOURCE_SELECTION}}, agents: [], skills: [], permissions: {schemaVersion: 1, configured: false}}
     ];
 }
 
@@ -102,10 +135,11 @@ function normalizeWorlds(value: unknown): WorkspaceWorld[] | null {
         && typeof world.name === "string"
         && typeof world.color === "string"
         && /^#[0-9a-fA-F]{6}$/.test(world.color)
-        && ["rocky", "ringed", "glowing"].includes(world.style));
+        && ["rocky", "planet", "ringed", "glowing", "asteroid", "black-hole", "galaxy"].includes(world.style));
     if (!worlds.length) return null;
     const unique = new Set<string>();
     return worlds.map(world => {
+        const storedStyle = String(world.style);
         let id = world.id;
         while (unique.has(id)) id = `${world.id}-${crypto.randomUUID().slice(0, 6)}`;
         unique.add(id);
@@ -113,7 +147,9 @@ function normalizeWorlds(value: unknown): WorkspaceWorld[] | null {
             id,
             name: world.name.trim().slice(0, 40) || "Pianeta",
             color: world.color,
-            style: world.style,
+            // Keep the persisted appearance identifier intact; presentation changes
+            // must not silently migrate a user's saved planet style.
+            style: storedStyle as WorldPlanetStyle,
             aiEnabled: Boolean(world.aiEnabled),
             graphEnabled: world.graphEnabled === true,
             emailAccount: Object.hasOwn(world, "emailAccount")
@@ -123,8 +159,8 @@ function normalizeWorlds(value: unknown): WorkspaceWorld[] | null {
                 : undefined,
             treeRootMode: world.treeRootMode === "desktop" ? "desktop" : "computer",
             obsidian: world.obsidian && typeof world.obsidian === "object"
-                ? {enabled: world.obsidian.enabled === true, vaultPath: typeof world.obsidian.vaultPath === "string" ? world.obsidian.vaultPath.slice(0, 1024) : "", ...(typeof world.obsidian.lastSyncAt === "string" ? {lastSyncAt: world.obsidian.lastSyncAt.slice(0, 40)} : {}), ...(typeof world.obsidian.status === "string" ? {status: world.obsidian.status.slice(0, 200)} : {})}
-                : {enabled: false, vaultPath: ""},
+                ? {enabled: world.obsidian.enabled === true, autoSync: world.obsidian.autoSync === true, vaultPath: typeof world.obsidian.vaultPath === "string" ? world.obsidian.vaultPath.slice(0, 1024) : "", sourceSelection: normalizeObsidianSourceSelection(world.obsidian.sourceSelection), ...(typeof world.obsidian.lastSyncAt === "string" ? {lastSyncAt: world.obsidian.lastSyncAt.slice(0, 40)} : {}), ...(typeof world.obsidian.status === "string" ? {status: world.obsidian.status.slice(0, 200)} : {}), ...(world.obsidian.lastResult && typeof world.obsidian.lastResult === "object" ? {lastResult: {total: finiteCount(world.obsidian.lastResult.total), written: finiteCount(world.obsidian.lastResult.written), unchanged: finiteCount(world.obsidian.lastResult.unchanged), conflicts: finiteCount(world.obsidian.lastResult.conflicts), warnings: Array.isArray(world.obsidian.lastResult.warnings) ? world.obsidian.lastResult.warnings.filter((item): item is string => typeof item === "string").slice(0, 20) : []}} : {})}
+                : {enabled: false, vaultPath: "", sourceSelection: {...DEFAULT_OBSIDIAN_SOURCE_SELECTION}},
             agents: Array.isArray(world.agents) ? world.agents.filter(agent => agent && typeof agent.id === "string" && typeof agent.name === "string").map(agent => ({
                 id: agent.id,
                 name: agent.name.trim().slice(0, 60) || "Agente",

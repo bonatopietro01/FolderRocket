@@ -1,0 +1,5 @@
+interface:
+  display_name: "Requirement Traceability"
+  short_description: "Keep requirements and evidence across agents"
+policy:
+  allow_implicit_invocation: true

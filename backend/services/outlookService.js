@@ -429,6 +429,8 @@ async function listConnectedAccounts(userId) {
     return listConnections("outlook", userId).slice(0, 30).map(connection => ({
         blockId: connection.blockId,
         email: connection.email,
+        originWorldId: connection.originWorldId || "",
+        originWorldName: connection.originWorldName || "",
         label: connection.email || `Account collegato · ${connection.blockId.slice(-6)}`,
         canSend: String(connection.scopes || "").split(/\s+/).includes(OUTLOOK_SEND_SCOPE)
     }));

@@ -712,9 +712,10 @@ async function listInboxMessages(filters = {}, {includeText = true} = {}, userId
 
 }
 
-async function listInboxThreads({pageToken = "", maxResults = 50} = {}, userId, blockId = "") {
+async function listInboxThreads({pageToken = "", maxResults = 50, query = ""} = {}, userId, blockId = "") {
     const limit = Math.max(1, Math.min(100, Math.floor(Number(maxResults) || 50)));
-    const parameters = new URLSearchParams({q:"in:inbox", maxResults:String(limit)});
+    const safeQuery=String(query||"").trim().slice(0,200);
+    const parameters = new URLSearchParams({q:safeQuery?`in:inbox ${safeQuery}`:"in:inbox", maxResults:String(limit)});
     if (typeof pageToken === "string" && pageToken.length <= 2048) parameters.set("pageToken", pageToken);
     const response = await gmailFetch(userId, `/messages?${parameters}`, blockId);
     const listed = await response.json();
@@ -743,11 +744,42 @@ async function listInboxThreads({pageToken = "", maxResults = 50} = {}, userId, 
     return {threads,nextPageToken:typeof listed.nextPageToken === "string" ? listed.nextPageToken : ""};
 }
 
-function findMessageAttachments(part, output = []) {
-    if (!part) return output;
-    if (part.filename && part.body?.attachmentId) output.push({id:part.body.attachmentId,name:String(part.filename).slice(0,240),mimeType:String(part.mimeType || "application/octet-stream").slice(0,120),size:Math.max(0,Number(part.body.size)||0)});
-    for (const child of part.parts || []) findMessageAttachments(child,output);
+function getMimeHeader(part,name) {
+    return getHeader(Array.isArray(part?.headers)?part.headers:[],name);
+}
+
+function isInlineImagePart(part) {
+    const mimeType=String(part?.mimeType||"").toLocaleLowerCase();
+    const disposition=getMimeHeader(part,"Content-Disposition").toLocaleLowerCase();
+    const contentId=getMimeHeader(part,"Content-ID").trim();
+    if(disposition.startsWith("attachment"))return false;
+    return mimeType.startsWith("image/")&&(disposition.startsWith("inline")||Boolean(contentId));
+}
+
+function collectMessageMedia(part,output={attachments:[],inlineImages:[]}) {
+    if(!part)return output;
+    const disposition=getMimeHeader(part,"Content-Disposition").toLocaleLowerCase();
+    const isInlineImage=isInlineImagePart(part);
+    if((part.body?.attachmentId||(isInlineImage&&typeof part.body?.data==="string"))&&(part.filename||isInlineImage)) {
+        const metadata={id:part.body?.attachmentId?String(part.body.attachmentId).slice(0,300):"",name:String(part.filename||(isInlineImage?"inline-image":"attachment")).slice(0,240),mimeType:String(part.mimeType||"application/octet-stream").slice(0,120),size:Math.max(0,Number(part.body.size)||0)};
+        if(isInlineImage) {
+            const contentId=getMimeHeader(part,"Content-ID").trim().replace(/^<|>$/g,"").slice(0,240);
+            output.inlineImages.push({...metadata,partId:typeof part.partId==="string"?part.partId.slice(0,100):"",downloadable:Boolean(part.body?.attachmentId||part.body?.data),contentId,disposition:disposition.split(";")[0]||"inline"});
+        } else output.attachments.push(metadata);
+    }
+    for(const child of part.parts||[])collectMessageMedia(child,output);
     return output;
+}
+
+function collectMessageMetadata(part) {
+    const media=collectMessageMedia(part);
+    const seen=new Set();
+    media.inlineImages=media.inlineImages.filter(item=>{
+        const key=item.id||item.contentId||item.name;
+        if(seen.has(key))return false;
+        seen.add(key);return true;
+    });
+    return media;
 }
 
 async function getThread(threadId,userId,blockId="") {
@@ -756,9 +788,29 @@ async function getThread(threadId,userId,blockId="") {
     const messages=(thread.messages || []).map(message=>{
         const headers=message.payload?.headers || [];
         const get=(name)=>getHeader(headers,name);
-        return {id:message.id,threadId:message.threadId || thread.id || threadId,messageId:get("Message-ID"),inReplyTo:get("In-Reply-To"),references:get("References"),from:get("From"),replyTo:get("Reply-To"),to:get("To"),cc:get("Cc"),subject:get("Subject"),date:get("Date"),receivedAt:message.internalDate?new Date(Number(message.internalDate)).toISOString():"",text:extractMessageText(message.payload),attachments:findMessageAttachments(message.payload)};
+        const media=collectMessageMetadata(message.payload);
+        return {id:message.id,threadId:message.threadId || thread.id || threadId,messageId:get("Message-ID"),inReplyTo:get("In-Reply-To"),references:get("References"),from:get("From"),replyTo:get("Reply-To"),to:get("To"),cc:get("Cc"),subject:get("Subject"),date:get("Date"),receivedAt:message.internalDate?new Date(Number(message.internalDate)).toISOString():"",text:extractMessageText(message.payload),attachments:media.attachments,inlineImages:media.inlineImages};
     }).sort((a,b)=>String(a.receivedAt).localeCompare(String(b.receivedAt)));
     return {id:thread.id || threadId,messages};
+}
+
+async function getThreadPage(threadId,userId,blockId="",{before,maxResults=10}={}) {
+    const response=await gmailFetch(userId,`/threads/${encodeURIComponent(threadId)}?format=metadata&metadataHeaders=From&metadataHeaders=Reply-To&metadataHeaders=To&metadataHeaders=Cc&metadataHeaders=Subject&metadataHeaders=Date&metadataHeaders=Message-ID&metadataHeaders=In-Reply-To&metadataHeaders=References`,blockId);
+    const thread=await response.json();
+    const references=(Array.isArray(thread.messages)?thread.messages:[]).slice().sort((a,b)=>Number(a.internalDate||0)-Number(b.internalDate||0));
+    const end=Number.isInteger(Number(before))?Math.max(0,Math.min(references.length,Number(before))):references.length;
+    const limit=Math.max(1,Math.min(20,Math.floor(Number(maxResults)||10)));
+    const start=Math.max(0,end-limit);
+    const pageReferences=references.slice(start,end);
+    const messages=await Promise.all(pageReferences.map(async reference=>{
+        const itemResponse=await gmailFetch(userId,`/messages/${encodeURIComponent(reference.id)}?format=full`,blockId);
+        const item=await itemResponse.json();
+        const headers=item.payload?.headers||[];const get=name=>getHeader(headers,name);
+        const media=collectMessageMetadata(item.payload);
+        return {id:item.id,threadId:item.threadId||thread.id||threadId,messageId:get("Message-ID"),inReplyTo:get("In-Reply-To"),references:get("References"),from:get("From"),replyTo:get("Reply-To"),to:get("To"),cc:get("Cc"),subject:get("Subject"),date:get("Date"),receivedAt:item.internalDate?new Date(Number(item.internalDate)).toISOString():"",text:extractMessageText(item.payload),attachments:media.attachments,inlineImages:media.inlineImages};
+    }));
+    messages.sort((a,b)=>String(a.receivedAt).localeCompare(String(b.receivedAt)));
+    return {id:thread.id||threadId,messages,hasMore:start>0,nextBefore:start,totalMessages:references.length};
 }
 
 
@@ -788,27 +840,47 @@ async function downloadAttachment(
 
 }
 
+async function downloadInlinePart(messageId, partId, userId, blockId = "") {
+    if(typeof messageId!=="string"||!messageId||messageId.length>300||typeof partId!=="string"||!/^0(?:\.\d+){0,20}$/.test(partId))throw new Error("Gmail inline part identifier is invalid.");
+    const response=await gmailFetch(userId,`/messages/${encodeURIComponent(messageId)}?format=full`,blockId);
+    const message=await response.json();
+    if(message.id!==messageId)throw new Error("The requested Gmail message is unavailable in this account.");
+    const findPart=(part)=>{
+        if(!part)return null;
+        if(part.partId===partId)return part;
+        for(const child of Array.isArray(part.parts)?part.parts:[]){const found=findPart(child);if(found)return found;}
+        return null;
+    };
+    const part=findPart(message.payload);
+    if(!part||!isInlineImagePart(part)||typeof part.body?.data!=="string"||!part.body.data)throw new Error("This inline Gmail image is no longer downloadable.");
+    return {content:Buffer.from(part.body.data.replaceAll("-","+").replaceAll("_","/"),"base64"),mimeType:String(part.mimeType||"application/octet-stream").slice(0,120),name:String(part.filename||"inline-image").slice(0,240)};
+}
+
 function decodeBase64Url(value) {
     return Buffer.from(value.replaceAll("-", "+").replaceAll("_", "/"), "base64").toString("utf8");
 }
 
-function stripHtml(value) {
+function decodeHtmlEntities(value) {
     return String(value)
-        .replace(/<style\b[^>]*>[\s\S]*?<\/style>/gi, "")
-        .replace(/<\s*br\s*\/?>/gi, "\n")
-        .replace(/<\/p\s*>/gi, "\n\n")
-        .replace(/<[^>]*>/g, "")
-        .replace(/&nbsp;/gi, " ")
-        .replace(/&amp;/gi, "&")
-        .replace(/&lt;/gi, "<")
-        .replace(/&gt;/gi, ">")
-        .replace(/&#39;/g, "'")
-        .replace(/&quot;/gi, '"')
-        .trim();
+        .replace(/&nbsp;/gi," ").replace(/&amp;/gi,"&").replace(/&lt;/gi,"<").replace(/&gt;/gi,">")
+        .replace(/&quot;/gi,'"').replace(/&#39;|&apos;/gi,"'")
+        .replace(/&#(\d+);/g,(_,decimal)=>{const point=Number(decimal);return point>0&&point<=0x10ffff?String.fromCodePoint(point):"";})
+        .replace(/&#x([\da-f]+);/gi,(_,hex)=>{const point=Number.parseInt(hex,16);return point>0&&point<=0x10ffff?String.fromCodePoint(point):"";});
+}
+
+function stripHtml(value) {
+    return decodeHtmlEntities(String(value)
+        .replace(/<!--[\s\S]*?-->/g,"")
+        .replace(/<(script|style|noscript|template)\b[^>]*>[\s\S]*?<\/\1\s*>/gi,"")
+        .replace(/<\s*br\s*\/?>/gi,"\n")
+        .replace(/<\/(p|div|section|article|header|footer|li|tr|h[1-6])\s*>/gi,"\n")
+        .replace(/<\s*li\b[^>]*>/gi,"• ")
+        .replace(/<[^>]*>/g,""))
+        .replace(/[\t ]+\n/g,"\n").replace(/\n[\t ]+/g,"\n").replace(/\n{3,}/g,"\n\n").trim();
 }
 
 function cleanEmailText(value) {
-    let text = stripHtml(value);
+    let text = String(value).replace(/\0/g,"").replace(/\r\n?/g,"\n").trim();
     // Some messages expose CSS as a text/plain part. Remove only leading CSS
     // rules, then preserve the actual readable body below them.
     while (/^(?:[a-z][a-z0-9\s,.:#_-]*)\s*\{/i.test(text)) {
@@ -820,13 +892,38 @@ function cleanEmailText(value) {
 }
 
 function extractMessageText(part) {
-    const own = part?.body?.data ? decodeBase64Url(part.body.data) : "";
-    if (part?.mimeType === "text/plain" && own) return cleanEmailText(own);
-    for (const child of part?.parts ?? []) {
-        const text = extractMessageText(child);
-        if (text) return text;
-    }
-    return own ? cleanEmailText(own) : "";
+    const plain=[],html=[];
+    const collect=current=>{
+        if(!current)return;
+        const mimeType=String(current.mimeType||"").toLocaleLowerCase();
+        const disposition=getMimeHeader(current,"Content-Disposition").toLocaleLowerCase();
+        const isAttachment=disposition.startsWith("attachment")||Boolean(current.filename);
+        if(!isAttachment&&current.body?.data) {
+            if(mimeType==="text/plain")plain.push(decodeBase64Url(current.body.data));
+            else if(mimeType==="text/html")html.push(decodeBase64Url(current.body.data));
+        }
+        for(const child of current.parts||[])collect(child);
+    };
+    collect(part);
+    const readablePlain=plain.map(cleanEmailText).filter(Boolean).join("\n\n").trim();
+    if(readablePlain)return readablePlain;
+    return html.map(stripHtml).filter(Boolean).join("\n\n").trim();
+}
+
+async function getThreadMetadata(threadId,userId,blockId="") {
+    const parameters=new URLSearchParams({format:"metadata"});
+    for(const header of ["From","Subject","Message-ID","Date"])parameters.append("metadataHeaders",header);
+    const response=await gmailFetch(userId,`/threads/${encodeURIComponent(threadId)}?${parameters}`,blockId);
+    const thread=await response.json();
+    const messages=(Array.isArray(thread.messages)?thread.messages:[]).map(message=>({
+        id:String(message.id||""),
+        threadId:String(message.threadId||thread.id||threadId),
+        from:getHeader(message.payload?.headers,"From"),
+        subject:getHeader(message.payload?.headers,"Subject"),
+        receivedAt:message.internalDate?new Date(Number(message.internalDate)).toISOString():""
+    })).filter(message=>message.id);
+    const latest=messages.reduce((current,item)=>item.receivedAt>current?item.receivedAt:current,"");
+    return {id:String(thread.id||threadId),subject:messages.find(item=>item.subject)?.subject||"",updatedAt:latest,messageCount:messages.length,messages};
 }
 
 async function getMessageText(messageId, userId, blockId = "") {
@@ -962,6 +1059,7 @@ async function createDraft({to, subject, text, attachments = []}, userId, blockI
 module.exports = {
     createDraft,
     downloadAttachment,
+    downloadInlinePart,
     disconnect,
     getEmailIdentity,
     getMessageText,
@@ -973,6 +1071,8 @@ module.exports = {
     listInboxThreads,
     listInboxMessages,
     getThread,
+    getThreadMetadata,
+    getThreadPage,
     sendEmail,
     sendReply,
     createReplyDraft,

@@ -1,0 +1,5 @@
+policy:
+  allow_implicit_invocation: true
+interface:
+  display_name: "Diagnosing Bugs"
+  short_description: "Diagnose hard bugs and regressions"

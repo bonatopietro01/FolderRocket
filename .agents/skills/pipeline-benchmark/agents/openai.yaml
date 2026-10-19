@@ -1,0 +1,5 @@
+interface:
+  display_name: "Pipeline Benchmark"
+  short_description: "Measure repeatable agent pipeline comparisons"
+policy:
+  allow_implicit_invocation: true

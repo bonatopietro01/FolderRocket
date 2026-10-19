@@ -6,6 +6,17 @@ const path = require("node:path");
 const {spawn} = require("node:child_process");
 const crypto = require("node:crypto");
 const {resolveManagedObsidianVault} = require("./obsidianVaultProtocol.cjs");
+const {
+    MIN_MAIN_ZOOM,
+    MAIN_WINDOW_MIN_LAYOUT_CSS_WIDTH,
+    MAIN_WINDOW_MIN_NATIVE_CONTENT_WIDTH,
+    MAIN_WINDOW_MIN_HEIGHT,
+    MAIN_WINDOW_NATIVE_BOUNDS_GUARD,
+    getMainWindowZoomLimits,
+    clampMainZoomFactor,
+    getMainWindowMinimumSize,
+    clampMainWindowBounds
+} = require("./mainWindowGeometry.cjs");
 
 const FOLDERROCKET_PROTOCOL = "folderrocket";
 
@@ -32,6 +43,8 @@ let cargoShipLastBounds = null;
 let selectedDisplaySourceId = "";
 let electronDiagnosticsQueue = Promise.resolve();
 let electronDiagnosticsStorageWarning = false;
+let mainWindowLastZoomLimitsSignature = "";
+let mainWindowLastAnnouncedZoomFactor = null;
 
 function electronDiagnosticsPath() {
     return path.join(app.getPath("userData"), "diagnostics-electron.json");
@@ -402,8 +415,8 @@ function createWindow(loadApplication = true) {
         width: visibleBounds?.width ?? 1440,
         height: visibleBounds?.height ?? 940,
         ...(visibleBounds ? {x: visibleBounds.x, y: visibleBounds.y} : {}),
-        minWidth: 640,
-        minHeight: 700,
+        minWidth: MAIN_WINDOW_MIN_NATIVE_CONTENT_WIDTH,
+        minHeight: MAIN_WINDOW_MIN_HEIGHT,
         show: false,
         autoHideMenuBar: true,
         backgroundColor: "#0e1424",
@@ -416,6 +429,9 @@ function createWindow(loadApplication = true) {
             sandbox: true
         }
     });
+    mainWindowLastZoomLimitsSignature = "";
+    mainWindowLastAnnouncedZoomFactor = null;
+    refreshMainWindowLayout({notifyIfLimitsChanged: true});
     monitorElectronWindow(mainWindow, "FolderRocket");
     if (savedState?.maximized) mainWindow.maximize();
     const saveWindowState = () => {
@@ -425,6 +441,8 @@ function createWindow(loadApplication = true) {
         try { fs.writeFileSync(statePath, JSON.stringify({...bounds, maximized})); } catch (error) { console.error("Unable to save window size", error); }
     };
     mainWindow.on("close", saveWindowState);
+    mainWindow.on("move", () => refreshMainWindowLayout({notifyIfLimitsChanged: true}));
+    mainWindow.on("resize", () => refreshMainWindowLayout({notifyIfLimitsChanged: true}));
     mainWindow.on("closed", () => {
         mainWindow = null;
         if (process.platform === "darwin") return;
@@ -452,11 +470,92 @@ function createWindow(loadApplication = true) {
     mainWindow.webContents.on("did-navigate", notifyNavigationState);
     mainWindow.webContents.on("did-navigate-in-page", notifyNavigationState);
     mainWindow.webContents.on("zoom-changed", () => {
-        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send("folderrocket:zoom-changed", mainWindow.webContents.getZoomFactor());
+        refreshMainWindowLayout({notifyOnZoom: true});
     });
     mainWindow.once("ready-to-show", () => mainWindow?.show());
     if (loadApplication) void mainWindow.loadURL(APP_ORIGIN);
     else void mainWindow.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(`<!doctype html><html><head><meta charset="utf-8"><title>FolderRocket</title><style>html,body{height:100%;margin:0}body{display:grid;place-items:center;background:#0e1424;color:#eef5ff;font:14px system-ui}.loader{text-align:center}.rocket{font-size:42px;animation:pulse 1.1s ease-in-out infinite}.loader strong{display:block;margin-top:12px;font-size:18px}.loader small{display:block;margin-top:7px;color:#9eb0c7}@keyframes pulse{50%{transform:translateY(-6px);opacity:.7}}</style></head><body><div class="loader"><div class="rocket">🚀</div><strong>FolderRocket is starting</strong><small>Preparing your local workspace…</small></div></body></html>`)}`);
+}
+
+function getMainWindowDisplayLayout(window = mainWindow) {
+    if (!window || window.isDestroyed()) return null;
+    const bounds = window.getBounds();
+    const contentBounds = window.getContentBounds();
+    const frameWidth = Math.max(0, bounds.width - contentBounds.width);
+    const display = screen.getDisplayMatching(bounds);
+    const zoomLimits = getMainWindowZoomLimits({
+        workAreaWidth: display.workArea.width,
+        frameWidth,
+        minLayoutCssWidth: MAIN_WINDOW_MIN_LAYOUT_CSS_WIDTH
+    });
+    return {bounds, contentBounds, frameWidth, display, zoomLimits};
+}
+
+function updateMainWindowMinimumSize(window, zoomFactor, layout = null) {
+    if (!window || window.isDestroyed()) return;
+    const currentLayout = layout || getMainWindowDisplayLayout(window);
+    if (!currentLayout) return;
+    const minimumSize = getMainWindowMinimumSize({
+        zoomFactor,
+        workAreaWidth: currentLayout.display.workArea.width,
+        workAreaHeight: currentLayout.display.workArea.height,
+        frameWidth: currentLayout.frameWidth,
+        minLayoutCssWidth: MAIN_WINDOW_MIN_LAYOUT_CSS_WIDTH,
+        availableContentWidth: currentLayout.zoomLimits.availableContentWidth
+    });
+    window.setMinimumSize(minimumSize.width, minimumSize.height);
+    if (window.isMaximized()) return;
+    const safeWorkArea = {
+        ...currentLayout.display.workArea,
+        height: Math.max(1, currentLayout.display.workArea.height - MAIN_WINDOW_NATIVE_BOUNDS_GUARD)
+    };
+    const targetBounds = clampMainWindowBounds({
+        ...currentLayout.bounds,
+        width: Math.max(Math.min(currentLayout.bounds.width, currentLayout.display.workArea.width), minimumSize.width),
+        height: Math.max(Math.min(currentLayout.bounds.height, safeWorkArea.height), minimumSize.height)
+    }, safeWorkArea);
+    if (targetBounds.x !== currentLayout.bounds.x || targetBounds.y !== currentLayout.bounds.y
+        || targetBounds.width !== currentLayout.bounds.width || targetBounds.height !== currentLayout.bounds.height) {
+        window.setBounds(targetBounds);
+    }
+}
+
+function refreshMainWindowLayout({notifyOnZoom = false, notifyIfLimitsChanged = false} = {}) {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    const layout = getMainWindowDisplayLayout(mainWindow);
+    if (!layout) return;
+    const currentZoom = mainWindow.webContents.getZoomFactor();
+    const nextZoom = clampMainZoomFactor(currentZoom, layout.zoomLimits);
+    updateMainWindowMinimumSize(mainWindow, nextZoom, layout);
+    const signature = `${layout.zoomLimits.min}:${layout.zoomLimits.max}:${layout.zoomLimits.fits}`;
+    const limitsChanged = signature !== mainWindowLastZoomLimitsSignature;
+    mainWindowLastZoomLimitsSignature = signature;
+    if (Math.abs(nextZoom - currentZoom) > 1e-9) {
+        mainWindow.webContents.setZoomFactor(nextZoom);
+        notifyMainWindowZoomFactor(nextZoom);
+        return;
+    }
+    if (notifyOnZoom) {
+        notifyMainWindowZoomFactor(nextZoom);
+    } else if (notifyIfLimitsChanged && limitsChanged) {
+        // The renderer uses this compatible numeric event to re-read the
+        // display-derived limits even when its current factor did not change.
+        notifyMainWindowZoomFactor(nextZoom, true);
+    }
+}
+
+function notifyMainWindowZoomFactor(zoomFactor, force = false) {
+    if (!mainWindow || mainWindow.isDestroyed()) return;
+    if (!force && mainWindowLastAnnouncedZoomFactor === zoomFactor) return;
+    mainWindowLastAnnouncedZoomFactor = zoomFactor;
+    mainWindow.webContents.send("folderrocket:zoom-changed", zoomFactor);
+}
+
+function readMainWindowZoomLimits() {
+    const layout = getMainWindowDisplayLayout(mainWindow);
+    if (!layout) return {min: MIN_MAIN_ZOOM, max: MAX_MAIN_ZOOM, fits: true};
+    const {min, max, fits} = layout.zoomLimits;
+    return {min, max, fits};
 }
 
 function createCargoShipWindow(showWhenReady = true) {
@@ -617,6 +716,10 @@ function setCargoShipWindowExpanded(expanded) {
 
 app.whenReady().then(async () => {
     recordElectronDiagnostic({message:"Applicazione Electron avviata", route:"desktop/main.cjs", severity:"info"});
+    const refreshForDisplayChange = () => refreshMainWindowLayout({notifyIfLimitsChanged: true});
+    screen.on("display-metrics-changed", refreshForDisplayChange);
+    screen.on("display-added", refreshForDisplayChange);
+    screen.on("display-removed", refreshForDisplayChange);
     if (process.defaultApp) app.setAsDefaultProtocolClient(FOLDERROCKET_PROTOCOL, process.execPath, [path.resolve(process.argv[1])]);
     else app.setAsDefaultProtocolClient(FOLDERROCKET_PROTOCOL);
     session.defaultSession.setPermissionCheckHandler((_webContents, permission, requestingOrigin) => {
@@ -695,13 +798,20 @@ app.whenReady().then(async () => {
         if (event.sender.getURL().startsWith(APP_ORIGIN) === false) return 1;
         return event.sender.getZoomFactor();
     });
+    ipcMain.handle("folderrocket:zoom-limits", event => {
+        if (event.sender.getURL().startsWith(APP_ORIGIN) === false || event.sender.id !== mainWindow?.webContents.id) {
+            return {min: MIN_MAIN_ZOOM, max: MIN_MAIN_ZOOM, fits: false};
+        }
+        return readMainWindowZoomLimits();
+    });
     ipcMain.handle("folderrocket:set-zoom-factor", (event, factor) => {
         // Only the main window controls the workspace zoom. A secondary
         // CargoRocket renderer must never alter it through the shared origin.
         if (event.sender.getURL().startsWith(APP_ORIGIN) === false || event.sender.id !== mainWindow?.webContents.id) return 1;
-        const requested = Number(factor);
-        const next = Number.isFinite(requested) ? Math.max(.75, Math.min(1.5, requested)) : 1;
+        const layout = getMainWindowDisplayLayout(mainWindow);
+        const next = clampMainZoomFactor(factor, layout?.zoomLimits);
         event.sender.setZoomFactor(next);
+        updateMainWindowMinimumSize(mainWindow, next, layout);
         return next;
     });
     ipcMain.handle("folderrocket:cargo-ship-state", event => {

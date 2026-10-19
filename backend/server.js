@@ -1,3 +1,4 @@
+require("./services/pipeErrorGuards").attachLogPipeErrorGuards([process.stdout, process.stderr]);
 require("./services/hostFilesystem");
 const express = require("express");
 const cors = require("cors");
@@ -7,6 +8,7 @@ const path = require("path");
 const os = require("os");
 const crypto = require("crypto");
 const {execFile, spawn} = require("child_process");
+const {Worker} = require("node:worker_threads");
 let xlsxModule;
 let readFileContentModule;
 let analyzeDocumentModule;
@@ -35,14 +37,31 @@ const {executeCopyBatch, executeMoveBatch, moveFilePortable, pathExists} = requi
 const {searchFiles} = require("./services/searchService");
 const {readDashboardPreferences, writeDashboardPreferences} = require("./services/userPreferencesService");
 const planetGraph = require("./services/planetGraphService");
+const {matchesSavedConversationScope,conversationContactIdentity,mergeSavedChatSelectorThreads,findInboxThreadById,chatInboxPageOptions,senderInboxQuery} = require("./services/emailConversationSelectionService");
 const {buildGmailAccountCatalog} = require("./services/gmailAccountCatalog");
+const {buildProviderAccountCatalog} = require("./services/providerAccountCatalog");
 const worldEmailAccountService = require("./services/worldEmailAccountService");
 const obsidianVault = require("./services/obsidianVaultService");
+const planetKnowledge = require("./services/planetKnowledgeService");
+const {summarizeKnowledgeBlockers,knowledgeStatusForBlockers} = require("./services/knowledgeReadiness");
+const {createSerialWorkQueue,createLatestGenerationSlot} = require("./services/planetKnowledgePipeline");
+const localModelRuntime = require("./services/localModelRuntime");
+const canonicalPathContainment = require("./services/canonicalPathContainment");
+const {safePlanetVaultFolderName,migrateLegacyVault} = require("./services/obsidianVaultPaths");
 const {getRuntimeUploadsDirectory} = require("./services/runtimePaths");
 const {assertWorkspacePath} = require("./services/userPathSecurity");
-const {listTreeDirectory, listTreeRoots, resolveDesktopRoot, searchTreeRoots} = require("./services/treeRocketService");
+const {listTreeDirectory, listTreeRoots, resolveDesktopRoot, resolveDesktopRoots, searchTreeRoots, treeRootsResponse} = require("./services/treeRocketService");
+const conversationNotifications = require("./services/conversationNotificationService");
+const {observeInboxThreads} = require("./services/conversationNotificationPolling");
 const {getEmailAlertSettings, normalizeProviderBlock, saveEmailAlertSettings} = require("./services/emailAlertSettingsService");
 const {startEmailAlertScheduler} = require("./services/emailAlertScheduler");
+const knowledgeJobsByScope = new Map();
+const knowledgeJobsById = new Map();
+const knowledgeWatchersByScope = new Map();
+const initializedKnowledgeScopes = new Set();
+const knowledgePipelineQueue=createSerialWorkQueue();
+const knowledgeFolderRefreshes=new Set();
+const selectedFolderWatcher=require("./services/selectedFolderWatcher");
 const {migrateLegacyConnections} = require("./services/emailTokenStore");
 const {addAuditEvent, listAuditEvents} = require("./services/auditLogService");
 const {analyzeDomainPage, analyzeProjection, downloadDomainFile, listDomainDownloads, readDomainPreview} = require("./services/projectionAnalysisService");
@@ -71,17 +90,20 @@ const {
     sendEmail: sendGmailEmail,
     sendReply: sendGmailReply,
     downloadAttachment,
+    downloadInlinePart,
     disconnect: disconnectGmail,
     exchangeAuthorizationCode,
     getAuthorizationUrl,
     getEmailIdentity: getGmailEmailIdentity,
     getMessageText: getGmailMessageText,
     getThread: getGmailThread,
+    getThreadMetadata: getGmailThreadMetadata,
+    getThreadPage: getGmailThreadPage,
     getStatus: getGmailStatus,
     listAttachments: listGmailAttachments,
     listConnectedAccounts: listGmailConnectedAccounts,
     listInboxMessages,
-    listInboxThreads
+    listInboxThreads: listGmailInboxThreads
 } = require("./services/gmailService");
 
 const {
@@ -543,7 +565,9 @@ app.use((req, res, next) => {
             type: "http",
             severity: res.statusCode >= 500 ? "error" : "warning",
             category: routeCategory,
-            message: req.folderRocketDiagnosticMessage || (res.statusCode >= 500 ? `Errore backend${req.folderRocketBackendErrorName ? ` (${req.folderRocketBackendErrorName})` : ""}.` : "La richiesta è stata rifiutata o non completata."),
+            message: req.folderRocketDiagnosticMessage
+                ? safeDiagnosticText(`${req.folderRocketDiagnosticMessage}${req.folderRocketBackendErrorName ? ` (${req.folderRocketBackendErrorName})` : ""}`, 260)
+                : (res.statusCode >= 500 ? `Errore backend${req.folderRocketBackendErrorName ? ` (${req.folderRocketBackendErrorName})` : ""}.` : "La richiesta è stata rifiutata o non completata."),
             route,
             screen: safeDiagnosticText(req.get("X-FolderRocket-Screen") || "backend", 100),
             component: route,
@@ -581,6 +605,8 @@ app.put("/settings/worlds/:worldId", requireAuthenticated, async (req, res) => {
     if (req.body?.aiEnabled !== undefined && typeof req.body.aiEnabled !== "boolean") return res.status(400).json({message: "Stato AI del pianeta non valido."});
     if (req.body?.graphEnabled !== undefined && typeof req.body.graphEnabled !== "boolean") return res.status(400).json({message: "Stato del grafo non valido."});
     if (req.body?.treeRootMode !== undefined && !["computer", "desktop"].includes(req.body.treeRootMode)) return res.status(400).json({message:"Tree Rocket root mode is invalid."});
+    if (req.body?.style !== undefined && !["planet", "rocky", "ringed", "glowing", "asteroid", "black-hole", "galaxy"].includes(req.body.style)) return res.status(400).json({message:"Planet style is invalid."});
+    if (req.body?.color !== undefined && (typeof req.body.color !== "string" || !/^#[\da-fA-F]{6}$/.test(req.body.color))) return res.status(400).json({message:"Planet color must be a six-digit hexadecimal color."});
     const normaliseProfiles = value => {
         if (!Array.isArray(value) || value.length > 100) throw new Error("Configurazione agente o skill non valida.");
         const seen = new Set();
@@ -603,7 +629,14 @@ app.put("/settings/worlds/:worldId", requireAuthenticated, async (req, res) => {
     const currentWorlds = existing.worlds && typeof existing.worlds === "object" && !Array.isArray(existing.worlds) ? existing.worlds : {};
     try {
         const currentWorld = currentWorlds[worldId] || {};
-        const nextWorld = {...currentWorld, ...(typeof req.body.aiEnabled === "boolean" ? {aiEnabled:req.body.aiEnabled} : {}), ...(typeof req.body.graphEnabled === "boolean" ? {graphEnabled:req.body.graphEnabled} : {}), ...(typeof req.body.treeRootMode === "string" ? {treeRootMode:req.body.treeRootMode} : {})};
+        const nextWorld = {
+            ...currentWorld,
+            ...(typeof req.body.aiEnabled === "boolean" ? {aiEnabled:req.body.aiEnabled} : {}),
+            ...(typeof req.body.graphEnabled === "boolean" ? {graphEnabled:req.body.graphEnabled} : {}),
+            ...(typeof req.body.treeRootMode === "string" ? {treeRootMode:req.body.treeRootMode} : {}),
+            ...(typeof req.body.style === "string" ? {style:req.body.style} : {}),
+            ...(typeof req.body.color === "string" ? {color:req.body.color.toLowerCase()} : {})
+        };
         if (Object.hasOwn(req.body || {}, "emailAccount")) {
             const selection = worldEmailAccountService.normalizeEmailAccount(req.body.emailAccount);
             if (selection) {
@@ -644,7 +677,7 @@ app.get("/settings/worlds/:worldId", requireAuthenticated, async (req, res) => {
     const worldId=String(req.params.worldId || "").trim();
     if(!validWorldId(worldId))return res.status(400).json({message:"Invalid planet identifier."});
     const found=readWorldRecord(req.user.id,worldId);
-    if(!found.world)return res.status(404).json({message:"Planet not found."});
+    if(!found.world){req.folderRocketExpectedNotFound=true;return res.status(404).json({code:"WORLD_SETTINGS_NOT_FOUND",message:"Planet not found."});}
     try {
         const resolved=worldEmailAccountService.resolveWorldEmailAccount(found.world,found.settings,worldId);
         let selection=resolved.selection;
@@ -657,14 +690,27 @@ app.get("/settings/worlds/:worldId", requireAuthenticated, async (req, res) => {
                 migrated=true;
             } else selection=null;
         }
-        const [gmailAccounts,outlookAccounts]=await Promise.all([listGmailConnectedAccounts(req.user.id),listOutlookConnectedAccounts(req.user.id)]);
-        const world=selection?{...found.world,emailAccount:{...selection,email:selection.email||((selection.provider==="gmail"?gmailAccounts:outlookAccounts).find(item=>item.blockId===selection.blockId)?.email||"")}}:{...found.world,emailAccount:null};
-        const storedConflict=!Object.hasOwn(found.world,"emailAccount")&&resolved.conflict;
-        res.json({world,emailAccountConflict:storedConflict,emailAccountCandidates:resolved.candidates,emailAccounts:{gmail:gmailAccounts,outlook:outlookAccounts},emailAccountMigrated:migrated});
+        const [gmailAccountsRaw,outlookAccountsRaw]=await Promise.all([listGmailConnectedAccounts(req.user.id),listOutlookConnectedAccounts(req.user.id)]);
+        const selectedBlockId=selection?.blockId||"";
+        const emailAccounts={
+            gmail:buildProviderAccountCatalog(gmailAccountsRaw,found.settings,{provider:"gmail",worldId,selectedBlockId:selection?.provider==="gmail"?selectedBlockId:""}),
+            outlook:buildProviderAccountCatalog(outlookAccountsRaw,found.settings,{provider:"outlook",worldId,selectedBlockId:selection?.provider==="outlook"?selectedBlockId:""})
+        };
+        const currentSettings=readDashboardPreferences(req.user.id)||{};
+        const currentWorld=currentSettings.worlds?.[worldId]||found.world;
+        const style=currentWorld.style;
+        const world=selection?{...currentWorld,style,emailAccount:{...selection,email:selection.email||((selection.provider==="gmail"?gmailAccountsRaw:outlookAccountsRaw).find(item=>item.blockId===selection.blockId)?.email||"")}}:{...currentWorld,style,emailAccount:null};
+        const storedConflict=!Object.hasOwn(currentWorld,"emailAccount")&&resolved.conflict;
+        res.json({world,emailAccountConflict:storedConflict,emailAccountCandidates:resolved.candidates,emailAccounts,emailAccountMigrated:migrated});
     } catch(error) {res.status(500).json({message:error instanceof Error?error.message:"Unable to read planet settings."});}
 });
 
 function validWorldId(value) { return typeof value === "string" && /^[a-zA-Z0-9_-]{1,80}$/.test(value) && !["__proto__", "prototype", "constructor"].includes(value); }
+function respondGraphStorageUnavailable(res,error) {
+    if(error?.code!=="GRAPH_STORAGE_UNAVAILABLE")return false;
+    res.status(503).json({code:"GRAPH_STORAGE_UNAVAILABLE",retryable:true,message:"Planet graph storage is temporarily unavailable. Retry the operation shortly."});
+    return true;
+}
 function readWorldRecord(userId,worldId) {
     const settings=readDashboardPreferences(userId)||{};
     const worlds=settings.worlds&&typeof settings.worlds==="object"&&!Array.isArray(settings.worlds)?settings.worlds:{};
@@ -673,6 +719,13 @@ function readWorldRecord(userId,worldId) {
 }
 function readWorldDashboard(settings,worldId) {
     return settings.worlds?.[worldId]?.dashboard || (worldId==="work"?legacyWorkspaceDashboard(settings):{});
+}
+function graphFolderRootsForWorld(settings,worldId,sourceSelection) {
+    const configured=readWorldDashboard(settings,worldId);
+    const roots=Array.isArray(configured?.folders)?configured.folders.filter(folder=>folder&&folder.storage!=="imaginary"&&typeof folder.id==="string"&&typeof folder.path==="string"&&folder.path.trim()):[];
+    if(sourceSelection?.folderMode!=="selected")return roots;
+    const selected=new Set(Array.isArray(sourceSelection.folderIds)?sourceSelection.folderIds:[]);
+    return roots.filter(folder=>selected.has(folder.id));
 }
 function selectedWorldGmailBlocks(settings,worldId) {
     const world=settings?.worlds?.[worldId]||{};
@@ -684,6 +737,65 @@ function selectedWorldGmailBlocks(settings,worldId) {
 function selectedGmailBlock(settings,worldId,requestedBlockId) {
     const selected=selectedWorldGmailBlocks(settings,worldId);
     return selected.find(item=>item.blockId===requestedBlockId) || (!requestedBlockId&&selected.length===1?selected[0]:null) || null;
+}
+function retainLastGoodGraphSources(existingGraph,nodes,edges,sourceStatuses,roots=[]) {
+    const byId=new Map(nodes.map(item=>[item.id,item]));
+    const retainedSourceIds=new Set();
+    const rootsBySource=new Map(roots.filter(item=>item&&typeof item.id==="string").map(item=>[`folder:${item.id}`,item]));
+    for(const status of sourceStatuses.filter(item=>item.status==="partial"||item.status==="failed")) {
+        const root=status.type==="folder"?rootsBySource.get(status.sourceId):null;
+        const sourcePath=root?.path||"";
+        const ids=planetGraph.sourceOwnedNodeIds(existingGraph,status,sourcePath);
+        for(const item of existingGraph.nodes)if(ids.has(item.id)) {
+            retainedSourceIds.add(item.id);
+            if(!byId.has(item.id))byId.set(item.id,item);
+        }
+    }
+    const nextNodes=[...byId.values()];
+    const nextIds=new Set(nextNodes.map(item=>item.id));
+    const nextEdges=new Map(edges.filter(item=>item&&nextIds.has(item.from)&&nextIds.has(item.to)).map(item=>[item.id,item]));
+    for(const item of existingGraph.edges) {
+        if(!item||!nextIds.has(item.from)||!nextIds.has(item.to))continue;
+        if(retainedSourceIds.has(item.from)||retainedSourceIds.has(item.to))nextEdges.set(item.id,item);
+    }
+    return {nodes:nextNodes,edges:[...nextEdges.values()]};
+}
+async function collectPlanetGmailSource({userId,source,sourceSelection,accountCatalog,existingGraph}) {
+    const account=accountCatalog.find(item=>item.blockId===source.blockId);
+    if(!account)return {nodes:[],edges:[],warnings:[],status:planetGraph.sourceStatus({sourceId:`gmail:${source.blockId}`,type:"gmail",label:"Gmail",status:"failed",reasonCode:"provider_unavailable",message:"The Gmail account selected for this planet is not connected.",retryable:true})};
+    const nodes=[],edges=[],warnings=[];
+    let reasonCode="",message="",status="complete",processed=0,total=0;
+    try {
+        const listing=await listGmailInboxThreads({maxResults:100},userId,source.blockId);
+        const scopedThreads=listing.threads.map(item=>({...item,accountEmail:account.email||""}));
+        const selectedIds=sourceSelection.threadMode==="selected"?new Set(sourceSelection.threadIds):null;
+        let sourceThreads=existingGraph.conversationSelectionConfigured===true?scopedThreads.filter(item=>matchesSavedConversationScope(item,source.blockId,existingGraph.selectedConversations)):scopedThreads;
+        if(selectedIds)sourceThreads=sourceThreads.filter(item=>selectedIds.has(item.id));
+        const loadedIds=new Set(sourceThreads.map(item=>item.id));
+        if(listing.nextPageToken){status="partial";reasonCode="provider_page_limit";message="Gmail indexing reached the current 100-message page limit. Narrow the selected conversations or refresh after changing the source selection.";warnings.push(message);}
+        planetGraph.addEmailThreads(nodes,edges,source.blockId,account.email||"",sourceThreads);
+        processed=sourceThreads.length;total=listing.threads.length;
+        const explicitlyWantedIds=selectedIds
+            ?sourceSelection.threadIds.filter(id=>existingGraph.conversationSelectionConfigured!==true||existingGraph.selectedConversations.some(saved=>saved.blockId===source.blockId&&saved.threadId===id))
+            :existingGraph.conversationSelectionConfigured===true?existingGraph.selectedConversations.filter(saved=>saved.blockId===source.blockId).map(saved=>saved.threadId):[];
+        for(const threadId of explicitlyWantedIds) {
+            if(loadedIds.has(threadId))continue;
+            try {
+                const metadataThread=await getGmailThreadMetadata(threadId,userId,source.blockId);
+                planetGraph.addEmailThreads(nodes,edges,source.blockId,account.email||"",[metadataThread]);
+                loadedIds.add(threadId);processed+=1;
+            } catch {
+                status="partial";reasonCode="selected_item_missing";message="One or more saved conversations could not be loaded from Gmail.";warnings.push(message);
+            }
+        }
+        if(selectedIds) {
+            const missing=explicitlyWantedIds.filter(id=>!loadedIds.has(id));
+            if(missing.length&&reasonCode!="selected_item_missing"){status="partial";reasonCode="selected_item_missing";message=`${missing.length} selected conversation(s) could not be loaded from the current Gmail account.`;warnings.push(message);}
+        }
+    } catch {
+        return {nodes:[],edges:[],warnings:["The selected Gmail source could not be reached."],status:planetGraph.sourceStatus({sourceId:`gmail:${source.blockId}`,type:"gmail",label:"Gmail",status:"failed",reasonCode:"provider_unavailable",message:"The selected Gmail source could not be reached. Check its connection and retry.",retryable:true,processed:0,total:0})};
+    }
+    return {nodes,edges,warnings,status:planetGraph.sourceStatus({sourceId:`gmail:${source.blockId}`,type:"gmail",label:account.email||"Gmail",status,reasonCode,message,processed,total,retryable:status!=="complete"})};
 }
 function graphMimeType(filePath) {
     const extension=path.extname(filePath).toLowerCase();
@@ -697,8 +809,22 @@ function graphWorld(req,res,worldId) {
     return found;
 }
 
-function defaultObsidianVaultPath(user,worldId) {
-    return path.join(userWorkspace(user),".folderrocket","obsidian",worldId);
+function defaultObsidianVaultPath(user,worldId,worldName=worldId) {
+    return path.join(userWorkspace(user),".folderrocket","obsidian",safePlanetVaultFolderName(worldName,worldId));
+}
+
+function verifiedVaultMarker(vaultPath,user,worldId) {
+    try {
+        const marker=JSON.parse(fs.readFileSync(path.join(vaultPath,".folderrocket","vault.json"),"utf8"));
+        return marker?.ownerId===String(user.id)&&marker?.worldId===worldId;
+    } catch { return false; }
+}
+
+function preferredObsidianVaultPath(user,worldId,worldName) {
+    const target=defaultObsidianVaultPath(user,worldId,worldName);
+    if(verifiedVaultMarker(target,user,worldId))return target;
+    const legacy=defaultObsidianVaultPath(user,worldId,worldId);
+    return verifiedVaultMarker(legacy,user,worldId)?legacy:target;
 }
 
 function assertObsidianVaultPath(user,candidate,{allowMissing=true}={}) {
@@ -709,13 +835,13 @@ function readWorldObsidian(user,worldId) {
     const found=readWorldRecord(user.id,worldId);
     if(!found.world)return null;
     const stored=found.world.obsidian&&typeof found.world.obsidian==="object"?found.world.obsidian:{};
-    const canonical=defaultObsidianVaultPath(user,worldId);
+    const canonical=preferredObsidianVaultPath(user,worldId,found.world.name||worldId);
     let vaultPath=canonical;
     if(typeof stored.vaultPath==="string"&&stored.vaultPath) {
         try {vaultPath=assertObsidianVaultPath(user,stored.vaultPath,{allowMissing:true});}
         catch {vaultPath=canonical;}
     }
-    return {...found,config:{enabled:stored.enabled===true,vaultPath,lastSyncAt:typeof stored.lastSyncAt==="string"?stored.lastSyncAt:"",status:typeof stored.status==="string"?stored.status:"idle",lastResult:stored.lastResult&&typeof stored.lastResult==="object"?stored.lastResult:null}};
+    return {...found,config:{enabled:stored.enabled===true,autoSync:stored.autoSync===true,vaultPath,sourceSelection:obsidianVault.normalizeSourceSelection(stored.sourceSelection),lastSyncAt:typeof stored.lastSyncAt==="string"?stored.lastSyncAt:"",status:typeof stored.status==="string"?stored.status:"idle",lastResult:stored.lastResult&&typeof stored.lastResult==="object"?stored.lastResult:null}};
 }
 
 app.get("/worlds/:worldId/obsidian",requireAuthenticated,(req,res)=>{
@@ -723,6 +849,13 @@ app.get("/worlds/:worldId/obsidian",requireAuthenticated,(req,res)=>{
     if(!validWorldId(worldId))return res.status(400).json({message:"Invalid planet identifier."});
     if(!state)return res.status(404).json({message:"Planet not found."});
     res.json({config:state.config,openSupported:process.env.FOLDERROCKET_DESKTOP==="1",uri:`obsidian://open?path=${encodeURIComponent(state.config.vaultPath)}`});
+});
+
+app.get("/worlds/:worldId/obsidian/folders",requireAuthenticated,(req,res)=>{
+    const worldId=String(req.params.worldId||"");const found=graphWorld(req,res,worldId);if(!found)return;
+    const dashboard=readWorldDashboard(found.settings,worldId);
+    const folders=(Array.isArray(dashboard?.folders)?dashboard.folders:[]).filter(item=>item&&item.storage!=="imaginary"&&typeof item.id==="string"&&typeof item.name==="string"&&typeof item.path==="string"&&item.path.trim()).map(item=>({id:item.id.slice(0,120),name:item.name.slice(0,180),path:item.path.slice(0,1024)}));
+    res.json({folders,fileTypes:obsidianVault.GRAPH_FILE_TYPES,worldId});
 });
 
 app.post("/worlds/:worldId/obsidian/pick-folder",requireAuthenticated,requireAdministrator,async(req,res)=>{
@@ -738,20 +871,529 @@ app.post("/worlds/:worldId/obsidian/pick-folder",requireAuthenticated,requireAdm
 app.put("/worlds/:worldId/obsidian",requireAuthenticated,(req,res)=>{
     const worldId=String(req.params.worldId||"");const found=graphWorld(req,res,worldId);if(!found)return;
     if(req.body?.enabled!==undefined&&typeof req.body.enabled!=="boolean")return res.status(400).json({message:"Obsidian setting is invalid."});
+    if(req.body?.autoSync!==undefined&&typeof req.body.autoSync!=="boolean")return res.status(400).json({message:"Automatic Obsidian sync setting is invalid."});
     try {
         const current=found.world.obsidian&&typeof found.world.obsidian==="object"?found.world.obsidian:{};
-        const canonical=defaultObsidianVaultPath(req.user,worldId);
-        const requested=typeof req.body?.vaultPath==="string"&&req.body.vaultPath.trim()?req.body.vaultPath:current.vaultPath||canonical;
+        const canonical=defaultObsidianVaultPath(req.user,worldId,found.world.name||worldId);
+        const requested=typeof req.body?.vaultPath==="string"&&req.body.vaultPath.trim()?req.body.vaultPath:current.vaultPath||preferredObsidianVaultPath(req.user,worldId,found.world.name||worldId);
         const vaultPath=assertObsidianVaultPath(req.user,requested,{allowMissing:true});
         const existingVault=awaitlessStat(vaultPath);
         if(existingVault&& !existingVault.isDirectory())throw new Error("The selected Obsidian vault path is not a folder.");
-        const next={...current,enabled:typeof req.body?.enabled==="boolean"?req.body.enabled:current.enabled===true,vaultPath,status:current.status||"idle"};
+        if(Object.hasOwn(req.body||{},"sourceSelection")) {
+            const value=req.body.sourceSelection;
+            const invalid=Object.entries(value||{}).some(([key,item])=>key==="version"?(item!==1&&item!==obsidianVault.SOURCE_SELECTION_VERSION):obsidianVault.SOURCE_KEYS.includes(key)?typeof item!=="boolean":key==="threadMode"?["all","selected"].includes(item)===false:key==="threadIds"?(!Array.isArray(item)||item.length>500||item.some(id=>typeof id!=="string"||!id||id.length>300)):key==="folderMode"?["all","selected"].includes(item)===false:key==="folderIds"?(!Array.isArray(item)||item.length>200||item.some(id=>typeof id!=="string"||!/^[a-zA-Z0-9_-]{1,120}$/.test(id))):key==="fileTypeMode"?["all","selected"].includes(item)===false:key==="fileTypes"?(!Array.isArray(item)||item.length>obsidianVault.GRAPH_FILE_TYPES.length||item.some(type=>typeof type!=="string"||!obsidianVault.GRAPH_FILE_TYPES.includes(type.toLowerCase()))):key==="excludedFileIds"?(!Array.isArray(item)||item.length>500||item.some(id=>typeof id!=="string"||!/^file:[a-f0-9]{32}$/.test(id))):key==="includeSubfolders"?typeof item!=="boolean":true);
+            if(!value||typeof value!=="object"||Array.isArray(value)||invalid)throw new Error("Obsidian source selection must contain valid category flags and supported folder, file type, and conversation selections.");
+        }
+        const sourceSelection=Object.hasOwn(req.body||{},"sourceSelection")?obsidianVault.normalizeSourceSelection(req.body.sourceSelection,current.sourceSelection):obsidianVault.normalizeSourceSelection(current.sourceSelection);
+        const next={...current,enabled:typeof req.body?.enabled==="boolean"?req.body.enabled:current.enabled===true,autoSync:typeof req.body?.autoSync==="boolean"?req.body.autoSync:current.autoSync===true,vaultPath,sourceSelection,status:current.status||"idle"};
         writeDashboardPreferences(req.user.id,{...found.settings,worlds:{...found.worlds,[worldId]:{...found.world,obsidian:next}}});
         res.json({config:next,openSupported:process.env.FOLDERROCKET_DESKTOP==="1",uri:`obsidian://open?path=${encodeURIComponent(vaultPath)}`});
     } catch(error) {res.status(400).json({message:error instanceof Error?error.message:"Unable to save Obsidian settings."});}
 });
 
 function awaitlessStat(filePath) {try{return fs.statSync(filePath);}catch(error){if(error?.code==="ENOENT")return null;throw error;}}
+function knowledgeNoteRecords(notes,worldId,fingerprint){
+    return (Array.isArray(notes)?notes:[]).slice(0,planetKnowledge.MAX_NOTES).filter(note=>note&&typeof note.id==="string"&&typeof note.title==="string"&&typeof (note.markdown||note.content)==="string").map(note=>{
+        const rawName=typeof note.fileName==="string"?String(note.fileName).split(/[\\/]/).pop():`${obsidianVault.safeSlug(note.title)}-${planetKnowledge.documentFingerprint(note.id).slice(0,12)}.md`;
+        const fileName=(rawName.toLowerCase().endsWith(".md")?rawName:`${rawName}.md`).replace(/[<>:"/\\|?*\u0000-\u001f]/g,"-").slice(0,160);
+        const source=note.source&&typeof note.source==="object"?note.source:{};const sourceId=String(source.id||source.sourceId||note.sourceId||note.id).slice(0,300);
+        const sourceScopeId=String(note.sourceScopeId||source.sourceScopeId||source.scopeId||`knowledge:${fingerprint}`).slice(0,300);
+        const markdown=String(note.markdown||note.content).replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n?/u,"").trim();
+        const kind=String(note.kind||source.kind||"knowledge-note").slice(0,80);
+        const folder=kind==="knowledge-area"?"Areas":"";
+        return {id:`knowledge:${note.id.slice(0,260)}`,kind,sourceId,sourceScopeId,title:note.title.slice(0,300),updatedAt:String(note.updatedAt||new Date().toISOString()).slice(0,80),content:markdown.slice(0,12_000),notePath:`FolderRocket/Knowledge/${folder?`${folder}/`:""}${fileName}`};
+    });
+}
+
+const KNOWLEDGE_READABLE_EXTENSIONS=new Set([".pdf",".docx",".txt",".xlsx",".md"]);
+const KNOWLEDGE_MAX_FILES=250, KNOWLEDGE_MAX_ACTIVITY=30, KNOWLEDGE_MAX_FILE_BYTES=2*1024*1024, KNOWLEDGE_MAX_TOTAL_BYTES=25*1024*1024, KNOWLEDGE_BATCH_SIZE=8;
+function knowledgeMetadataExclusion(title,size){
+    const name=String(title||"").trim();
+    const stem=name.replace(/\.[^.]+$/u,"");
+    if(size===0)return "Empty file; skipped before local text extraction.";
+    if(/^(?:~\$|\.~lock\.|thumbs\.db$|desktop\.ini$|\.ds_store$)/i.test(name))return "Temporary or operating-system file; skipped before local text extraction.";
+    if(/^(?:untitled|new document|document\s*\d*|backup(?:\s*\d*)?)$/i.test(stem))return "Generic temporary file name; skipped before local text extraction.";
+    return "";
+}
+function knowledgeScopeKey(userId,worldId){return `${String(userId)}\0${worldId}`;}
+function publicKnowledgeJob(job){return job?{jobId:job.id,status:job.status,stage:job.stage,processed:job.processed,total:job.total,exclusions:job.exclusions,startedAt:job.startedAt,updatedAt:job.updatedAt,error:job.error||"",supportsPause:true,supportsCancel:true}:null;}
+function knowledgeNodeSourceId(item){return String(item?.source?.id||item?.sourceId||item?.source?.sourceId||"");}
+function knowledgeNoteSourceIds(item){const source=item?.source&&typeof item.source==="object"?item.source:{};return [...new Set([source.id,source.sourceId,item?.sourceId,...(Array.isArray(source.sourceIds)?source.sourceIds:[])].filter(value=>typeof value==="string"&&value))];}
+function expectedKnowledgeGraphSourceIds(scope){
+    const ids=[];
+    if(scope.selection.folders)for(const root of scope.roots)ids.push(`folder:${root.id}`);
+    if(scope.selection.snapshots)ids.push("snapshot");
+    if(scope.selection.email&&scope.emailSelection?.provider==="gmail")ids.push(`gmail:${scope.emailSelection.blockId}`);
+    return [...new Set(ids)].sort();
+}
+function selectedKnowledgeGraph(graph,scope){
+    const selected=obsidianVault.filterGraphBySources(graph,scope.selection,{emailBlockIds:scope.emailSelection?.provider==="gmail"?[scope.emailSelection.blockId]:[],folderRoots:scope.roots});
+    const expected=new Set(expectedKnowledgeGraphSourceIds(scope));
+    const statuses=(Array.isArray(graph.sourceStatuses)?graph.sourceStatuses:[]).filter(item=>expected.has(String(item.sourceId||"")));
+    selected.sourceStatuses=statuses;
+    selected.status=statuses.some(item=>item.status==="indexing")?"indexing":statuses.some(item=>item.status!=="complete")?"partial":"ready";
+    selected.progress={...(graph.progress||{}),limitReached:statuses.some(item=>item.progress?.limitReached===true)};
+    return selected;
+}
+function selectedKnowledgeBlockers(graph,scope){
+    const statuses=new Map((Array.isArray(graph.sourceStatuses)?graph.sourceStatuses:[]).map(item=>[String(item.sourceId||""),item]));
+    const blockers=[];
+    for(const sourceId of expectedKnowledgeGraphSourceIds(scope)){
+        const source=statuses.get(sourceId);
+        if(source?.status==="complete")continue;
+        const isEmail=sourceId.startsWith("gmail:");
+        const fallbackLabel=isEmail?"Selected Gmail source":sourceId==="snapshot"?"Selected snapshots":"Selected folder source";
+        const candidateLabel=String(source?.label||fallbackLabel).replace(/[\r\n\0]/g," ").slice(0,100);
+        const rawLabel=/[\\/]|\b[A-Za-z]:/u.test(candidateLabel)?fallbackLabel:candidateLabel;
+        blockers.push({sourceId:sourceId.slice(0,180),label:rawLabel,status:String(source?.status||"unknown").slice(0,24),reasonCode:"source_index_incomplete",action:isEmail?"Check the selected Gmail source status, then retry Sync now.":"Check that this selected source is available and readable, then retry Sync now.",retryable:source?.retryable===true});
+    }
+    if(scope.selection.email&&scope.selection.threadMode!=="selected")blockers.push({sourceId:"email-selection",label:"Email conversation selection",status:"incomplete",reasonCode:"content_unavailable",action:"Select specific Gmail conversations or turn off the email source, then retry Sync now.",retryable:false});
+    else if(scope.selection.email&&scope.emailSelection?.provider&&scope.emailSelection.provider!=="gmail")blockers.push({sourceId:"email-selection",label:"Selected email source",status:"unavailable",reasonCode:"content_unavailable",action:"Choose a connected Gmail source or turn off the email source, then retry Sync now.",retryable:false});
+    return blockers.slice(0,20);
+}
+function knowledgeContentBlockers(exclusions,scope,graph){
+    const statuses=new Map((Array.isArray(graph?.sourceStatuses)?graph.sourceStatuses:[]).map(item=>[String(item.sourceId||""),item]));
+    const nodes=new Map((Array.isArray(graph?.nodes)?graph.nodes:[]).map(item=>[String(item.id||""),item]));
+    const blockers=[],seen=new Set();
+    for(const exclusion of (Array.isArray(exclusions)?exclusions:[]).slice(0,500)){
+        const reason=String(exclusion?.reason||"");
+        if(!reason||/excluded by the user|exact duplicate|duplicate content|temporary or operating-system|generic temporary|too little retained context|text extraction is unavailable for|unsupported/i.test(reason))continue;
+        let reasonCode="";
+        if(/selected-source limit|at most \d+ explicitly selected|conversation limit/i.test(reason))reasonCode="selected_source_limit";
+        else if(/limit|exceeds the .*byte|maximum.*reached|node limit|edge limit|note limit/i.test(reason))reasonCode="knowledge_limit";
+        else if(/missing|outside the authorized|outside the selected|no readable|could not be read|could not be extracted|unavailable|permission|no current local knowledge note/i.test(reason))reasonCode="content_unavailable";
+        if(!reasonCode)continue;
+        const excludedId=String(exclusion.sourceId||"");
+        const node=nodes.get(excludedId);
+        const graphSourceId=String(node?.sourceRef?.graphSourceId||"");
+        const emailSource=excludedId.startsWith("gmail:")||excludedId==="email"||excludedId==="email-selection";
+        const sourceId=graphSourceId||(
+            emailSource&&scope.emailSelection?.provider==="gmail"?`gmail:${scope.emailSelection.blockId}`:
+            excludedId.startsWith("snapshot")||excludedId.startsWith("folderrocket:activity")?"snapshot":
+            excludedId===""?"selected-content":
+            "selected-content"
+        );
+        const key=`${sourceId}:${reasonCode}`;if(seen.has(key))continue;seen.add(key);
+        const source=statuses.get(sourceId);
+        const fallback=emailSource?"Selected Gmail conversations":sourceId==="snapshot"?"Selected snapshots":"Selected source content";
+        const sourceLabel=String(source?.label||fallback).replace(/[\r\n\0]/g," ").slice(0,100);
+        const label=/[\\/]|\b[A-Za-z]:/u.test(sourceLabel)?fallback:sourceLabel;
+        const action=reasonCode==="knowledge_limit"||reasonCode==="selected_source_limit"
+            ?"Reduce the selected source items or scope, then retry Sync now."
+            :emailSource?"Check the selected Gmail conversation and retry Sync now.":"Restore access to this selected source, then retry Sync now.";
+        blockers.push({sourceId:sourceId.slice(0,180),label,status:String(source?.status==="complete"?"partial":source?.status||"partial").slice(0,24),reasonCode,action,retryable:reasonCode==="content_unavailable"});
+        if(blockers.length>=20)break;
+    }
+    return blockers;
+}
+function safeKnowledgeBlockerSummary(blockers,extra={}){
+    const counts={};for(const blocker of blockers)if(["source_index_incomplete","selected_source_limit","content_unavailable","knowledge_limit"].includes(blocker.reasonCode))counts[blocker.reasonCode]=(counts[blocker.reasonCode]||0)+1;
+    if(extra.selectedSourceLimit)counts.selected_source_limit=1;
+    if(extra.contentIncomplete)counts.content_unavailable=1;
+    if(extra.knowledgeLimit)counts.knowledge_limit=1;
+    const reasonCodes=["source_index_incomplete","selected_source_limit","content_unavailable","knowledge_limit"].filter(code=>counts[code]);
+    const summary=reasonCodes.length?"Review the selected source status and resolve the listed limits or unavailable content before syncing again.":"Selected sources are ready for local knowledge sync.";
+    return {reasonCodes,counts,blockers:blockers.slice(0,20),summary};
+}
+function knowledgeReadinessFingerprint(scope,graph,reasonSummary){
+    const selected=selectedKnowledgeGraph(graph,scope);
+    return planetKnowledge.fingerprint({selection:scope.selection,roots:scope.roots.map(item=>({id:item.id,path:path.resolve(item.path)})).sort((a,b)=>a.id.localeCompare(b.id)),email:scope.selection.email?{provider:scope.emailSelection?.provider||"",blockId:scope.emailSelection?.blockId||"",threadMode:scope.selection.threadMode,threadIds:[...scope.selection.threadIds].sort()}:null,evidenceRevision:planetGraph.contentRevision(selected),reasonCodes:reasonSummary.reasonCodes,blockers:reasonSummary.blockers.map(({sourceId,status,reasonCode,action,retryable})=>({sourceId,status,reasonCode,action,retryable}))});
+}
+async function knowledgeScope(req,worldId){
+    const found=readWorldRecord(req.user.id,worldId);if(!found.world)return null;
+    const selection=obsidianVault.normalizeSourceSelection(found.world.obsidian?.sourceSelection);
+    const roots=selection.folders?graphFolderRootsForWorld(found.settings,worldId,selection):[];
+    const emailSelection=worldEmailAccountService.resolveWorldEmailAccount(found.world,found.settings,worldId).selection;
+    const vaultPath=readWorldObsidian(req.user,worldId)?.config?.vaultPath||"";
+    const canonicalVaultPath=canonicalPathContainment.canonicalPath(vaultPath);
+    const managedMarkdownPath=planetKnowledge.managedMarkdownRoot(req.user.id,worldId);
+    const managedMarkdownCanonicalPath=canonicalPathContainment.canonicalPath(managedMarkdownPath);
+    const graph=await planetGraph.readGraph(req.user.id,worldId);
+    const selectedGraph=selectedKnowledgeGraph(graph,{selection,roots,emailSelection});
+    const graphRevision=planetGraph.contentRevision(selectedGraph);
+    const fingerprint=planetKnowledge.fingerprint({selection,roots:roots.map(item=>({id:item.id,path:path.resolve(item.path)})).sort((a,b)=>a.id.localeCompare(b.id)),excludedVaultPath:canonicalVaultPath,managedMarkdownPath:managedMarkdownCanonicalPath,graphRevision,email:selection.email?{provider:emailSelection?.provider||"",blockId:emailSelection?.blockId||"",threadMode:selection.threadMode,threadIds:[...selection.threadIds].sort()}:null});
+    return {...found,selection,roots,emailSelection,vaultPath,canonicalVaultPath,managedMarkdownPath,graphRevision,fingerprint};
+}
+function knowledgeReadiness({enabled,graphStatus,knowledge,fingerprint,graphRevision,job}){
+    const result=planetKnowledge.readiness({enabled,graphStatus,knowledge,fingerprint,graphRevision});
+    if(job&&!["completed","cancelled","failed"].includes(job.status)&&!['disabled','indexing','stale'].includes(result.readiness))return {...result,readiness:"preparing",knowledgeStatus:"preparing"};
+    return result;
+}
+function knowledgeCandidates(graph,selection,vaultPaths=[]){
+    const excluded=new Set(selection.excludedFileIds||[]);
+    const roots=Array.isArray(vaultPaths)?vaultPaths:[vaultPaths];
+    return (Array.isArray(graph?.nodes)?graph.nodes:[]).filter(item=>item?.type==="file"&&typeof item.sourceRef?.path==="string"&&!roots.some(root=>isKnowledgeFileInsideVault(root,item.sourceRef.path))).map(item=>({id:item.id,title:String(item.label||path.basename(item.sourceRef.path)).slice(0,240),sourceScopeId:`filesystem:${item.sourceRef.graphSourceId||""}`,extension:String(item.details?.extension||path.extname(item.sourceRef.path)).toLowerCase(),selected:!excluded.has(item.id)})).sort((a,b)=>a.title.localeCompare(b.title,undefined,{sensitivity:"base"}));
+}
+function isKnowledgeFileInsideVault(vaultPath,candidatePath){
+    if(typeof vaultPath!=="string"||!vaultPath||typeof candidatePath!=="string"||!candidatePath)return false;
+    const vaultLexical=path.resolve(vaultPath),candidateLexical=path.resolve(candidatePath);
+    const vaultCanonical=canonicalPathContainment.canonicalPath(vaultPath),candidateCanonical=canonicalPathContainment.canonicalPath(candidatePath);
+    return [[vaultLexical,candidateLexical],[vaultCanonical,candidateCanonical],[vaultCanonical,candidateLexical],[vaultLexical,candidateCanonical]].some(([root,candidate])=>canonicalPathContainment.isWithinCanonicalRoot(root,candidate));
+}
+function setKnowledgeJob(job,values={}){Object.assign(job,values,{updatedAt:new Date().toISOString()});}
+function scheduleKnowledgeGeneration(job,user,worldId,scope){
+    return knowledgePipelineQueue.run(()=>{
+        const pending=job.pendingGeneration.take();
+        const desiredScope=pending?.scope||scope,desiredUser=pending?.user||user;
+        job.activeScopeFingerprint=desiredScope.fingerprint;
+        return runKnowledgeSync(job,{user:desiredUser,worldId,scope:desiredScope});
+    });
+}
+function scheduleBackendHeavy(work){return knowledgePipelineQueue.run(work);}
+function scheduleSelectedFolderRefresh(user,worldId,scope){
+    const key=knowledgeScopeKey(user.id,worldId);if(knowledgeFolderRefreshes.has(key))return;
+    knowledgeFolderRefreshes.add(key);
+    knowledgePipelineQueue.run(async()=>{
+        try{await refreshSelectedFolderSources(user,worldId,scope);const latest=await knowledgeScope({user},worldId);if(latest){await maintainKnowledgeWatcher(user,worldId,latest);queueKnowledgeSyncJob(user,worldId,latest);}}
+        catch{}
+        finally{knowledgeFolderRefreshes.delete(key);}
+    });
+}
+async function refreshSelectedFolderSources(user,worldId,scope){
+    const latest=await knowledgeScope({user},worldId);if(!latest||!latest.selection.folders||!latest.roots.length)return;
+    const rootsFingerprint=value=>JSON.stringify(value.roots.map(item=>({id:item.id,path:path.resolve(item.path)})).sort((a,b)=>a.id.localeCompare(b.id)));
+    if(rootsFingerprint(latest)!==rootsFingerprint(scope))return;
+    const configuredVaultPath=latest.vaultPath||"";
+    const excludedPaths=[canonicalPathContainment.canonicalPath(configuredVaultPath),canonicalPathContainment.canonicalPath(latest.managedMarkdownPath)].filter(Boolean);
+    const graph=await planetGraph.readGraph(user.id,worldId);
+    const indexingStatuses=graph.sourceStatuses.filter(item=>!item.sourceId.startsWith("folder:")).concat(latest.roots.map(item=>planetGraph.sourceStatus({sourceId:`folder:${item.id}`,type:"folder",label:item.name||"Folder",status:"indexing",message:"Folder changes are being indexed.",retryable:true})));
+    await planetGraph.updateGraphStatus(user.id,worldId,"indexing",{stage:"folders",processed:0,total:latest.roots.length,limitReached:false},undefined,{sourceStatuses:indexingStatuses});
+    let walked;
+    try{walked=await planetGraph.walkConfiguredFolders(latest.roots,{maxDirectories:400,maxFiles:3000,maxDepth:8,maxNodes:Math.max(0,planetGraph.MAX_NODES-1),excludePaths:excludedPaths,includeSubfolders:latest.selection.includeSubfolders,fileTypes:latest.selection.fileTypeMode==="selected"?latest.selection.fileTypes:null,validateRoot:async candidate=>{const safe=assertUserPath(user,candidate);const real=await fs.promises.realpath(safe);if(!(await fs.promises.stat(real)).isDirectory())throw Object.assign(new Error("Configured path is not a folder."),{code:"ENOTDIR"});return real;}});}
+    catch{
+        let current=await planetGraph.readGraph(user.id,worldId);
+        for(const root of latest.roots){const status=planetGraph.sourceStatus({sourceId:`folder:${root.id}`,type:"folder",label:root.name||"Folder",status:"failed",reasonCode:"source_read_failed",message:"FolderRocket could not refresh this folder source.",retryable:true});current=await planetGraph.replaceIndexedSourceGraph(user.id,worldId,status,[],[],{sourcePath:root.path,sourceStatuses:current.sourceStatuses});}
+        return current;
+    }
+    const worldNode=planetGraph.node("world","folderrocket",worldId,String(latest.world.name||worldId),{kind:"world",worldId});
+    let current=await planetGraph.readGraph(user.id,worldId);
+    for(const status of walked.sourceStatuses){
+        const root=latest.roots.find(item=>`folder:${item.id}`===status.sourceId);
+        const canonicalRoot=root?canonicalPathContainment.canonicalPath(root.path):"";
+        const nodes=walked.nodes.filter(item=>item.sourceRef?.graphSourceId===status.sourceId||canonicalRoot&&canonicalPathContainment.isWithinCanonicalRoot(canonicalRoot,item.sourceRef?.path||""));
+        const ids=new Set([worldNode.id,...nodes.map(item=>item.id)]);
+        const edges=walked.edges.filter(item=>ids.has(item.from)&&ids.has(item.to));
+        current=await planetGraph.replaceIndexedSourceGraph(user.id,worldId,status,[worldNode,...nodes],edges,{sourcePath:root?.path||"",sourceStatuses:current.sourceStatuses});
+    }
+    return current;
+}
+async function maintainKnowledgeWatcher(user,worldId,scope){
+    const key=knowledgeScopeKey(user.id,worldId),current=knowledgeWatchersByScope.get(key);
+    if(!scope.selection.folders||!scope.roots.length){current?.watcher.dispose();knowledgeWatchersByScope.delete(key);return;}
+    const watchRoots=[];
+    for(const root of scope.roots){try{const safe=assertUserPath(user,root.path),real=await fs.promises.realpath(safe);if((await fs.promises.stat(real)).isDirectory())watchRoots.push({...root,path:real});}catch{}}
+    if(!watchRoots.length){current?.watcher.dispose();knowledgeWatchersByScope.delete(key);return;}
+    const rootsSignature=JSON.stringify(watchRoots.map(item=>({id:item.id,path:item.path})).sort((a,b)=>a.id.localeCompare(b.id)));
+    if(current?.fingerprint===scope.fingerprint&&current.rootsSignature===rootsSignature)return;
+    current?.watcher.dispose();
+    const watcher=selectedFolderWatcher.createSelectedFolderWatcher({roots:watchRoots,onChange:async()=>{
+        scheduleSelectedFolderRefresh(user,worldId,scope);
+    }});
+    knowledgeWatchersByScope.set(key,{fingerprint:scope.fingerprint,rootsSignature,watcher});
+}
+function disposeKnowledgeWatchersForUser(userId){
+    const prefix=`${String(userId)}\0`;
+    for(const [key,entry] of knowledgeWatchersByScope){if(key.startsWith(prefix)){entry.watcher.dispose();knowledgeWatchersByScope.delete(key);}}
+    for(const key of initializedKnowledgeScopes)if(key.startsWith(prefix))initializedKnowledgeScopes.delete(key);
+}
+async function waitKnowledgeBatch(job){
+    while(job.status==="paused"&&!job.controller.signal.aborted)await new Promise(resolve=>setTimeout(resolve,120));
+    if(job.controller.signal.aborted)throw Object.assign(new Error("Knowledge sync cancelled."),{name:"AbortError"});
+}
+function boundedKnowledgeArray(value,limit){return Array.isArray(value)?value.slice(0,limit):[];}
+function analyzeKnowledgeInWorker(documents,limits,signal){
+    if(!documents.length)return Promise.resolve({nodes:[],edges:[],notes:[],exclusions:[]});
+    const modulePath=path.join(__dirname,"services","localKnowledgeEngine.js");
+    const source="const {parentPort,workerData}=require('node:worker_threads');try{const engine=require(workerData.modulePath);const result=engine.analyzeKnowledgeDocuments({documents:workerData.documents,limits:workerData.limits});parentPort.postMessage({ok:true,result});}catch(error){parentPort.postMessage({ok:false,error:String(error&&error.message||error)});}";
+    return new Promise((resolve,reject)=>{
+        const worker=new Worker(source,{eval:true,workerData:{modulePath,documents,limits}});let settled=false;
+        const finish=(error,value)=>{if(settled)return;settled=true;signal?.removeEventListener("abort",abort);void worker.terminate();if(error)reject(error);else resolve(value);};
+        const abort=()=>finish(Object.assign(new Error("Knowledge sync cancelled."),{name:"AbortError"}));
+        signal?.addEventListener("abort",abort,{once:true});if(signal?.aborted)return abort();
+        worker.once("message",message=>message?.ok?finish(null,message.result):finish(new Error(message?.error||"Local knowledge analysis failed.")));
+        worker.once("error",error=>finish(error));worker.once("exit",code=>{if(!settled&&code!==0)finish(new Error("Local knowledge worker stopped unexpectedly."));});
+    });
+}
+
+async function runKnowledgeSync(job,context){
+    const {user,worldId,scope}=context;job.scopeFingerprint=scope.fingerprint;const previous=await planetKnowledge.readKnowledge(user.id,worldId);
+    const start={...previous};
+    try{
+        const runtimeStatus=await localModelRuntime.inspect();
+        const effectiveSummaryMode=runtimeStatus.available?"model-assisted":"extractive";
+        const effectiveModelName=runtimeStatus.available?runtimeStatus.modelName:"";
+        const maxGeneratedSummaries=runtimeStatus.available?8:0;let generatedSummaryCount=0;
+        const graph=await planetGraph.readGraph(user.id,worldId);
+        const expectedSourceIds=new Set(expectedKnowledgeGraphSourceIds(scope));
+        const selectedGraph=selectedKnowledgeGraph(graph,scope);
+        const selectedBlockers=selectedKnowledgeBlockers(graph,scope);
+        const graphStatuses=new Map((Array.isArray(graph.sourceStatuses)?graph.sourceStatuses:[]).map(item=>[item.sourceId,item.status]));
+        const incompleteGraph=selectedBlockers.length>0||selectedGraph.progress?.limitReached===true;
+        const retainPrevious=(reasonList)=>{
+            const reasons=reasonList.slice(0,500);
+            return planetKnowledge.writeKnowledge({...previous,status:"partial",progress:{...previous.progress,stage:"incomplete",limitReached:true},exclusions:reasons,updatedAt:new Date().toISOString()});
+        };
+        if(incompleteGraph){
+            const reasons=[{sourceId:"graph:index",reason:"The current Planet Graph source index is incomplete; the last complete knowledge graph was retained."}];
+            const reasonSummary=safeKnowledgeBlockerSummary(selectedBlockers.length?selectedBlockers:[{sourceId:"aggregate:graph",label:"Selected source index",status:"partial",reasonCode:"source_index_incomplete",action:"Refresh the selected sources, then retry Sync now.",retryable:true}]);
+            await retainPrevious(reasons);setKnowledgeJob(job,{status:"completed",stage:"incomplete",processed:0,total:0,exclusions:reasons,reasonSummary});return;
+        }
+        const incompleteSources=graph.sourceStatuses.filter(item=>expectedSourceIds.has(item.sourceId)&&!['complete'].includes(item.status));
+        const completeSourceIds=new Set(graph.sourceStatuses.filter(item=>item.status==="complete").map(item=>item.sourceId));
+        const scopedGraph=selectedGraph;
+        scopedGraph.nodes=scopedGraph.nodes.filter(item=>{
+            if(item.type==="file"||item.type==="folder")return !item.sourceRef?.graphSourceId||completeSourceIds.has(item.sourceRef.graphSourceId);
+            if(["activity","search","calendar-event","note","reminder"].includes(item.type))return completeSourceIds.has("snapshot");
+            if(["email-thread","email-message"].includes(item.type))return completeSourceIds.has(`gmail:${item.sourceRef?.blockId||""}`);
+            return true;
+        });
+        const evidenceNodeIds=new Set(scopedGraph.nodes.map(item=>item.id));scopedGraph.edges=scopedGraph.edges.filter(item=>evidenceNodeIds.has(item.from)&&evidenceNodeIds.has(item.to));
+        const allCandidates=knowledgeCandidates(scopedGraph,scope.selection,[scope.vaultPath,scope.managedMarkdownPath]);
+        const selectedCandidates=allCandidates.filter(item=>item.selected);
+        const exclusions=incompleteSources.map(source=>({sourceId:source.sourceId,reason:source.message||"This selected source is not fully indexed; its retained index is not used as current evidence."}));
+        for(const id of scope.selection.excludedFileIds||[])exclusions.push({sourceId:id,reason:"Excluded by the user from Planet knowledge."});
+        if(selectedCandidates.length>KNOWLEDGE_MAX_FILES)exclusions.push({sourceId:"",reason:`Selected-source limit reached; ${selectedCandidates.length-KNOWLEDGE_MAX_FILES} selected local files were not processed. Unselected exclusions do not count toward the limit.`});
+        const candidates=selectedCandidates.slice(0,KNOWLEDGE_MAX_FILES);
+        const priorMetadata=previous.sourceMetadata&&typeof previous.sourceMetadata==="object"?previous.sourceMetadata:{};
+        const sourceMetadata={},descriptorsById=new Map(),unchangedSourceIds=new Set(),seenContentHashes=new Set();
+        const rawBatch=[],explicitEdges=[];let totalBytes=0,textBytes=0,inspected=0,processed=0,extractionIncomplete=false;
+        const addDescriptor=(sourceId,descriptor,metadata)=>{
+            const normalized=planetKnowledge.normalizeDescriptor(descriptor);
+            if(effectiveSummaryMode==="model-assisted"&&(normalized?.summaryMethod!=="model-assisted"||normalized?.modelName!==effectiveModelName))return false;
+            if(effectiveSummaryMode==="extractive"&&normalized?.summaryMethod==="model-assisted")return false;
+            if(!normalized||!metadata?.contentHash||normalized.contentHash!==metadata.contentHash||seenContentHashes.has(normalized.contentHash))return false;
+            seenContentHashes.add(normalized.contentHash);descriptorsById.set(sourceId,normalized);sourceMetadata[sourceId]={...metadata,descriptor:normalized};unchangedSourceIds.add(sourceId);return true;
+        };
+        const flushRawBatch=async()=>{
+            if(!rawBatch.length)return;
+            if(runtimeStatus.available&&generatedSummaryCount<maxGeneratedSummaries){
+                const engine=require("./services/localKnowledgeEngine");
+                for(const document of rawBatch){
+                    await waitKnowledgeBatch(job);
+                    if(generatedSummaryCount>=maxGeneratedSummaries)break;
+                    generatedSummaryCount+=1;
+                    try{
+                        const built=engine.buildKnowledgeSummaryPrompt({sourceText:document.content,title:document.title,limits:{maxDocumentChars:100_000,maxPromptChars:10_000,maxSummaryChars:900,maxEvidenceChars:240}});
+                        if(!built?.prompt)continue;
+                        const candidate=await localModelRuntime.generate(built.prompt,{signal:job.controller.signal,maxOutputChars:built.maxOutputChars,timeoutMs:20_000});
+                        if(typeof candidate==="string"&&candidate)document.generatedSummary={candidate,modelName:effectiveModelName};
+                    }catch(error){if(error?.name==="AbortError")throw error;}
+                }
+            }
+            await waitKnowledgeBatch(job);setKnowledgeJob(job,{stage:"analyzing-batch",processed,total:candidates.length+KNOWLEDGE_MAX_ACTIVITY+20,exclusions});
+            const result=await analyzeKnowledgeInWorker(rawBatch,{maxDocuments:KNOWLEDGE_BATCH_SIZE,maxNodes:500,maxEdges:1_500,maxNotes:500,maxDocumentChars:100_000,maxNoteChars:4_000,maxPairComparisons:40_000},job.controller.signal);
+            for(const value of Array.isArray(result?.descriptors)?result.descriptors:[]){
+                const descriptor=planetKnowledge.normalizeDescriptor(value);if(!descriptor)continue;
+                if(seenContentHashes.has(descriptor.contentHash)){const reason="Exact duplicate content already retained from another selected source.";sourceMetadata[descriptor.sourceId]={...(sourceMetadata[descriptor.sourceId]||{}),contentHash:descriptor.contentHash,excludedReason:reason};exclusions.push({sourceId:descriptor.sourceId,reason});continue;}
+                seenContentHashes.add(descriptor.contentHash);descriptorsById.set(descriptor.sourceId,descriptor);sourceMetadata[descriptor.sourceId]={...(sourceMetadata[descriptor.sourceId]||{}),contentHash:descriptor.contentHash,descriptor};
+            }
+            for(const item of Array.isArray(result?.exclusions)?result.exclusions:[]){
+                const sourceId=String(item?.sourceId||item?.id||""),reason=String(item?.reason||"Local analysis excluded this item.").slice(0,240);exclusions.push({sourceId,reason});if(sourceId&&sourceMetadata[sourceId])sourceMetadata[sourceId].excludedReason=reason;
+            }
+            explicitEdges.push(...(Array.isArray(result?.edges)?result.edges.filter(edge=>edge?.type==="direct-link").slice(0,1_500-explicitEdges.length):[]));
+            processed+=rawBatch.length;rawBatch.length=0;
+        };
+        const queueRaw=async(document)=>{rawBatch.push(document);if(rawBatch.length>=KNOWLEDGE_BATCH_SIZE)await flushRawBatch();};
+        setKnowledgeJob(job,{status:"running",stage:"scanning",processed:0,total:candidates.length,exclusions});
+        for(const candidate of candidates){
+            await waitKnowledgeBatch(job);inspected+=1;setKnowledgeJob(job,{stage:"extracting",processed:inspected,total:candidates.length,exclusions});
+            const node=scopedGraph.nodes.find(item=>item.id===candidate.id);const candidatePath=node?.sourceRef?.path;
+            if(!candidatePath){extractionIncomplete=true;exclusions.push({sourceId:candidate.id,reason:"The indexed file no longer has an authorized local path."});continue;}
+            const extension=candidate.extension;
+            let safePath,realPath,stats;
+            try{safePath=assertUserPath(user,candidatePath);realPath=await fs.promises.realpath(safePath);assertUserPath(user,realPath);stats=await fs.promises.stat(realPath);if(!stats.isFile())throw new Error("not a file");}
+            catch(error){extractionIncomplete=true;exclusions.push({sourceId:candidate.id,reason:"The selected file is missing or outside the authorized workspace."});continue;}
+            if(isKnowledgeFileInsideVault(scope.vaultPath,realPath)||isKnowledgeFileInsideVault(scope.managedMarkdownPath,realPath)){sourceMetadata[candidate.id]={excludedReason:"FolderRocket knowledge output and the configured Obsidian vault are excluded from knowledge intake."};exclusions.push({sourceId:candidate.id,reason:"FolderRocket knowledge output and the configured Obsidian vault are excluded from knowledge intake."});continue;}
+            let withinSelectedRoot=false;for(const root of scope.roots){try{const rootPath=await fs.promises.realpath(assertUserPath(user,root.path));if(isPathWithin(rootPath,realPath)){withinSelectedRoot=true;break;}}catch{}}
+            if(!withinSelectedRoot){extractionIncomplete=true;exclusions.push({sourceId:candidate.id,reason:"The file is outside the selected folder roots."});continue;}
+            if(stats.size>KNOWLEDGE_MAX_FILE_BYTES){extractionIncomplete=true;exclusions.push({sourceId:candidate.id,reason:`File exceeds the ${KNOWLEDGE_MAX_FILE_BYTES} byte per-file extraction limit.`});continue;}
+            const signature=`${stats.size}:${stats.mtimeMs}:${stats.ctimeMs}:${stats.mtime.toISOString()}`,old=priorMetadata[candidate.id];
+            const metadataExclusion=knowledgeMetadataExclusion(candidate.title,stats.size);
+            if(metadataExclusion){sourceMetadata[candidate.id]={signature,excludedReason:metadataExclusion};exclusions.push({sourceId:candidate.id,reason:metadataExclusion});continue;}
+            if(!KNOWLEDGE_READABLE_EXTENSIONS.has(extension)){const reason=`Local text extraction is unavailable for ${extension||"this file type"}.`;sourceMetadata[candidate.id]={signature,excludedReason:reason};exclusions.push({sourceId:candidate.id,reason});continue;}
+            if(old?.signature===signature&&addDescriptor(candidate.id,old.descriptor,old))continue;
+            if(old?.signature===signature&&old?.contentHash&&seenContentHashes.has(old.contentHash)){const reason="Exact duplicate content already retained from another selected source.";sourceMetadata[candidate.id]={...old,signature,excludedReason:reason};exclusions.push({sourceId:candidate.id,reason});continue;}
+            if(old?.signature===signature&&old?.excludedReason){sourceMetadata[candidate.id]={...old,signature};exclusions.push({sourceId:candidate.id,reason:old.excludedReason});continue;}
+            totalBytes+=stats.size;if(totalBytes>KNOWLEDGE_MAX_TOTAL_BYTES){extractionIncomplete=true;exclusions.push({sourceId:candidate.id,reason:"The sync reached its 25 MB total local input limit."});continue;}
+            let content="";try{content=extension===".md"?await fs.promises.readFile(realPath,"utf8"):String(await readFileContent(realPath)||"");}catch{content="";}
+            if(content==="Formato non supportato")content="";
+            content=content.slice(0,100_000);if(!content.trim()){extractionIncomplete=true;exclusions.push({sourceId:candidate.id,reason:"No readable local text was extracted from this file."});continue;}
+            const documentBytes=Buffer.byteLength(content,"utf8");if(textBytes+documentBytes>KNOWLEDGE_MAX_TOTAL_BYTES){extractionIncomplete=true;exclusions.push({sourceId:candidate.id,reason:"The sync reached its 25 MB total extracted-text limit."});continue;}textBytes+=documentBytes;
+            const contentHash=planetKnowledge.documentFingerprint(content);
+            if(old?.contentHash===contentHash&&addDescriptor(candidate.id,old.descriptor,{...old,signature,contentHash}))continue;
+            sourceMetadata[candidate.id]={signature,contentHash};
+            await queueRaw({id:candidate.id,sourceId:candidate.id,sourceType:"filesystem",kind:"file",title:candidate.title,sourceScopeId:candidate.sourceScopeId,locator:realPath,content,updatedAt:stats.mtime.toISOString(),contentHash,metadata:{extension,size:stats.size,modifiedAt:stats.mtime.toISOString(),sourceScopeId:candidate.sourceScopeId,planetId:worldId}});
+        }
+        const allOperationalNodes=scopedGraph.nodes.filter(item=>item&&((scope.selection.activity&&["activity","search"].includes(item.type))||(scope.selection.snapshots&&["calendar-event","note","reminder"].includes(item.type))||(scope.selection.alerts&&["alert","email-alert"].includes(item.type))));
+        const operationalNodes=allOperationalNodes.slice(0,KNOWLEDGE_MAX_ACTIVITY);
+        if(allOperationalNodes.length>KNOWLEDGE_MAX_ACTIVITY){extractionIncomplete=true;exclusions.push({sourceId:"folderrocket:activity",reason:`FolderRocket activity limit reached; only ${KNOWLEDGE_MAX_ACTIVITY} records are considered per sync.`});}
+        for(const item of operationalNodes){
+            await waitKnowledgeBatch(job);const details=item.details&&typeof item.details==="object"?item.details:{};const sourceRef=item.sourceRef&&typeof item.sourceRef==="object"?item.sourceRef:{};
+            const sourceScopeId=item.type==="alert"||item.type==="email-alert"?`alerts:${String(item.sourceType||sourceRef.provider||"mail")}:${String(sourceRef.blockId||"")}`:item.type==="activity"||item.type==="search"?"snapshot:activity":item.type==="calendar-event"?"snapshot:calendar":"snapshot:planet-notes";
+            const signature=planetKnowledge.documentFingerprint(`${item.updatedAt||""}\0${item.label||""}\0${JSON.stringify(details)}`),old=priorMetadata[item.id];
+            if(old?.signature===signature&&addDescriptor(item.id,old.descriptor,old))continue;
+            if(old?.signature===signature&&old?.contentHash&&seenContentHashes.has(old.contentHash)){const reason="Exact duplicate content already retained from another selected source.";sourceMetadata[item.id]={...old,signature,excludedReason:reason};exclusions.push({sourceId:item.id,reason});continue;}
+            const content=[`Action or record: ${String(item.label||item.type)}`,`Type: ${item.type}`,`Updated: ${String(item.updatedAt||details.updatedAt||details.at||"")}`,`Details: ${JSON.stringify(details).slice(0,4_000)}`,`Referenced files: ${(Array.isArray(details.files)?details.files:[]).slice(0,20).join("; ")}`].join("\n");
+            if(textBytes+Buffer.byteLength(content,"utf8")>KNOWLEDGE_MAX_TOTAL_BYTES){extractionIncomplete=true;exclusions.push({sourceId:item.id,reason:"The sync reached its 25 MB total extracted-text limit."});continue;}
+            textBytes+=Buffer.byteLength(content,"utf8");
+            const contentHash=planetKnowledge.documentFingerprint(content);if(content.trim().length<80){const reason="FolderRocket activity contains too little retained context.";sourceMetadata[item.id]={signature,contentHash,excludedReason:reason};exclusions.push({sourceId:item.id,reason});continue;}
+            sourceMetadata[item.id]={signature,contentHash};
+            await queueRaw({id:item.id,sourceId:item.id,sourceType:item.sourceType||"folderrocket",kind:`folderrocket-${item.type}`,title:String(item.label||item.type).slice(0,240),sourceScopeId,locator:String(sourceRef.path||details.at||"FolderRocket activity"),content,updatedAt:String(item.updatedAt||details.at||""),contentHash,metadata:{sourceScopeId,planetId:worldId,signature}});
+        }
+        if(allOperationalNodes.length>KNOWLEDGE_MAX_ACTIVITY)exclusions.push({sourceId:"folderrocket:activity",reason:`FolderRocket activity limit reached; only ${KNOWLEDGE_MAX_ACTIVITY} records are considered per sync.`});
+        const selectedThreads=scope.selection.email&&scope.selection.threadMode==="selected"?scope.selection.threadIds:[];
+        if(scope.selection.email&&scope.selection.threadMode!=="selected")exclusions.push({sourceId:"email",reason:"Choose specific conversation IDs before adding email knowledge; broad mailbox intake is disabled."});
+        if(scope.selection.email&&selectedThreads.length&&!scope.emailSelection?.provider){extractionIncomplete=true;exclusions.push({sourceId:"email",reason:"No email account is selected for this planet."});}
+        if(scope.selection.email&&selectedThreads.length&&scope.emailSelection?.provider!=="gmail"){extractionIncomplete=true;exclusions.push({sourceId:"email",reason:"Local knowledge intake currently supports explicitly selected Gmail conversations only."});}
+        if(scope.selection.email&&selectedThreads.length&&scope.emailSelection?.provider==="gmail"){
+            if(!scope.emailSelection.blockId){extractionIncomplete=true;exclusions.push({sourceId:"email",reason:"No Gmail account is selected for this planet."});}
+            else for(const threadId of selectedThreads.slice(0,20)){
+                await waitKnowledgeBatch(job);
+                try{
+                    const metadataThread=await getGmailThreadMetadata(threadId,user.id,scope.emailSelection.blockId);if(metadataThread.id&&metadataThread.id!==threadId)throw new Error("Selected Gmail thread identity did not match.");
+                    const signature=planetKnowledge.documentFingerprint(`${metadataThread.updatedAt||""}\0${metadataThread.messageCount||0}\0${metadataThread.subject||""}`),id=`gmail:${scope.emailSelection.blockId}:${threadId}`,old=priorMetadata[id];
+                    if(old?.signature===signature&&addDescriptor(id,old.descriptor,old))continue;
+                    if(old?.signature===signature&&old?.contentHash&&seenContentHashes.has(old.contentHash)){const reason="Exact duplicate content already retained from another selected source.";sourceMetadata[id]={...old,signature,excludedReason:reason};exclusions.push({sourceId:id,reason});continue;}
+                    const thread=await getGmailThreadPage(threadId,user.id,scope.emailSelection.blockId,{maxResults:10});if(thread.id&&thread.id!==threadId)throw new Error("Selected Gmail thread identity did not match.");if(thread.hasMore)exclusions.push({sourceId:`gmail:${threadId}`,reason:"Only the most recent 10 messages in this selected conversation are included per sync."});const content=(thread.messages||[]).slice(-10).map(message=>`${message.subject||""}\n${String(message.text||"").slice(0,10_000)}`).join("\n\n").slice(0,100_000);
+                    if(!content.trim()){extractionIncomplete=true;exclusions.push({sourceId:`gmail:${threadId}`,reason:"No readable message text was available."});continue;}
+                    if(textBytes+Buffer.byteLength(content,"utf8")>KNOWLEDGE_MAX_TOTAL_BYTES){extractionIncomplete=true;exclusions.push({sourceId:`gmail:${threadId}`,reason:"The sync reached its 25 MB total extracted-text limit."});continue;}textBytes+=Buffer.byteLength(content,"utf8");
+                    const contentHash=planetKnowledge.documentFingerprint(content);
+                    if(old?.contentHash===contentHash&&addDescriptor(id,old.descriptor,{...old,signature,contentHash}))continue;
+                    sourceMetadata[id]={contentHash,signature};
+                    await queueRaw({id,sourceId:id,sourceType:"gmail",kind:"email-conversation",title:String(thread.messages?.[0]?.subject||threadId).slice(0,240),sourceScopeId:`gmail:${scope.emailSelection.blockId}`,locator:threadId,content,updatedAt:thread.messages?.at(-1)?.receivedAt||new Date().toISOString(),contentHash,metadata:{blockId:scope.emailSelection.blockId,threadId,sourceScopeId:`gmail:${scope.emailSelection.blockId}`,planetId:worldId}});
+                }catch{extractionIncomplete=true;exclusions.push({sourceId:`gmail:${threadId}`,reason:"The explicitly selected conversation could not be read from its connected account."});}
+            }
+            if(selectedThreads.length>20){extractionIncomplete=true;exclusions.push({sourceId:"email",reason:"Conversation limit reached; at most 20 explicitly selected conversations are read per sync."});}
+        }
+        if(scope.selection.email&&selectedThreads.length&&scope.emailSelection?.provider==="gmail"){
+            const loaded=new Set([...descriptorsById.values()].filter(item=>item.kind==="email-conversation").map(item=>item.locator));
+            if(selectedThreads.slice(0,20).some(id=>!loaded.has(id)))extractionIncomplete=true;
+        }
+        await flushRawBatch();
+        const compactDocuments=[...descriptorsById.values()].map(descriptor=>({descriptor}));
+        setKnowledgeJob(job,{stage:"analyzing-global",processed,total:compactDocuments.length,exclusions});await waitKnowledgeBatch(job);
+        const result=await analyzeKnowledgeInWorker(compactDocuments,{maxDocuments:300,maxNodes:500,maxEdges:1_500,maxNotes:500,maxDocumentChars:100_000,maxNoteChars:4_000,maxPairComparisons:40_000},job.controller.signal);
+        const canonicalDescriptors=(Array.isArray(result?.descriptors)?result.descriptors:[]).map(planetKnowledge.normalizeDescriptor).filter(Boolean);
+        const canonicalSourceIds=new Set(canonicalDescriptors.map(item=>item.sourceId));
+        for(const [sourceId,metadata] of Object.entries(sourceMetadata))if(metadata?.descriptor&&!canonicalSourceIds.has(sourceId)){
+            const reason="Duplicate or low-signal source omitted from the canonical knowledge graph.";
+            metadata.excludedReason=reason;delete metadata.descriptor;metadata.nodeIds=[];metadata.noteIds=[];
+            if(!exclusions.some(item=>item.sourceId===sourceId))exclusions.push({sourceId,reason});
+        }
+        const newNodes=boundedKnowledgeArray(result?.nodes,planetKnowledge.MAX_NODES),newEdges=boundedKnowledgeArray(result?.edges,planetKnowledge.MAX_EDGES),newNotes=boundedKnowledgeArray(result?.notes,planetKnowledge.MAX_NOTES);
+        exclusions.push(...boundedKnowledgeArray(result?.exclusions,300).map(item=>({sourceId:String(item?.sourceId||item?.id||""),reason:String(item?.reason||item?.message||"Local analysis excluded this item.").slice(0,240)})));
+        const nodeMap=new Map();for(const item of newNodes)if(item?.id)nodeMap.set(item.id,item);
+        const nodes=[...nodeMap.values()].slice(0,planetKnowledge.MAX_NODES),nodeIds=new Set(nodes.map(item=>item.id));
+        const edgeMap=new Map();for(const edge of newEdges){const from=edge?.from||edge?.source,to=edge?.to||edge?.target;if(nodeIds.has(from)&&nodeIds.has(to))edgeMap.set(edge.id||`${from}:${to}`,{...edge,from,to});}
+        const previousNodeById=new Map(previous.nodes.map(item=>[item.id,item]));
+        for(const edge of previous.edges){
+            if(edge?.type!=="direct-link")continue;
+            const from=edge.from||edge.source,to=edge.to||edge.target,sourceId=String(previousNodeById.get(from)?.source?.id||"");
+            if(unchangedSourceIds.has(sourceId)&&nodeIds.has(from)&&nodeIds.has(to))edgeMap.set(edge.id||`${from}:${to}`,{...edge,from,to});
+        }
+        for(const edge of explicitEdges){const from=edge?.from||edge?.source,to=edge?.to||edge?.target;if(nodeIds.has(from)&&nodeIds.has(to))edgeMap.set(edge.id||`${from}:${to}`,{...edge,from,to});}
+        const noteMap=new Map(newNotes.filter(item=>item?.id).map(item=>[item.id,item])),nodeById=new Map(nodes.map(item=>[item.id,item]));
+        for(const edge of edgeMap.values())if(edge.type==="direct-link"){
+            const source=nodeById.get(edge.from),target=nodeById.get(edge.to),note=noteMap.get(edge.from);if(!source||!target||!note)continue;
+            const link=`- [[${target.noteTarget||target.label}|${String(target.label||target.id).replace(/[\r\n\[\]]/g," ")}]] (explicit source link)`;
+            const markdown=String(note.markdown||note.content||"");if(!markdown.includes(link)){note.markdown=`${markdown}\n${link}`.slice(0,4_000);note.content=note.markdown;}
+        }
+        for(const descriptor of canonicalDescriptors){
+            const sourceId=descriptor.sourceId,nodesForSource=nodes.filter(item=>knowledgeNodeSourceId(item)===sourceId||(Array.isArray(item.sources)&&item.sources.some(source=>source?.id===sourceId))),notesForSource=[...noteMap.values()].filter(item=>knowledgeNoteSourceIds(item).includes(sourceId));
+            sourceMetadata[sourceId]={...(sourceMetadata[sourceId]||{}),descriptor,nodeIds:nodesForSource.map(item=>item.id),noteIds:notesForSource.map(item=>item.id)};
+        }
+        const limited=nodes.length>planetKnowledge.MAX_NODES||edgeMap.size>planetKnowledge.MAX_EDGES||noteMap.size>planetKnowledge.MAX_NOTES;
+        const contentBlockers=knowledgeContentBlockers(exclusions,scope,graph);
+        const fallbackBlocker=extractionIncomplete&&!contentBlockers.length?[{sourceId:"selected-content",label:"Selected source content",status:"partial",reasonCode:"content_unavailable",action:"Review the selected source status and restore any unavailable content, then retry Sync now.",retryable:true}]:[];
+        const reasonSummary=safeKnowledgeBlockerSummary([...contentBlockers,...fallbackBlocker],{selectedSourceLimit:selectedCandidates.length>KNOWLEDGE_MAX_FILES,contentIncomplete:extractionIncomplete,knowledgeLimit:limited});
+        const next={...previous,status:knowledgeStatusForBlockers(reasonSummary),progress:{stage:"complete",processed:candidates.length+selectedThreads.length,total:candidates.length+selectedThreads.length,limitReached:limited||extractionIncomplete||selectedCandidates.length>KNOWLEDGE_MAX_FILES},sourceSelectionFingerprint:scope.fingerprint,graphRevision:scope.graphRevision,sourceMetadata,nodes:nodes.slice(0,planetKnowledge.MAX_NODES),edges:[...edgeMap.values()].slice(0,planetKnowledge.MAX_EDGES),notes:[...noteMap.values()].slice(0,planetKnowledge.MAX_NOTES),exclusions:exclusions.slice(0,500),updatedAt:new Date().toISOString()};
+        const latestScope=await knowledgeScope({user},worldId);if(!latestScope||latestScope.fingerprint!==scope.fingerprint)throw Object.assign(new Error("Planet source selection changed during knowledge sync."),{name:"AbortError"});
+        setKnowledgeJob(job,{status:"running",stage:"writing",processed:next.progress.processed,total:next.progress.total,exclusions:next.exclusions});
+        const managedRecords=knowledgeNoteRecords(next.notes,worldId,scope.fingerprint);
+        const selectedScopes=[...new Set(managedRecords.map(item=>item.sourceScopeId).filter(Boolean))];
+        await planetKnowledge.ensureManagedMarkdownRoot(user.id,worldId);
+        const managedResult=await obsidianVault.syncVault({vaultPath:scope.managedMarkdownPath,worldId,ownerId:user.id,worldName:String(scope.world.name||worldId).slice(0,80),records:managedRecords,completeSelection:true,selectedSourceScopeIds:selectedScopes});
+        next.managedMarkdown={path:scope.managedMarkdownPath,revision:scope.graphRevision,status:next.status,updatedAt:new Date().toISOString(),complete:next.status==="ready",written:managedResult.written,unchanged:managedResult.unchanged};
+        await planetKnowledge.writeKnowledge(next);setKnowledgeJob(job,{status:"completed",stage:"complete",processed:next.progress.processed,total:next.progress.total,reasonSummary});
+    }catch(error){
+        if(error?.name==="AbortError"||job.controller.signal.aborted){await planetKnowledge.writeKnowledge({...start,status:"cancelled",progress:{...start.progress,stage:"cancelled"},updatedAt:new Date().toISOString()}).catch(()=>{});setKnowledgeJob(job,{status:"cancelled",stage:"cancelled"});}
+        else{await planetKnowledge.writeKnowledge({...start,status:"error",progress:{...start.progress,stage:"error"},updatedAt:new Date().toISOString()}).catch(()=>{});setKnowledgeJob(job,{status:"failed",stage:"failed",error:"Local knowledge sync failed. The last complete knowledge graph was kept."});}
+    }finally{
+        const key=knowledgeScopeKey(user.id,worldId);const pending=!job.controller.signal.aborted?job.pendingGeneration.take():null;
+        if(pending){setKnowledgeJob(job,{status:"queued",stage:"queued-latest",processed:0,total:0,exclusions:[]});scheduleKnowledgeGeneration(job,pending.user,worldId,pending.scope);}
+        else{if(knowledgeJobsByScope.get(key)===job)knowledgeJobsByScope.delete(key);if(typeof job.resolve==="function")job.resolve(job);}
+        while(knowledgeJobsById.size>100){const oldest=knowledgeJobsById.keys().next().value;if(knowledgeJobsById.get(oldest)?.status!=="running"&&knowledgeJobsById.get(oldest)?.status!=="paused"&&knowledgeJobsById.get(oldest)?.status!=="queued")knowledgeJobsById.delete(oldest);else break;}
+    }
+}
+function queueKnowledgeSyncJob(user,worldId,scope){
+    const key=knowledgeScopeKey(user.id,worldId);const active=knowledgeJobsByScope.get(key);
+    if(active&&!['completed','cancelled','failed'].includes(active.status)){if((active.activeScopeFingerprint||active.scopeFingerprint)!==scope.fingerprint)active.pendingGeneration.replace({scope,user});else active.pendingGeneration.clear();return active;}
+    if(active)knowledgeJobsByScope.delete(key);
+    const job={id:crypto.randomUUID(),userId:String(user.id),worldId,status:"queued",stage:"queued",processed:0,total:0,exclusions:[],startedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),controller:new AbortController(),scopeFingerprint:scope.fingerprint,activeScopeFingerprint:scope.fingerprint,pendingGeneration:createLatestGenerationSlot()};
+    job.done=new Promise(resolve=>{job.resolve=resolve;});knowledgeJobsByScope.set(key,job);knowledgeJobsById.set(job.id,job);scheduleKnowledgeGeneration(job,user,worldId,scope);return job;
+}
+
+app.get("/worlds/:worldId/knowledge",requireAuthenticated,async(req,res)=>{
+    const worldId=String(req.params.worldId||"");if(!validWorldId(worldId))return res.status(400).json({message:"Invalid planet identifier."});
+    const scope=await knowledgeScope(req,worldId);if(!scope)return res.status(404).json({message:"Planet not found."});
+    await maintainKnowledgeWatcher(req.user,worldId,scope);
+    try{
+        const knowledge=await planetKnowledge.readKnowledge(req.user.id,worldId);const key=knowledgeScopeKey(req.user.id,worldId);const job=knowledgeJobsByScope.get(key)||null;
+        const graph=await planetGraph.readGraph(req.user.id,worldId);const scopedGraph=obsidianVault.filterGraphBySources(graph,scope.selection,{emailBlockIds:scope.emailSelection?.provider==="gmail"?[scope.emailSelection.blockId]:[],folderRoots:scope.roots});
+        if(req.query.summary==="1"){
+            const blockers=selectedKnowledgeBlockers(graph,scope);
+            const active=job&&!['completed','cancelled','failed'].includes(job.status);
+            const matchingJob=job&&(job.scopeFingerprint===scope.fingerprint||job.activeScopeFingerprint===scope.fingerprint)?job:null;
+            const matchingKnowledge=knowledge.sourceSelectionFingerprint===scope.fingerprint;
+            const extra=matchingKnowledge&&knowledge.status==="partial"&&!blockers.length?{contentIncomplete:true}:{};
+            const contentBlockers=matchingKnowledge&&knowledge.status==="partial"?knowledgeContentBlockers(knowledge.exclusions,scope,graph):[];
+            const reasonSummary=blockers.length?safeKnowledgeBlockerSummary(blockers):matchingJob?.reasonSummary?.reasonCodes?.length?{...matchingJob.reasonSummary,blockers:matchingJob.reasonSummary.blockers||contentBlockers}:contentBlockers.length?safeKnowledgeBlockerSummary(contentBlockers,extra):safeKnowledgeBlockerSummary([],extra);
+            const readinessFingerprint=knowledgeReadinessFingerprint(scope,graph,reasonSummary);
+            const status=blockers.some(item=>item.status==="indexing")||active?"indexing":reasonSummary.reasonCodes.length||blockers.length?"blocked":"ready";
+            return res.json({worldId,status,sourceSelectionFingerprint:scope.fingerprint,revision:scope.graphRevision,readinessFingerprint,reasonSummary:{reasonCodes:reasonSummary.reasonCodes||[],counts:reasonSummary.counts||{},blockers:(reasonSummary.blockers||[]).slice(0,20)}});
+        }
+        const allCandidates=knowledgeCandidates(scopedGraph,scope.selection,[scope.vaultPath,scope.managedMarkdownPath]);const candidateCount=allCandidates.length,selectedCandidateCount=allCandidates.filter(item=>item.selected).length,candidateLimitReached=candidateCount>500;
+        const candidates=allCandidates.slice(0,500).map(({id,title,sourceScopeId,extension,selected})=>({id,title,sourceScopeId,extension,selected}));
+        const matches=knowledge.sourceSelectionFingerprint===scope.fingerprint;const activeJob=publicKnowledgeJob(job);
+        res.json({worldId,knowledge:{nodes:knowledge.nodes,edges:knowledge.edges,notes:knowledge.notes,managedMarkdown:knowledge.managedMarkdown||null},candidates,candidateCount,selectedCandidateCount,candidateLimitReached,status:activeJob?.status||(!knowledge.sourceSelectionFingerprint?knowledge.status:matches?knowledge.status:"stale"),progress:activeJob?{stage:activeJob.stage,processed:activeJob.processed,total:activeJob.total}:knowledge.progress,job:activeJob,limits:{maxFiles:KNOWLEDGE_MAX_FILES,maxActivity:KNOWLEDGE_MAX_ACTIVITY,maxConversations:20,maxDocuments:300,maxCandidates:500,candidateLimitReached,maxFileBytes:KNOWLEDGE_MAX_FILE_BYTES,maxTotalBytes:KNOWLEDGE_MAX_TOTAL_BYTES,maxNodes:planetKnowledge.MAX_NODES,maxEdges:planetKnowledge.MAX_EDGES,maxNotes:planetKnowledge.MAX_NOTES,batchSize:KNOWLEDGE_BATCH_SIZE,externalAi:false,automaticWatcher:knowledgeWatchersByScope.has(key)},exclusions:activeJob?.exclusions?.length?activeJob.exclusions:knowledge.exclusions,sourceSelection:scope.selection,sourceSelectionFingerprint:scope.fingerprint,revision:scope.graphRevision,stale:!matches&&Boolean(knowledge.sourceSelectionFingerprint),updatedAt:knowledge.updatedAt});
+    }catch(error){res.status(500).json({message:error instanceof Error?error.message:"Unable to read local planet knowledge."});}
+});
+
+app.get("/local-model/status",requireAuthenticated,async(req,res)=>{
+    try{const status=await localModelRuntime.inspect();res.json({enabled:status.enabled,configured:status.configured,runtimeAvailable:status.runtimeAvailable,modelConfigured:status.modelConfigured,modelDetected:status.modelDetected,available:status.available,modelName:status.modelName,models:status.models,error:status.error,remoteCalls:false,automaticInstall:false});}
+    catch{res.json({enabled:false,configured:false,runtimeAvailable:false,modelConfigured:false,modelDetected:false,available:false,modelName:"",models:[],error:"Local model runtime status is unavailable.",remoteCalls:false,automaticInstall:false});}
+});
+
+app.post("/worlds/:worldId/knowledge/sync",requireAuthenticated,async(req,res)=>{
+    const worldId=String(req.params.worldId||"");if(!validWorldId(worldId))return res.status(400).json({message:"Invalid planet identifier."});
+    const scope=await knowledgeScope(req,worldId);if(!scope)return res.status(404).json({message:"Planet not found."});
+    await maintainKnowledgeWatcher(req.user,worldId,scope);
+    if(scope.selection.folders&&scope.roots.length)scheduleSelectedFolderRefresh(req.user,worldId,scope);
+    const job=queueKnowledgeSyncJob(req.user,worldId,scope);
+    const current=await planetKnowledge.readKnowledge(req.user.id,worldId);res.status(202).json({jobId:job.id,status:job.status,latestGenerationQueued:job.pendingGeneration.hasPending||job.scopeFingerprint!==scope.fingerprint,progress:{stage:job.stage,processed:job.processed||0,total:job.total||0},knowledge:{nodes:current.nodes,edges:current.edges,notes:current.notes,managedMarkdown:current.managedMarkdown||null}});
+});
+
+app.post("/worlds/:worldId/knowledge/query",requireAuthenticated,async(req,res)=>{
+    const worldId=String(req.params.worldId||"");if(!validWorldId(worldId))return res.status(400).json({message:"Invalid planet identifier."});
+    const scope=await knowledgeScope(req,worldId);if(!scope)return res.status(404).json({message:"Planet not found."});
+    const query=typeof req.body?.question==="string"?req.body.question.trim().slice(0,600):"";if(!query)return res.status(400).json({message:"Enter a question to search this planet's local knowledge."});
+    try{
+        const knowledge=await planetKnowledge.readKnowledge(req.user.id,worldId);if(!knowledge.sourceSelectionFingerprint||knowledge.sourceSelectionFingerprint!==scope.fingerprint||!planetKnowledge.readiness({enabled:true,knowledge,fingerprint:scope.fingerprint,graphRevision:scope.graphRevision}).queryable)return res.status(409).json({message:"Current source evidence is not ready for this planet. Run or retry local knowledge sync first."});
+        const engine=require("./services/localKnowledgeEngine");const result=await engine.retrieveKnowledge({nodes:knowledge.nodes,edges:knowledge.edges,query,limit:8});
+        res.json({...result,externalAi:false,sourceSelectionFingerprint:knowledge.sourceSelectionFingerprint,revision:knowledge.graphRevision||"",readiness:knowledge.status});
+    }catch(error){res.status(500).json({message:error instanceof Error?error.message:"Unable to query local planet knowledge."});}
+});
+
+app.post("/worlds/:worldId/knowledge/jobs/:jobId/:action",requireAuthenticated,(req,res)=>{
+    const worldId=String(req.params.worldId||""),action=String(req.params.action||"");if(!validWorldId(worldId))return res.status(400).json({message:"Invalid planet identifier."});
+    const found=graphWorld(req,res,worldId);if(!found)return;const job=knowledgeJobsById.get(req.params.jobId);
+    if(!job||job.userId!==String(req.user.id)||job.worldId!==worldId)return res.status(404).json({message:"Knowledge job not found."});
+    if(action==="pause"&&job.status==="running")setKnowledgeJob(job,{status:"paused",stage:"paused"});
+    else if(action==="resume"&&job.status==="paused")setKnowledgeJob(job,{status:"running",stage:"resuming"});
+    else if(action==="cancel"&&!['completed','cancelled','failed'].includes(job.status)){job.controller.abort();setKnowledgeJob(job,{status:"cancelled",stage:"cancelled"});}
+    else if(!["pause","resume","cancel"].includes(action))return res.status(404).json({message:"Unknown knowledge job action."});
+    res.json({job:publicKnowledgeJob(job)});
+});
 
 app.post("/worlds/:worldId/obsidian/sync",requireAuthenticated,async(req,res)=>{
     const worldId=String(req.params.worldId||"");const state=readWorldObsidian(req.user,worldId);
@@ -759,20 +1401,89 @@ app.post("/worlds/:worldId/obsidian/sync",requireAuthenticated,async(req,res)=>{
     if(!state)return res.status(404).json({message:"Planet not found."});
     if(!state.config.enabled)return res.status(409).json({message:"Enable Obsidian for this planet before syncing."});
     try {
-        const vaultPath=assertObsidianVaultPath(req.user,state.config.vaultPath,{allowMissing:true});
+        const initialStoredVaultPath=typeof state.world.obsidian?.vaultPath==="string"?state.world.obsidian.vaultPath:"";
+        let vaultPath=assertObsidianVaultPath(req.user,state.config.vaultPath,{allowMissing:true});
+        const namedPath=defaultObsidianVaultPath(req.user,worldId,state.world.name||worldId);
+        const legacyPath=defaultObsidianVaultPath(req.user,worldId,worldId);
+        if(vaultPath.toLocaleLowerCase()===legacyPath.toLocaleLowerCase()&&namedPath.toLocaleLowerCase()!==legacyPath.toLocaleLowerCase()) {
+            const migration=await migrateLegacyVault({legacyPath,targetPath:namedPath,ownerId:req.user.id,worldId});
+            vaultPath=assertObsidianVaultPath(req.user,migration.path,{allowMissing:false});
+            const latestSettings=readDashboardPreferences(req.user.id)||state.settings;
+            const latestWorlds=latestSettings.worlds&&typeof latestSettings.worlds==="object"?latestSettings.worlds:{};
+            const latestWorld=latestWorlds[worldId]||state.world;
+            const latestObsidian=latestWorld.obsidian&&typeof latestWorld.obsidian==="object"?latestWorld.obsidian:{};
+            const latestStoredVaultPath=typeof latestObsidian.vaultPath==="string"?latestObsidian.vaultPath:"";
+            if(latestStoredVaultPath!==initialStoredVaultPath)throw new Error("The configured Obsidian vault changed during migration; retry with the current vault.");
+            const migratedWorld={...latestWorld,obsidian:{...latestObsidian,vaultPath}};
+            const migratedSettings={...latestSettings,worlds:{...latestWorlds,[worldId]:migratedWorld}};
+            writeDashboardPreferences(req.user.id,migratedSettings);
+            state.settings=migratedSettings;state.world=migratedWorld;state.config={...state.config,vaultPath};
+        }
         const graph=await planetGraph.readGraph(req.user.id,worldId);
         const worldName=String(state.world.name||worldId).slice(0,80);
-        const records=obsidianVault.graphRecords(graph,worldName);
-        records.unshift({id:`overview:${worldId}`,kind:"overview",sourceId:worldId,title:`${worldName} · FolderRocket`,updatedAt:graph.updatedAt||"",content:`This vault contains the FolderRocket records available for the **${worldName}** planet.\n\n- Graph status: ${graph.status}\n- Indexed records: ${graph.nodes.length}\n- Relationships: ${graph.edges.length}\n\nFolder and file entries contain metadata and local paths. Email records contain the selected account's latest synced conversations. Client-held notes, reminders, Daily Jobs and File Studio activity are included only when supplied by the FolderRocket client during sync.\n`});
+        const sourceSelection=obsidianVault.normalizeSourceSelection(state.config.sourceSelection);
+        let warnings=[];
+        const emailSelection=worldEmailAccountService.resolveWorldEmailAccount(state.world,state.settings,worldId).selection;
+        const selectedEmailBlocks=emailSelection?.provider==="gmail"?[emailSelection.blockId]:[];
+        const syncFolderRoots=graphFolderRootsForWorld(state.settings,worldId,sourceSelection);
+        const selectedGraph=obsidianVault.filterGraphBySources(graph,sourceSelection,{emailBlockIds:selectedEmailBlocks,folderRoots:syncFolderRoots});
+        let currentKnowledge=await planetKnowledge.readKnowledge(req.user.id,worldId);
+        const currentScope=await knowledgeScope(req,worldId);if(!currentScope)throw new Error("Planet knowledge scope is no longer available.");
+        if(canonicalPathContainment.canonicalPath(currentScope.vaultPath)!==canonicalPathContainment.canonicalPath(vaultPath))throw new Error("The configured Obsidian vault changed during sync; retry with the current vault.");
+        const sourceSelectionFingerprint=currentScope.fingerprint;const job=queueKnowledgeSyncJob(req.user,worldId,currentScope);await job.done;
+        if(job.status!=="completed")throw new Error("Local knowledge sync did not complete. The existing Obsidian vault was left unchanged.");
+        currentKnowledge=await planetKnowledge.readKnowledge(req.user.id,worldId);
+        const currentKnowledgeMatches=currentKnowledge.sourceSelectionFingerprint===sourceSelectionFingerprint;
+        if(!currentKnowledgeMatches||currentKnowledge.status!=="ready") {
+            const latestGraph=await planetGraph.readGraph(req.user.id,worldId);
+            const selectedBlockers=selectedKnowledgeBlockers(latestGraph,currentScope);
+            const baseSummary=currentKnowledgeMatches&&job.reasonSummary?.reasonCodes?.length
+                ?job.reasonSummary
+                :summarizeKnowledgeBlockers({sourceSelectionChanged:!currentKnowledgeMatches,contentIncomplete:currentKnowledgeMatches});
+            const contentBlockers=currentKnowledgeMatches?knowledgeContentBlockers(currentKnowledge.exclusions,currentScope,latestGraph):[];
+            const reasonSummary=selectedBlockers.length?safeKnowledgeBlockerSummary(selectedBlockers):job.reasonSummary?.blockers?.length?job.reasonSummary:contentBlockers.length?safeKnowledgeBlockerSummary(contentBlockers):{...baseSummary,blockers:currentKnowledgeMatches?[{sourceId:"selected-content",label:"Selected source content",status:"partial",reasonCode:"content_unavailable",action:"Review the selected source status and restore any unavailable content, then retry Sync now.",retryable:true}]:[]};
+            const readinessFingerprint=knowledgeReadinessFingerprint(currentScope,latestGraph,reasonSummary);
+            return res.status(409).json({code:"KNOWLEDGE_INCOMPLETE",message:"The selected sources are incomplete. The managed local Markdown was updated, and the custom Obsidian vault remains at its last complete revision.",summary:reasonSummary.summary,reasonSummary:{reasonCodes:reasonSummary.reasonCodes,counts:reasonSummary.counts,blockers:(reasonSummary.blockers||[]).slice(0,20)},readinessFingerprint});
+        }
+        const graphRecords=knowledgeNoteRecords(currentKnowledge.notes,worldId,sourceSelectionFingerprint);
+        const records=[...graphRecords];
+        const selectedSourceScopeIds=new Set();
+        for(const key of obsidianVault.SOURCE_KEYS)if(sourceSelection[key])selectedSourceScopeIds.add(`client-category:${key}`);
+        if(sourceSelection.folders)for(const root of syncFolderRoots)selectedSourceScopeIds.add(`filesystem:folder:${root.id}`);
+        if(sourceSelection.email&&emailSelection?.provider==="gmail")selectedSourceScopeIds.add(`gmail:${emailSelection.blockId}`);
+        if(sourceSelection.activity)selectedSourceScopeIds.add("snapshot:activity");
+        if(sourceSelection.snapshots) {
+            selectedSourceScopeIds.add("snapshot:calendar");
+            selectedSourceScopeIds.add("snapshot:planet-notes");
+        }
+        if(currentKnowledgeMatches)for(const record of graphRecords)if(record.sourceScopeId)selectedSourceScopeIds.add(record.sourceScopeId);
+        if(currentKnowledgeMatches)selectedSourceScopeIds.add(`knowledge:${sourceSelectionFingerprint}`);
+        const graphStatuses=new Map((Array.isArray(graph.sourceStatuses)?graph.sourceStatuses:[]).map(item=>[item.sourceId,item.status]));
+        let completeSelection=selectedKnowledgeBlockers(graph,currentScope).length===0&&expectedKnowledgeGraphSourceIds(currentScope).every(sourceId=>graphStatuses.get(sourceId)==="complete");
+        const lateBlockers=selectedKnowledgeBlockers(graph,currentScope);
+        if(Array.isArray(req.body?.records)&&req.body.records.length>500){completeSelection=false;lateBlockers.push({sourceId:"client-record-limit",label:"Supplied sync records",status:"limited",reasonCode:"selected_source_limit",action:"Reduce the number of supplied records to 500 or fewer, then retry Sync now.",retryable:false});}
+        if(Array.isArray(req.body?.attachments)&&req.body.attachments.length>40){completeSelection=false;lateBlockers.push({sourceId:"selected-attachment-limit",label:"Selected attachments",status:"limited",reasonCode:"selected_source_limit",action:"Reduce the selected attachments to 40 or fewer, then retry Sync now.",retryable:false});}
+        if(sourceSelection.email&&emailSelection?.provider!=="gmail"){
+            completeSelection=false;
+            if(!lateBlockers.some(item=>item.sourceId==="email-selection"))lateBlockers.push({sourceId:"email-selection",label:"Selected email source",status:"unavailable",reasonCode:"content_unavailable",action:"Choose a connected Gmail source or turn off the email source, then retry Sync now.",retryable:false});
+        }
+        if(sourceSelection.email&&sourceSelection.threadMode==="selected") {
+            const exportedThreadIds=new Set(selectedGraph.nodes.filter(item=>item.type==="email-thread").map(item=>item.sourceRef?.threadId).filter(Boolean));
+            const omitted=sourceSelection.threadIds.filter(id=>!exportedThreadIds.has(id));
+            if(omitted.length){completeSelection=false;warnings.push(`${omitted.length} selected conversation(s) are not currently present in the planet graph and were not exported.`);lateBlockers.push({sourceId:`gmail:${emailSelection?.blockId||"selected"}`.slice(0,180),label:"Selected Gmail conversations",status:"incomplete",reasonCode:"content_unavailable",action:"Refresh the selected Gmail conversations, then retry Sync now.",retryable:true});}
+        }
+        records.unshift({id:`overview:${worldId}`,kind:"overview",sourceId:worldId,title:`${worldName} · FolderRocket`,updatedAt:graph.updatedAt||"",content:`This vault contains the FolderRocket records available for the **${worldName}** planet.\n\n- Graph status: ${graph.status}\n- Indexed records: ${graph.nodes.length}\n- Knowledge notes: ${graphRecords.length}\n\nKnowledge notes are created locally from the selected folder sources and explicitly selected Gmail conversations. FolderRocket does not scan the mailbox for Obsidian sync. Client-held notes, reminders, Daily Jobs and File Studio activity are included only when supplied by FolderRocket during sync.\n`});
         const allowedKinds=new Set(["post-it","ai-post-it","reminder","daily-job","activity","file-studio","file-studio-operation","downloaded-attachment"]);
         const clientRecords=[];let clientTextBytes=0;
         for(const item of (Array.isArray(req.body?.records)?req.body.records:[]).slice(0,500)) {
             if(!item||typeof item.id!=="string"||!item.id||typeof item.kind!=="string"||!allowedKinds.has(item.kind))continue;
             const content=typeof item.content==="string"?item.content.slice(0,10_000):"";clientTextBytes+=Buffer.byteLength(content,"utf8");
             if(clientTextBytes>2*1024*1024)throw new Error("Obsidian sync records exceed the 2 MB content limit.");
-            clientRecords.push({id:`client:${item.kind}:${item.id.slice(0,180)}`,kind:item.kind,title:typeof item.title==="string"?item.title.slice(0,300):item.kind,sourceId:item.id.slice(0,300),updatedAt:typeof item.updatedAt==="string"?item.updatedAt.slice(0,80):"",content});
+            const category=obsidianVault.sourceCategory(item.kind);
+            clientRecords.push({id:`client:${item.kind}:${item.id.slice(0,180)}`,kind:item.kind,title:typeof item.title==="string"?item.title.slice(0,300):item.kind,sourceId:item.id.slice(0,300),sourceScopeId:`client-category:${category}`,updatedAt:typeof item.updatedAt==="string"?item.updatedAt.slice(0,80):"",content});
         }
-        records.push(...clientRecords);
+        const filteredClientRecords=obsidianVault.filterRecordsBySources(clientRecords,sourceSelection);
+        records.push(...filteredClientRecords);
         const requestedAttachments=Array.isArray(req.body?.attachments)?req.body.attachments.slice(0,40):[];
         const safeAttachments=[];let attachmentBytes=0;
         for(const attachment of requestedAttachments) {
@@ -783,43 +1494,111 @@ app.post("/worlds/:worldId/obsidian/sync",requireAuthenticated,async(req,res)=>{
             attachmentBytes+=stats.size;if(attachmentBytes>100*1024*1024)throw new Error("Local attachments exceed the total Obsidian sync limit of 100 MB.");
             safeAttachments.push({path:real});
         }
-        const attachmentResult=await obsidianVault.copyDownloadedAttachments({vaultPath,attachments:safeAttachments});
-        records.push(...attachmentResult.records);
-        const selection=worldEmailAccountService.resolveWorldEmailAccount(state.world,state.settings,worldId).selection;
-        let warnings=[];
+        const selection=emailSelection;
         if(!["ready","partial","indexing"].includes(graph.status))warnings.push(`Planet graph data is not ready (status: ${graph.status}); only supplied client records can be synced.`);
-        if(selection?.provider==="gmail") {
-            const accounts=await listGmailConnectedAccounts(req.user.id);
-            if(!accounts.some(item=>item.blockId===selection.blockId))warnings.push("The selected Gmail account is disconnected; email conversations were omitted.");
-            else {
-                try {
-                    const listing=await listGmailInboxThreads({maxResults:25},req.user.id,selection.blockId);
-                    const threads=await Promise.all(listing.threads.slice(0,25).map(thread=>getGmailThread(thread.id,req.user.id,selection.blockId)));
-                    records.push(...threads.map(thread=>obsidianVault.markdownEmailThread(thread,accounts.find(item=>item.blockId===selection.blockId)?.email||"",worldId)));
-                    if(listing.nextPageToken)warnings.push("Only the newest 25 Gmail conversations are synced per manual sync.");
-                } catch(error) {warnings.push(error instanceof Error?`Gmail content could not be synced: ${error.message}`:"Gmail content could not be synced.");}
-            }
-        } else if(selection?.provider==="outlook") warnings.push("Outlook is selected for this planet, but the current conversation integration does not expose real thread identifiers; Outlook conversation notes were skipped.");
-        else warnings.push("No email account is selected for this planet.");
+        if(selection?.provider==="gmail"&&sourceSelection.email){
+            if(sourceSelection.threadMode!=="selected"||!sourceSelection.threadIds.length){completeSelection=false;warnings.push("Choose specific Gmail conversations before adding email knowledge; Obsidian sync does not scan the mailbox.");if(!lateBlockers.some(item=>item.sourceId==="email-selection"))lateBlockers.push({sourceId:"email-selection",label:"Email conversation selection",status:"incomplete",reasonCode:"content_unavailable",action:"Select specific Gmail conversations or turn off the email source, then retry Sync now.",retryable:false});}
+            else {const metadata=currentKnowledge.sourceMetadata||{};const missing=sourceSelection.threadIds.filter(id=>!metadata[`gmail:${selection.blockId}:${id}`]);if(missing.length){completeSelection=false;warnings.push(`${missing.length} selected conversation(s) have no current local knowledge note and were omitted.`);lateBlockers.push({sourceId:`gmail:${selection.blockId}`.slice(0,180),label:"Selected Gmail conversations",status:"incomplete",reasonCode:"content_unavailable",action:"Restore the selected Gmail conversation data, then retry Sync now.",retryable:true});}}
+        } else if(selection?.provider==="outlook"&&sourceSelection.email){completeSelection=false;warnings.push("Outlook conversation knowledge is not supported yet; only explicitly selected Gmail conversations can be processed locally.");}
+        else if(sourceSelection.email){completeSelection=false;warnings.push("No email account is selected for this planet.");}
+        if(!completeSelection){
+            const reasonSummary=safeKnowledgeBlockerSummary(lateBlockers.length?lateBlockers:[{sourceId:"selected-content",label:"Selected source content",status:"incomplete",reasonCode:"content_unavailable",action:"Review the selected source status and retry Sync now.",retryable:true}]);
+            const readinessFingerprint=knowledgeReadinessFingerprint(currentScope,graph,reasonSummary);
+            return res.status(409).json({code:"KNOWLEDGE_INCOMPLETE",message:"The selected sources are incomplete. The custom Obsidian vault remains at its last complete revision.",summary:reasonSummary.summary,reasonSummary:{reasonCodes:reasonSummary.reasonCodes,counts:reasonSummary.counts,blockers:reasonSummary.blockers},readinessFingerprint});
+        }
+        const attachmentResult=sourceSelection.attachments?await obsidianVault.copyDownloadedAttachments({vaultPath,attachments:safeAttachments}):{copied:0,unchanged:0,totalBytes:0,records:[]};
+        records.push(...attachmentResult.records);
         const suppliedKinds=new Set(clientRecords.map(item=>item.kind));
         if(!["post-it","ai-post-it","reminder"].some(kind=>suppliedKinds.has(kind)))warnings.push("No post-it or reminder records were supplied by the client; these items are stored in client state and are not readable from the backend.");
         if(!["daily-job","activity"].some(kind=>suppliedKinds.has(kind))&&!records.some(item=>item.kind==="activity"))warnings.push("No Daily Jobs records were supplied by the client.");
         if(!["file-studio","file-studio-operation"].some(kind=>suppliedKinds.has(kind)))warnings.push("No File Studio operation records were supplied by the client.");
         if(!attachmentResult.copied&&!attachmentResult.unchanged)warnings.push("No previously downloaded local attachments were supplied; Obsidian sync does not download email attachments automatically.");
-        const result=await obsidianVault.syncVault({vaultPath,worldId,ownerId:req.user.id,worldName,records});
+        for(const key of obsidianVault.SOURCE_KEYS)if(!sourceSelection[key])warnings.push(`Obsidian source category "${key}" is disabled.`);
+        const hasScopedSelectionChange=obsidianVault.SOURCE_KEYS.some(key=>!sourceSelection[key])||sourceSelection.threadMode==="selected"||sourceSelection.threadIds.length>0||sourceSelection.excludedFileIds.length>0||sourceSelection.folderMode==="selected"||sourceSelection.fileTypeMode==="selected"||sourceSelection.includeSubfolders===false;
+        const result=await obsidianVault.syncVault({vaultPath,worldId,ownerId:req.user.id,worldName,records,completeSelection,selectedSourceScopeIds:[...selectedSourceScopeIds]});
+        if(result.omitted)warnings.push(`The local Obsidian note limit is ${obsidianVault.MAX_NOTES}; ${result.omitted} selected record(s) were not written. Reduce selected sources and sync again.`);
+        if(result.warning)warnings.push(result.warning);
+        if(hasScopedSelectionChange&&(!completeSelection||result.omitted))warnings.push("Some previously generated notes were retained because this sync could not verify a complete result for the current source selection.");
+        if(result.prunedFromDeselected)warnings.push(`${result.prunedFromDeselected} unchanged generated note(s) from deselected sources were removed from this planet's FolderRocket output.`);
         const latest=readDashboardPreferences(req.user.id)||{};const worlds=latest.worlds&&typeof latest.worlds==="object"?latest.worlds:{};const current=worlds[worldId]||state.world;const obsidianConfig=current.obsidian||state.config;
-        const saved={...obsidianConfig,lastSyncAt:result.lastSyncAt,status:result.status,lastResult:{total:result.total,written:result.written,unchanged:result.unchanged,conflicts:result.conflicts,warnings}};
+        const saved={...obsidianConfig,vaultPath,lastSyncAt:result.status==="ready"?result.lastSyncAt:obsidianConfig.lastSyncAt||"",status:result.status,lastResult:{total:result.total,written:result.written,unchanged:result.unchanged,conflicts:result.conflicts,warnings}};
         writeDashboardPreferences(req.user.id,{...latest,worlds:{...worlds,[worldId]:{...current,obsidian:saved}}});
-        res.json({config:saved,result:{...result,attachments:{copied:attachmentResult.copied,unchanged:attachmentResult.unchanged,bytes:attachmentResult.totalBytes},warnings,openSupported:process.env.FOLDERROCKET_DESKTOP==="1",uri:`obsidian://open?path=${encodeURIComponent(vaultPath)}`}});
+        const bySource={};
+        for(const record of records) {const category=obsidianVault.sourceCategory(record.kind);bySource[category]=(bySource[category]||0)+1;}
+        res.json({config:saved,result:{...result,counts:{graphRecords:graphRecords.length,clientRecords:filteredClientRecords.length,attachments:attachmentResult.records.length,bySource},sourceSelection,attachments:{copied:attachmentResult.copied,unchanged:attachmentResult.unchanged,bytes:attachmentResult.totalBytes},warnings,openSupported:process.env.FOLDERROCKET_DESKTOP==="1",uri:`obsidian://open?path=${encodeURIComponent(vaultPath)}`}});
     } catch(error) {res.status(400).json({message:error instanceof Error?error.message:"Unable to sync this planet to Obsidian."});}
 });
 
 app.get("/worlds/:worldId/graph",requireAuthenticated,async(req,res)=>{
     const found=graphWorld(req,res,String(req.params.worldId||""));if(!found)return;
     try {
-        const graph=await planetGraph.readGraph(req.user.id,req.params.worldId);
-        res.json({enabled:found.world.graphEnabled===true,graph});
+        const storedGraph=await planetGraph.readGraph(req.user.id,req.params.worldId);
+        const sourceSelection=obsidianVault.normalizeSourceSelection(found.world.obsidian?.sourceSelection);
+        const emailSelection=worldEmailAccountService.resolveWorldEmailAccount(found.world,found.settings,req.params.worldId).selection;
+        const selectedEmailBlocks=emailSelection?.provider==="gmail"?[emailSelection.blockId]:[];
+        const folderRoots=graphFolderRootsForWorld(found.settings,req.params.worldId,sourceSelection);
+        const vaultPath=readWorldObsidian(req.user,req.params.worldId)?.config?.vaultPath||"";
+        const managedMarkdownPath=planetKnowledge.managedMarkdownRoot(req.user.id,req.params.worldId);
+        const graph=obsidianVault.filterGraphBySources(storedGraph,sourceSelection,{emailBlockIds:selectedEmailBlocks,folderRoots});
+        graph.nodes=graph.nodes.filter(item=>!(typeof item?.sourceRef?.path==="string"&&(isKnowledgeFileInsideVault(vaultPath,item.sourceRef.path)||isKnowledgeFileInsideVault(managedMarkdownPath,item.sourceRef.path))));
+        const graphNodeIds=new Set(graph.nodes.map(item=>item.id));graph.edges=graph.edges.filter(item=>graphNodeIds.has(item.from)&&graphNodeIds.has(item.to));
+        const excludedFileIds=new Set(sourceSelection.excludedFileIds||[]);if(excludedFileIds.size){graph.nodes=graph.nodes.filter(item=>!excludedFileIds.has(item.id));const visibleIds=new Set(graph.nodes.map(item=>item.id));graph.edges=graph.edges.filter(item=>visibleIds.has(item.from)&&visibleIds.has(item.to));}
+        const knowledge=await planetKnowledge.readKnowledge(req.user.id,req.params.worldId);
+        const revision=planetGraph.contentRevision(storedGraph);
+        const fingerprint=planetKnowledge.fingerprint({selection:sourceSelection,roots:(sourceSelection.folders?folderRoots:[]).map(item=>({id:item.id,path:path.resolve(item.path)})).sort((a,b)=>a.id.localeCompare(b.id)),excludedVaultPath:canonicalPathContainment.canonicalPath(vaultPath),managedMarkdownPath:canonicalPathContainment.canonicalPath(managedMarkdownPath),graphRevision:revision,email:sourceSelection.email?{provider:emailSelection?.provider||"",blockId:emailSelection?.blockId||"",threadMode:sourceSelection.threadMode,threadIds:[...sourceSelection.threadIds].sort()}:null});
+        const activeKnowledgeJob=knowledgeJobsByScope.get(knowledgeScopeKey(req.user.id,req.params.worldId));
+        const readiness=knowledgeReadiness({enabled:found.world.graphEnabled===true,graphStatus:storedGraph.status,knowledge,fingerprint,graphRevision:revision,job:activeKnowledgeJob});
+        if(knowledge.sourceSelectionFingerprint&&knowledge.sourceSelectionFingerprint===fingerprint){
+            const nodeIds=new Set(graph.nodes.map(item=>item.id));for(const item of knowledge.nodes)if(item?.id&&!nodeIds.has(item.id)){graph.nodes.push(item);nodeIds.add(item.id);}
+            const available=new Set(graph.nodes.map(item=>item.id));graph.edges.push(...knowledge.edges.filter(item=>available.has(item.from)&&available.has(item.to)));graph.knowledgeUpdatedAt=knowledge.updatedAt;
+        }
+        const progress=activeKnowledgeJob?{stage:activeKnowledgeJob.stage,processed:activeKnowledgeJob.processed,total:activeKnowledgeJob.total}:storedGraph.progress||{stage:"idle",processed:0,total:0};
+        if(req.query.summary==="1")return res.json({enabled:found.world.graphEnabled===true,...readiness,graphStatus:storedGraph.status,progress,revision,sourceSelectionFingerprint:fingerprint,knowledgeUpdatedAt:knowledge.updatedAt,managedMarkdown:knowledge.managedMarkdown||null,sourceStatuses:storedGraph.sourceStatuses||[]});
+        res.json({enabled:found.world.graphEnabled===true,graph,sourceSelection,...readiness,graphStatus:storedGraph.status,progress,revision,sourceSelectionFingerprint:fingerprint,knowledgeUpdatedAt:knowledge.updatedAt,managedMarkdown:knowledge.managedMarkdown||null});
     } catch(error) {res.status(500).json({message:error instanceof Error?error.message:"Unable to read this planet graph."});}
+});
+
+app.get("/worlds/:worldId/graph/chats",requireAuthenticated,async(req,res)=>{
+    const worldId=String(req.params.worldId||"");const found=graphWorld(req,res,worldId);if(!found)return;
+    const selectedAccount=worldEmailAccountService.resolveWorldEmailAccount(found.world,found.settings,worldId).selection;
+    if(selectedAccount?.provider==="outlook")return res.status(501).json({provider:"outlook",providerUnsupported:true,message:"Outlook conversation selection is not supported yet."});
+    if(!selectedAccount||selectedAccount.provider!=="gmail")return res.status(409).json({message:"Select a connected Gmail account for this planet before adding conversations to its graph."});
+    try {
+        const accounts=await listGmailConnectedAccounts(req.user.id);
+        const account=accounts.find(item=>item.blockId===selectedAccount.blockId);
+        if(!account)return res.status(424).json({message:"The selected Gmail account is no longer connected."});
+        const listing=await listGmailInboxThreads(chatInboxPageOptions(req.query.pageToken,req.query.query),req.user.id,selectedAccount.blockId);
+        const graph=await planetGraph.readGraph(req.user.id,worldId);
+        const saved=graph.selectedConversations.filter(item=>item.blockId===selectedAccount.blockId);
+        const threads=mergeSavedChatSelectorThreads(listing.threads,saved,selectedAccount.blockId).map(item=>({threadId:item.id,blockId:selectedAccount.blockId,subject:item.subject||"(no subject)",snippet:item.snippet||"",updatedAt:item.updatedAt||"",messageCount:item.messageCount||0,sender:conversationContactIdentity(item.messages,account.email),selected:item.selected===true}));
+        res.json({provider:"gmail",accountEmail:account.email||"",threads,nextPageToken:listing.nextPageToken||""});
+    } catch(error) {if(respondGraphStorageUnavailable(res,error))return;res.status(502).json({message:error instanceof Error?error.message:"Unable to load Gmail conversations for this planet graph."});}
+});
+
+app.post("/worlds/:worldId/graph/chats",requireAuthenticated,async(req,res)=>{
+    const worldId=String(req.params.worldId||"");const found=graphWorld(req,res,worldId);if(!found)return;
+    const selectedAccount=worldEmailAccountService.resolveWorldEmailAccount(found.world,found.settings,worldId).selection;
+    if(selectedAccount?.provider==="outlook")return res.status(501).json({provider:"outlook",providerUnsupported:true,message:"Outlook conversation selection is not supported yet."});
+    const blockId=typeof req.body?.blockId==="string"?req.body.blockId:"";
+    const threadId=typeof req.body?.threadId==="string"?req.body.threadId:"";
+    if(!selectedAccount||selectedAccount.provider!=="gmail"||selectedAccount.blockId!==blockId)return res.status(403).json({message:"Choose a real inbox conversation from the Gmail account selected for this planet."});
+    if(!threadId||threadId.length>300||req.body?.selected!==undefined&&typeof req.body.selected!=="boolean"||req.body?.pageToken!==undefined&&(typeof req.body.pageToken!=="string"||req.body.pageToken.length>5000)||req.body?.query!==undefined&&(typeof req.body.query!=="string"||req.body.query.length>200))return res.status(400).json({message:"Conversation selection is invalid."});
+    try {
+        const graph=await planetGraph.readGraph(req.user.id,worldId);
+        const current=graph.selectedConversations.find(item=>item.blockId===blockId&&item.threadId===threadId);
+        if(req.body?.selected===false) {
+            if(current)await planetGraph.unselectConversation(req.user.id,worldId,blockId,threadId);
+            return res.json({selected:false,threadId,blockId});
+        }
+        const accounts=await listGmailConnectedAccounts(req.user.id);const account=accounts.find(item=>item.blockId===blockId);
+        if(!account)return res.status(424).json({message:"The selected Gmail account is no longer connected."});
+        const listing=await listGmailInboxThreads(chatInboxPageOptions(req.body?.pageToken,req.body?.query),req.user.id,blockId);
+        const thread=findInboxThreadById(listing.threads,threadId);
+        if(!thread)return res.status(404).json({message:"That conversation is not present in the authenticated Gmail inbox page. Refresh the selector and try again."});
+        const emailSourceEnabled=obsidianVault.normalizeSourceSelection(found.world.obsidian?.sourceSelection).email!==false;
+        await planetGraph.selectConversation(req.user.id,worldId,{provider:"gmail",blockId,threadId,accountEmail:account.email||"",subject:thread.subject||"(no subject)",sender:conversationContactIdentity(thread.messages,account.email)},{includeNode:emailSourceEnabled});
+        res.json({selected:true,threadId,blockId});
+    } catch(error) {if(respondGraphStorageUnavailable(res,error))return;res.status(502).json({message:error instanceof Error?error.message:"Unable to save this conversation to the planet graph."});}
 });
 
 app.post("/worlds/:worldId/graph/index",requireAuthenticated,async(req,res)=>{
@@ -827,60 +1606,153 @@ app.post("/worlds/:worldId/graph/index",requireAuthenticated,async(req,res)=>{
     if(found.world.graphEnabled!==true)return res.status(409).json({message:"Enable Create graph in this planet's settings first."});
     const key=`${req.user.id}:${worldId}`;
     if(planetGraph.isIndexing(req.user.id,worldId))return res.status(202).json({message:"Graph indexing is already in progress.",status:"indexing"});
+    const requestedRetry=typeof req.body?.retrySourceId==="string"?req.body.retrySourceId.trim():"";
+    if(req.body?.retrySourceId!==undefined&&(typeof req.body.retrySourceId!=="string"||!requestedRetry||requestedRetry.length>240))return res.status(400).json({message:"Graph source retry reference is invalid."});
     const initial=await planetGraph.readGraph(req.user.id,worldId);
-    await planetGraph.writeGraph({...initial,status:"indexing",progress:{stage:"starting",processed:0,total:0,limitReached:false},updatedAt:new Date().toISOString(),warnings:[]});
-    const snapshot=req.body?.snapshot&&typeof req.body.snapshot==="object"?req.body.snapshot:{};
-    const accepted=planetGraph.enqueueIndex(key,async()=>{
+    const initialSelection=obsidianVault.normalizeSourceSelection(found.world.obsidian?.sourceSelection);
+    const initialRoots=initialSelection.folders?graphFolderRootsForWorld(found.settings,worldId,initialSelection):[];
+    const initialAccounts=initialSelection.email?selectedWorldGmailBlocks(found.settings,worldId):[];
+    const folderRetry=requestedRetry.startsWith("folder:")?initialRoots.find(item=>`folder:${item.id}`===requestedRetry):null;
+    const gmailRetry=requestedRetry.startsWith("gmail:")?initialAccounts.find(item=>`gmail:${item.blockId}`===requestedRetry):null;
+    const snapshotRetry=requestedRetry==="snapshot"&&initialSelection.snapshots;
+    if(requestedRetry&&!folderRetry&&!gmailRetry&&!snapshotRetry)return res.status(409).json({message:"That graph source is not currently selected for this planet. Refresh the source selection and try again."});
+    const startingStatuses=requestedRetry
+        ?planetGraph.normalizeSourceStatuses([...initial.sourceStatuses.filter(item=>item.sourceId!==requestedRetry),planetGraph.sourceStatus({sourceId:requestedRetry,type:requestedRetry.startsWith("folder:")?"folder":requestedRetry.startsWith("gmail:")?"gmail":"snapshot",label:folderRetry?.name||gmailRetry?.blockId||"Planet snapshot",status:"indexing",message:"This source is being refreshed.",retryable:true})])
+        :[
+            ...initialRoots.map(item=>planetGraph.sourceStatus({sourceId:`folder:${item.id}`,type:"folder",label:item.name||"Folder",status:"indexing",message:"This folder source is being indexed.",retryable:true})),
+            ...initialAccounts.map(item=>planetGraph.sourceStatus({sourceId:`gmail:${item.blockId}`,type:"gmail",label:"Gmail",status:"indexing",message:"The selected Gmail source is being indexed.",retryable:true})),
+            ...(initialSelection.snapshots?[planetGraph.sourceStatus({sourceId:"snapshot",type:"snapshot",label:"Planet activity",status:"indexing",message:"Selected planet activity is being indexed.",retryable:true})]:[])
+        ];
+    try {await planetGraph.writeGraph({...initial,status:"indexing",sourceStatuses:startingStatuses,progress:{stage:"starting",processed:0,total:startingStatuses.length,limitReached:false},updatedAt:new Date().toISOString(),warnings:[]});}
+    catch(error) {if(respondGraphStorageUnavailable(res,error))return;return res.status(500).json({message:"Unable to save planet graph state."});}
+    const snapshotProvided=Object.hasOwn(req.body||{},"snapshot")&&req.body.snapshot&&typeof req.body.snapshot==="object"&&!Array.isArray(req.body.snapshot);
+    const snapshot=snapshotProvided?req.body.snapshot:{};
+    const accepted=planetGraph.enqueueIndex(key,()=>scheduleBackendHeavy(async()=>{
         const warnings=[];let limitReached=false;
         try {
             const latest=readWorldRecord(req.user.id,worldId);
             if(latest.world?.graphEnabled!==true) {await planetGraph.updateGraphStatus(req.user.id,worldId,"disabled",{stage:"stopped",processed:0,total:0},warnings);return;}
-            const dashboard=readWorldDashboard(latest.settings,worldId);
-            const roots=Array.isArray(dashboard?.folders)?dashboard.folders:[];
-            await planetGraph.updateGraphStatus(req.user.id,worldId,"indexing",{stage:"folders",processed:0,total:roots.length},warnings);
             const obsidianConfig=latest.world?.obsidian&&typeof latest.world.obsidian==="object"?latest.world.obsidian:null;
-            const excludedRoots=obsidianConfig?.vaultPath?[obsidianConfig.vaultPath]:[];
-            const walked=await planetGraph.walkConfiguredFolders(roots,{maxDirectories:400,maxFiles:3000,maxDepth:8,excludePaths:excludedRoots,validateRoot:async candidate=>{
-                const safe=assertUserPath(req.user,candidate);const real=await fs.promises.realpath(safe);const info=await fs.promises.stat(real);if(!info.isDirectory())throw new Error("Configured path is not a folder.");return real;
-            }});
-            limitReached=walked.limitReached;
+            const sourceSelection=obsidianVault.normalizeSourceSelection(obsidianConfig?.sourceSelection);
+            const roots=sourceSelection.folders?graphFolderRootsForWorld(latest.settings,worldId,sourceSelection):[];
+            const accounts=sourceSelection.email?selectedWorldGmailBlocks(latest.settings,worldId):[];
+            const sourceStillSelected=!requestedRetry
+                ||(requestedRetry.startsWith("folder:")&&roots.some(item=>`folder:${item.id}`===requestedRetry))
+                ||(requestedRetry.startsWith("gmail:")&&accounts.some(item=>`gmail:${item.blockId}`===requestedRetry))
+                ||(requestedRetry==="snapshot"&&sourceSelection.snapshots);
+            if(!sourceStillSelected){const current=await planetGraph.readGraph(req.user.id,worldId);const remainingStatuses=current.sourceStatuses.filter(item=>item.sourceId!==requestedRetry);const progress={...current.progress,stage:"complete"};await planetGraph.writeGraph({...current,status:planetGraph.statusForSources?planetGraph.statusForSources(remainingStatuses,progress):"ready",progress,sourceStatuses:remainingStatuses,warnings:[],updatedAt:new Date().toISOString()});return;}
+            if(sourceSelection.folderMode==="selected") {
+                const selectedIds=new Set(roots.map(item=>item.id));
+                const missing=sourceSelection.folderIds.filter(id=>!selectedIds.has(id));
+                if(missing.length)warnings.push(`${missing.length} selected folder root(s) are no longer configured and were skipped.`);
+            }
+            const configuredVaultPath=readWorldObsidian(req.user,worldId)?.config?.vaultPath||"";
+            const excludedVaultPath=canonicalPathContainment.canonicalPath(configuredVaultPath);
+            const managedMarkdownPath=planetKnowledge.managedMarkdownRoot(req.user.id,worldId);
+            const excludedRoots=[excludedVaultPath,canonicalPathContainment.canonicalPath(managedMarkdownPath)].filter(Boolean);
+            const current=readWorldRecord(req.user.id,worldId);
+            if(current.world?.graphEnabled!==true) {await planetGraph.updateGraphStatus(req.user.id,worldId,"disabled",{stage:"stopped",processed:0,total:0},warnings);return;}
             const worldNode=planetGraph.node("world","folderrocket",worldId,String(latest.world?.name||worldId),{kind:"world",worldId});
+            const indexFolders=async targetRoots=>planetGraph.walkConfiguredFolders(targetRoots,{maxDirectories:400,maxFiles:3000,maxDepth:8,maxNodes:Math.max(0,planetGraph.MAX_NODES-1),excludePaths:excludedRoots,includeSubfolders:sourceSelection.includeSubfolders,fileTypes:sourceSelection.fileTypeMode==="selected"?sourceSelection.fileTypes:null,onProgress:async folderProgress=>{
+                const currentGraph=await planetGraph.readGraph(req.user.id,worldId);
+                const sourceStatuses=currentGraph.sourceStatuses.map(item=>item.sourceId!==folderProgress.sourceId?item:planetGraph.sourceStatus({...item,status:"indexing",message:"Folder indexing is in progress.",processed:Math.max(item.processed,folderProgress.processed),total:0,retryable:true}));
+                await planetGraph.updateGraphStatus(req.user.id,worldId,"indexing",{stage:"folders",processed:Math.max(Number(currentGraph.progress?.processed)||0,folderProgress.overallProcessed),total:0,limitReached:currentGraph.progress?.limitReached===true},undefined,{sourceStatuses});
+            },validateRoot:async candidate=>{
+                const safe=assertUserPath(req.user,candidate);const real=await fs.promises.realpath(safe);const info=await fs.promises.stat(real);if(!info.isDirectory())throw Object.assign(new Error("Configured path is not a folder."),{code:"ENOTDIR"});return real;
+            }});
+            if(requestedRetry) {
+                if(requestedRetry.startsWith("folder:")) {
+                    const sourceRoot=roots.find(item=>`folder:${item.id}`===requestedRetry);
+                    if(!sourceRoot)return;
+                    const walked=await indexFolders([sourceRoot]);const status=walked.sourceStatuses[0]||planetGraph.sourceStatus({sourceId:requestedRetry,type:"folder",label:sourceRoot.name||"Folder",status:"failed",reasonCode:"source_unavailable",message:"The folder source could not be indexed.",retryable:true});
+                    if(walked.limitReached)limitReached=true;
+                    const graph=await planetGraph.readGraph(req.user.id,worldId);
+                    const result=await planetGraph.replaceIndexedSourceGraph(req.user.id,worldId,status,[worldNode,...walked.nodes],walked.edges,{sourcePath:sourceRoot.path,sourceStatuses:graph.sourceStatuses});
+                    if(status.message)warnings.push(`${status.label}: ${status.message}`);
+                    if(warnings.length)await planetGraph.updateGraphStatus(req.user.id,worldId,result.status,result.progress,warnings);
+                    return;
+                }
+                if(requestedRetry==="snapshot") {
+                    const graph=await planetGraph.readGraph(req.user.id,worldId);
+                    const status=snapshotProvided
+                        ?planetGraph.sourceStatus({sourceId:"snapshot",type:"snapshot",label:"Planet activity",status:"complete",processed:planetGraph.snapshotGraphItems(snapshot).nodes.length,total:0})
+                        :planetGraph.sourceStatus({sourceId:"snapshot",type:"snapshot",label:"Planet activity",status:"failed",reasonCode:"snapshot_unavailable",message:"The planet snapshot was not provided; the last successful snapshot remains available.",retryable:true});
+                    const items=snapshotProvided?planetGraph.snapshotGraphItems(snapshot):{nodes:[],edges:[]};
+                    const result=await planetGraph.replaceIndexedSourceGraph(req.user.id,worldId,status,[...items.nodes],items.edges,{sourceStatuses:graph.sourceStatuses});
+                    if(status.message)warnings.push(status.message);
+                    if(warnings.length)await planetGraph.updateGraphStatus(req.user.id,worldId,result.status,result.progress,warnings);
+                    return;
+                }
+                const source=accounts.find(item=>`gmail:${item.blockId}`===requestedRetry);
+                if(!source)return;
+                let accountCatalog=[];
+                try {accountCatalog=await listGmailConnectedAccounts(req.user.id);} catch {}
+                const graph=await planetGraph.readGraph(req.user.id,worldId);
+                const indexed=await collectPlanetGmailSource({userId:req.user.id,source,sourceSelection,accountCatalog,existingGraph:graph});
+                const worldWithSource=[worldNode,...indexed.nodes];
+                const result=await planetGraph.replaceIndexedSourceGraph(req.user.id,worldId,indexed.status,worldWithSource,indexed.edges,{sourceStatuses:graph.sourceStatuses});
+                if(indexed.warnings.length)await planetGraph.updateGraphStatus(req.user.id,worldId,result.status,result.progress,indexed.warnings);
+                return;
+            }
+
+            const existingGraph=await planetGraph.readGraph(req.user.id,worldId);
+            let walked={nodes:[],edges:[],processedDirectories:0,processedFiles:0,configuredRoots:0,limitReached:false,sourceStatuses:[]};
+            if(sourceSelection.folders&&roots.length)walked=await indexFolders(roots);
+            if(sourceSelection.folderMode==="selected") {
+                const selectedIds=new Set(roots.map(item=>item.id));
+                for(const missingId of sourceSelection.folderIds.filter(id=>!selectedIds.has(id))) {
+                    const status=planetGraph.sourceStatus({sourceId:`folder:${missingId}`,type:"folder",label:"Selected folder",status:"skipped",reasonCode:"selected_item_missing",message:"This selected folder is no longer configured for the planet."});
+                    walked.sourceStatuses.push(status);warnings.push(`${status.label}: ${status.message}`);
+                }
+            }
             const nodes=[worldNode,...walked.nodes];const edges=[];
             for(const root of roots) {
-                if(root?.storage==="imaginary"||typeof root?.path!=="string")continue;
                 const rootNode=walked.nodes.find(item=>item.type==="folder"&&path.resolve(item.sourceRef?.path||"").toLowerCase()===path.resolve(root.path).toLowerCase());
                 if(rootNode)edges.push(planetGraph.edge("contains",worldNode.id,rootNode.id,"configured-world-folder"));
             }
-            const snapshotData=planetGraph.snapshotGraphItems(snapshot);
-            nodes.push(...snapshotData.nodes);edges.push(...snapshotData.edges);
-            const accountCatalog=await listGmailConnectedAccounts(req.user.id).catch(()=>[]);
-            const accounts=selectedWorldGmailBlocks(latest.settings,worldId);
-            await planetGraph.updateGraphStatus(req.user.id,worldId,"indexing",{stage:"gmail",processed:walked.processedDirectories+walked.processedFiles,total:walked.configuredRoots},warnings);
-            for(const source of accounts) {
-                if(!accountCatalog.some(item=>item.blockId===source.blockId)) {warnings.push("One configured Gmail account is not connected; its conversations were not indexed.");continue;}
-                try {
-                    const listing=await listGmailInboxThreads({maxResults:100},req.user.id,source.blockId);
-                    const sourceThreads=listing.threads;
-                    if(listing.nextPageToken) {limitReached=true;warnings.push("Gmail indexing is limited to the first 100 inbox messages per selected account. Refresh to continue later.");}
-                    const account=accountCatalog.find(item=>item.blockId===source.blockId);
-                    planetGraph.addEmailThreads(nodes,edges,source.blockId,account?.email||"",sourceThreads);
-                } catch(error) {warnings.push(error instanceof Error?`Gmail source unavailable: ${error.message}`:"A Gmail source could not be indexed.");}
+            let snapshotStatus=null;
+            if(sourceSelection.snapshots) {
+                if(snapshotProvided) {
+                    const snapshotData=planetGraph.snapshotGraphItems(snapshot);nodes.push(...snapshotData.nodes);edges.push(...snapshotData.edges);
+                    snapshotStatus=planetGraph.sourceStatus({sourceId:"snapshot",type:"snapshot",label:"Planet activity",status:"complete",processed:snapshotData.nodes.length,total:0});
+                } else {
+                    snapshotStatus=planetGraph.sourceStatus({sourceId:"snapshot",type:"snapshot",label:"Planet activity",status:"failed",reasonCode:"snapshot_unavailable",message:"The planet snapshot was not provided; the last successful snapshot remains available.",retryable:true});
+                    warnings.push(snapshotStatus.message);
+                }
             }
-            const alerts=require("./services/emailAlertSettingsService").getEmailAlertSettings(req.user.id,worldId);
+            let accountCatalog=[];let accountCatalogAvailable=true;
+            try {accountCatalog=await listGmailConnectedAccounts(req.user.id);} catch {accountCatalogAvailable=false;}
+            const sourceStatuses=[...walked.sourceStatuses];
+            if(snapshotStatus)sourceStatuses.push(snapshotStatus);
+            await planetGraph.updateGraphStatus(req.user.id,worldId,"indexing",{stage:"gmail",processed:walked.processedDirectories+walked.processedFiles,total:roots.length+accounts.length},warnings);
+            if(sourceSelection.email)for(const source of accounts) {
+                const indexed=await collectPlanetGmailSource({userId:req.user.id,source,sourceSelection,accountCatalog:accountCatalogAvailable?accountCatalog:[],existingGraph});
+                nodes.push(...indexed.nodes);edges.push(...indexed.edges);sourceStatuses.push(indexed.status);warnings.push(...indexed.warnings);
+            }
+            const alerts=sourceSelection.alerts?require("./services/emailAlertSettingsService").getEmailAlertSettings(req.user.id,worldId):{};
             for(const provider of ["gmail","outlook"]) for(const [blockId,block] of Object.entries(alerts[provider]?.blocks||{})) {
                 const selected=provider==="gmail"?accounts.some(item=>item.blockId===blockId):true;
                 if(!selected)continue;
                 for(const rule of (block.rules||[]).filter(item=>item.enabled)) nodes.push(planetGraph.node("alert",provider,`${blockId}:${rule.id}`,rule.label,{kind:"email-alert",provider,blockId,ruleId:rule.id},{query:rule.query.slice(0,240),color:rule.color}));
             }
-            const current=readWorldRecord(req.user.id,worldId);
-            if(current.world?.graphEnabled!==true) {await planetGraph.updateGraphStatus(req.user.id,worldId,"disabled",{stage:"stopped",processed:walked.processedDirectories+walked.processedFiles,total:walked.configuredRoots},warnings);return;}
-            const progress={stage:"complete",processed:walked.processedDirectories+walked.processedFiles,total:walked.configuredRoots,limitReached:limitReached||walked.limitReached};
-            await planetGraph.replaceIndexedGraph(req.user.id,worldId,nodes,edges,progress,{warnings});
+            const retained=retainLastGoodGraphSources(existingGraph,nodes,edges,sourceStatuses,roots);
+            limitReached=walked.limitReached;
+            const currentAfterIndex=readWorldRecord(req.user.id,worldId);
+            if(currentAfterIndex.world?.graphEnabled!==true) {await planetGraph.updateGraphStatus(req.user.id,worldId,"disabled",{stage:"stopped",processed:walked.processedDirectories+walked.processedFiles,total:roots.length},warnings);return;}
+            const progress={stage:"complete",processed:walked.processedDirectories+walked.processedFiles,total:roots.length,limitReached};
+            const linkedEdges=planetGraph.addWorldMembershipEdges(worldId,worldNode,retained.nodes,retained.edges);
+            await planetGraph.replaceIndexedGraph(req.user.id,worldId,retained.nodes,linkedEdges,progress,{warnings,sourceStatuses});
         } catch(error) {
             const current=await planetGraph.readGraph(req.user.id,worldId);
-            await planetGraph.writeGraph({...current,status:"error",progress:{...current.progress,stage:"error"},warnings:[...warnings,error instanceof Error?error.message:"Graph indexing failed."].slice(0,30),updatedAt:new Date().toISOString()}).catch(()=>{});
+            await planetGraph.writeGraph({...current,status:"error",sourceStatuses:planetGraph.failIndexingSources(current.sourceStatuses),progress:{...current.progress,stage:"error"},warnings:[...warnings,"Planet graph indexing stopped because an internal source could not be processed."].slice(0,30),updatedAt:new Date().toISOString()}).catch(()=>{});
+        } finally {
+            const latest=readWorldRecord(req.user.id,worldId);
+            if(latest.world?.graphEnabled===true){
+                const latestScope=await knowledgeScope({user:req.user},worldId).catch(()=>null);
+                if(latestScope){await maintainKnowledgeWatcher(req.user,worldId,latestScope);queueKnowledgeSyncJob(req.user,worldId,latestScope);}
+            }
         }
-    });
+    }));
     if(!accepted)return res.status(202).json({message:"Graph indexing is already in progress.",status:"indexing"});
     res.status(202).json({message:"Graph indexing started.",status:"indexing"});
 });
@@ -891,10 +1763,12 @@ app.post("/worlds/:worldId/graph/activity",requireAuthenticated,async(req,res)=>
     try {
         const activity=req.body?.activity;
         if(activity?.worldId!==worldId)return res.status(400).json({message:"The activity does not belong to this planet."});
+        const sourceSelection=obsidianVault.normalizeSourceSelection(found.world.obsidian?.sourceSelection);
+        if(!sourceSelection.activity)return res.status(409).json({message:"Activity graph indexing is disabled in this planet's Obsidian source selection."});
         if(activity.destination){const safe=assertUserPath(req.user,activity.destination,{allowMissing:true});activity.destination=safe;}
         const graph=await planetGraph.upsertActivity(req.user.id,worldId,activity);
         res.status(202).json({accepted:["ready","partial","indexing"].includes(graph.status),updatedAt:graph.updatedAt});
-    } catch(error) {res.status(400).json({message:error instanceof Error?error.message:"Unable to add the operation to this planet graph."});}
+    } catch(error) {if(respondGraphStorageUnavailable(res,error))return;res.status(400).json({message:error instanceof Error?error.message:"Unable to add the operation to this planet graph."});}
 });
 
 app.post("/worlds/:worldId/graph/snapshot",requireAuthenticated,async(req,res)=>{
@@ -902,10 +1776,12 @@ app.post("/worlds/:worldId/graph/snapshot",requireAuthenticated,async(req,res)=>
     if(found.world.graphEnabled!==true)return res.status(409).json({message:"This planet graph is disabled."});
     try {
         const snapshot=req.body?.snapshot&&typeof req.body.snapshot==="object"?req.body.snapshot:{};
+        const sourceSelection=obsidianVault.normalizeSourceSelection(found.world.obsidian?.sourceSelection);
+        if(!sourceSelection.snapshots)return res.status(409).json({message:"Snapshot graph indexing is disabled in this planet's Obsidian source selection."});
         const items=planetGraph.snapshotGraphItems(snapshot);
         const graph=await planetGraph.replaceSnapshotGraphData(req.user.id,worldId,items.nodes,items.edges);
         res.status(202).json({accepted:true,status:graph.status,updatedAt:graph.updatedAt});
-    } catch(error) {res.status(400).json({message:error instanceof Error?error.message:"Unable to update this planet graph."});}
+    } catch(error) {if(respondGraphStorageUnavailable(res,error))return;res.status(400).json({message:error instanceof Error?error.message:"Unable to update this planet graph."});}
 });
 
 app.get("/worlds/:worldId/email/conversations",requireAuthenticated,async(req,res)=>{
@@ -915,21 +1791,84 @@ app.get("/worlds/:worldId/email/conversations",requireAuthenticated,async(req,re
         const requested=typeof req.query.blockId==="string"?req.query.blockId:"";
         const activeAccount=worldEmailAccountService.resolveWorldEmailAccount(found.world,found.settings,worldId).selection;
         if(activeAccount?.provider==="outlook")return res.status(501).json({provider:"outlook",providerUnsupported:true,message:"Outlook messages are connected, but this FolderRocket build does not yet provide real Outlook conversation threads."});
-        const selected=selectedWorldGmailBlocks(found.settings,worldId);
+        const selected=activeAccount?.provider==="gmail"?[{blockId:activeAccount.blockId}]:[];
         const requestedSource=requested?selected.find(item=>item.blockId===requested):null;
         if(requested&&!requestedSource)return res.status(403).json({message:"Choose a Gmail account selected for this planet."});
+        const sender=typeof req.query.sender==="string"?req.query.sender.trim().toLowerCase():"";
+        let senderQuery="";
+        if(sender) {try {senderQuery=senderInboxQuery(sender);} catch {return res.status(400).json({message:"Sender email address is invalid."});}}
+        if(sender&&!requestedSource)return res.status(400).json({message:"Select this planet’s Gmail account to load messages from a sender."});
         let threads=[];let nextPageToken="";
         const accounts=await listGmailConnectedAccounts(req.user.id);
         for(const source of requestedSource?[requestedSource]:selected) {
             if(!accounts.some(item=>item.blockId===source.blockId))continue;
-            const listing=await listGmailInboxThreads({maxResults:40,pageToken:requestedSource?String(req.query.pageToken||""):""},req.user.id,source.blockId);
-            threads.push(...listing.threads.map(item=>({...item,blockId:source.blockId,accountEmail:accounts.find(account=>account.blockId===source.blockId)?.email||"",shared:false})));
-            if(requestedSource)nextPageToken=listing.nextPageToken;
+            const listing=await listGmailInboxThreads({maxResults:sender?20:40,pageToken:requestedSource?String(req.query.pageToken||""):"",query:sender?senderQuery:"newer_than:30d"},req.user.id,source.blockId);
+            const inboxItems=listing.threads.map(item=>({...item,blockId:source.blockId,accountEmail:accounts.find(account=>account.blockId===source.blockId)?.email||"",shared:false}));
+            const saved=graph.selectedConversations.filter(item=>item.blockId===source.blockId);
+            const senderScopedItems=sender?inboxItems.filter(item=>conversationContactIdentity(item.messages,item.accountEmail)===sender):inboxItems.filter(item=>matchesSavedConversationScope(item,source.blockId,saved));
+            const byThread=new Map(senderScopedItems.map(item=>[item.id,item]));
+            for(const reference of saved)if(!byThread.has(reference.threadId))byThread.set(reference.threadId,{id:reference.threadId,threadId:reference.threadId,blockId:source.blockId,subject:reference.subject||"(no subject)",snippet:"",updatedAt:reference.selectedAt||"",messageCount:0,messages:reference.sender?[{sender:reference.sender}]:[],accountEmail:accounts.find(account=>account.blockId===source.blockId)?.email||"",shared:false});
+            threads.push(...byThread.values());
+            if(requestedSource)nextPageToken=listing.nextPageToken||"";
         }
         const localKeys=new Set(threads.map(item=>`${item.blockId}:${item.id}`));
-        const shared=graph.sharedThreads.filter(item=>!localKeys.has(`${item.blockId}:${item.threadId}`)).map(item=>({id:item.threadId,threadId:item.threadId,blockId:item.blockId,subject:item.subject||"Shared email conversation",snippet:"",updatedAt:item.sharedAt,messageCount:0,messages:[],accountEmail:item.accountEmail||"",shared:true,sourceWorldId:item.sourceWorldId,sourceWorldName:found.settings.worlds?.[item.sourceWorldId]?.name||item.sourceWorldId,available:accountsHasConnection(req.user.id,item.blockId)}));
+        const shared=sender?[]:graph.sharedThreads.filter(item=>!localKeys.has(`${item.blockId}:${item.threadId}`)).map(item=>({id:item.threadId,threadId:item.threadId,blockId:item.blockId,subject:item.subject||"Shared email conversation",snippet:"",updatedAt:item.sharedAt,messageCount:0,messages:[],accountEmail:item.accountEmail||"",shared:true,sourceWorldId:item.sourceWorldId,sourceWorldName:found.settings.worlds?.[item.sourceWorldId]?.name||item.sourceWorldId,available:accountsHasConnection(req.user.id,item.blockId)}));
         res.json({threads:[...threads,...shared].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))),nextPageToken,selectedBlockId:requestedSource?.blockId||selected[0]?.blockId||""});
-    } catch(error) {res.status(502).json({message:error instanceof Error?error.message:"Unable to load Gmail conversations."});}
+    } catch(error) {
+        const failure=classifyGmailConversationFailure(error);
+        req.folderRocketBackendErrorName=failure.diagnosticType;
+        res.status(failure.status).json({code:failure.code,message:"FolderRocket could not load Gmail conversations. Check the selected account connection and retry."});
+    }
+});
+
+app.get("/worlds/:worldId/email/notifications",requireAuthenticated,async(req,res)=>{
+    const worldId=String(req.params.worldId||"");const found=graphWorld(req,res,worldId);if(!found)return;
+    const selected=worldEmailAccountService.resolveWorldEmailAccount(found.world,found.settings,worldId).selection;
+    if(!selected)return res.json({count:0,supported:true,configured:false,accountId:"",threadIds:[]});
+    if(selected.provider==="outlook")return res.status(501).json({code:"provider_unsupported",message:"Outlook inbox notifications are not available yet. Gmail notifications are supported for the selected account."});
+    if(selected.provider!=="gmail")return res.status(400).json({code:"provider_invalid",message:"The email provider selected for this planet is not supported."});
+    try {
+        const accounts=await listGmailConnectedAccounts(req.user.id);
+        if(!accounts.some(item=>item.blockId===selected.blockId))return res.status(409).json({code:"account_not_connected",message:"The Gmail account selected for this planet is no longer connected. Reconnect it in the planet settings."});
+        const listing=await listGmailInboxThreads({maxResults:20},req.user.id,selected.blockId);
+        const observation=await observeInboxThreads({
+            recordMessages:conversationNotifications.recordMessages,
+            scope:{userId:req.user.id,worldId,provider:"gmail",accountId:selected.blockId},
+            threads:listing.threads,
+            mode:"sync"
+        });
+        res.json({...observation,supported:true,configured:true,accountId:selected.blockId});
+    } catch(error) {
+        const providerStatus=Number(error?.status);
+        const status=[401,403,429].includes(providerStatus)?providerStatus:502;
+        const code=status===401||status===403?"provider_auth_required":status===429?"provider_rate_limited":"provider_unavailable";
+        const message=status===401||status===403
+            ? "Gmail access needs attention. Reconnect the selected account and approve its existing FolderRocket permissions."
+            : status===429
+                ? "Gmail is temporarily rate-limited. Try checking notifications again shortly."
+                : "FolderRocket could not check Gmail notifications. Check the selected account connection and try again.";
+        res.status(status).json({code,message});
+    }
+});
+
+app.post("/worlds/:worldId/email/notifications/acknowledge",requireAuthenticated,async(req,res)=>{
+    const worldId=String(req.params.worldId||"");const found=graphWorld(req,res,worldId);if(!found)return;
+    const selected=worldEmailAccountService.resolveWorldEmailAccount(found.world,found.settings,worldId).selection;
+    if(!selected)return res.json({count:0,supported:true,configured:false});
+    if(selected.provider==="outlook")return res.status(501).json({code:"provider_unsupported",message:"Outlook notification acknowledgement is not available yet."});
+    if(selected.provider!=="gmail")return res.status(400).json({code:"provider_invalid",message:"The email provider selected for this planet is not supported."});
+    const threadIds=Array.isArray(req.body?.threadIds)?[...new Set(req.body.threadIds.filter(id=>typeof id==="string"&&id.length>0&&id.length<=300))].slice(0,100):[];
+    if(!threadIds.length)return res.json({count:0,supported:true,configured:true});
+    try {
+        const accounts=await listGmailConnectedAccounts(req.user.id);
+        if(!accounts.some(item=>item.blockId===selected.blockId))return res.status(409).json({code:"account_not_connected",message:"The Gmail account selected for this planet is no longer connected. Reconnect it in the planet settings."});
+        let count=0;
+        for(const threadId of threadIds) {
+            const result=await conversationNotifications.acknowledgeMessages({userId:req.user.id,worldId,provider:"gmail",accountId:selected.blockId,threadId});
+            count+=result.count;
+        }
+        res.json({count,supported:true,configured:true});
+    } catch(error) {res.status(500).json({code:"notification_storage_error",message:"FolderRocket could not update its local notification checkpoint. Try again."});}
 });
 
 function accountsHasConnection(userId,blockId) {
@@ -954,10 +1893,30 @@ app.get("/worlds/:worldId/email/conversations/:threadId",requireAuthenticated,as
         if(!source)return res.status(403).json({message:"This conversation is not selected for or shared with this planet."});
         const accounts=await listGmailConnectedAccounts(req.user.id);
         if(!accounts.some(item=>item.blockId===source.blockId))return res.status(424).json({message:"The Gmail account used by this shared conversation is unavailable. Reconnect it in its source planet."});
-        const thread=await getGmailThread(threadId,req.user.id,source.blockId);
+        const before=req.query.before===undefined?undefined:Number(req.query.before);
+        const pageSize=req.query.limit===undefined?10:Number(req.query.limit);
+        if(before!==undefined&&(!Number.isInteger(before)||before<0)||!Number.isInteger(pageSize)||pageSize<1||pageSize>20)return res.status(400).json({message:"Conversation message page is invalid."});
+        const thread=await getGmailThreadPage(threadId,req.user.id,source.blockId,{before,maxResults:pageSize});
         res.json({...thread,blockId:source.blockId,accountEmail:accounts.find(item=>item.blockId===source.blockId)?.email||"",shared:source.shared,sourceWorldId:source.sourceWorldId});
-    } catch(error) {res.status(502).json({message:error instanceof Error?error.message:"Unable to open this Gmail conversation."});}
+    } catch(error) {
+        const failure=classifyGmailConversationFailure(error);
+        req.folderRocketBackendErrorName=failure.diagnosticType;
+        res.status(failure.status).json({code:failure.code,message:"FolderRocket could not load this Gmail conversation. Check the selected account connection and retry."});
+    }
 });
+
+function classifyGmailConversationFailure(error) {
+    const providerStatus=Number(error?.status||error?.statusCode);
+    const code=providerStatus===401||providerStatus===403
+        ? "provider_auth_required"
+        : providerStatus===429
+            ? "provider_rate_limited"
+            : "provider_unavailable";
+    const status=code==="provider_auth_required"?502:code==="provider_rate_limited"?503:502;
+    const errorCode=typeof error?.code==="string"&&/^[A-Z0-9_]{1,40}$/.test(error.code)?error.code:"";
+    const errorName=typeof error?.name==="string"&&/^[A-Za-z][A-Za-z0-9]{0,39}$/.test(error.name)?error.name:"Error";
+    return {code,status,diagnosticType:`Gmail:${errorCode||errorName}`};
+}
 
 app.post("/worlds/:worldId/email/conversations/:threadId/reply",requireAuthenticated,async(req,res)=>{
     const worldId=String(req.params.worldId||"");const found=graphWorld(req,res,worldId);if(!found)return;
@@ -981,10 +1940,12 @@ app.post("/worlds/:worldId/email/conversations/:threadId/reply",requireAuthentic
         const mode=req.body?.mode==="send"?"send":"draft";const originalMessageId=typeof req.body?.originalMessageId==="string"?req.body.originalMessageId:"";const references=typeof req.body?.references==="string"?req.body.references:"";const subject=typeof req.body?.subject==="string"?req.body.subject:"";
         if(mode==="send") {
             const sent=await sendGmailReply({threadId,to,subject,text,attachments,originalMessageId,references},req.user.id,source.blockId);
-            const messageNode=planetGraph.node("email-message","gmail",`${source.blockId}:${sent.id||crypto.randomUUID()}`,subject||"Sent reply",{kind:"gmail-message",blockId:source.blockId,messageId:sent.id||"",threadId},{at:new Date().toISOString()});
-            const threadNode=planetGraph.node("email-thread","gmail",`${source.blockId}:${threadId}`,subject||"Email conversation",{kind:"gmail-thread",blockId:source.blockId,threadId});
-            if(found.world.graphEnabled===true)await planetGraph.upsertGraphData(req.user.id,worldId,[threadNode,messageNode],[planetGraph.edge("contains",threadNode.id,messageNode.id,"gmail-reply")]);
-            res.json({message:"Reply sent in the Gmail conversation.",messageId:sent.id||"",threadId:sent.threadId||threadId});
+            const replyResult=await require("./services/sentReplyGraphUpdate").recordSentReplyGraphUpdate({sent,threadId,updateGraph:async()=>{
+                const messageNode=planetGraph.node("email-message","gmail",`${source.blockId}:${sent.id||crypto.randomUUID()}`,subject||"Sent reply",{kind:"gmail-message",blockId:source.blockId,messageId:sent.id||"",threadId},{at:new Date().toISOString()});
+                const threadNode=planetGraph.node("email-thread","gmail",`${source.blockId}:${threadId}`,subject||"Email conversation",{kind:"gmail-thread",blockId:source.blockId,threadId});
+                if(found.world.graphEnabled===true)await planetGraph.upsertGraphData(req.user.id,worldId,[threadNode,messageNode],[planetGraph.edge("contains",threadNode.id,messageNode.id,"gmail-reply")]);
+            }});
+            res.json(replyResult);
         } else {
             const draft=await createGmailReplyDraft({threadId,to,subject,text,attachments,originalMessageId,references},req.user.id,source.blockId);
             res.json({message:"Reply saved as a Gmail draft.",draftId:draft?.id||"",threadId});
@@ -1008,7 +1969,7 @@ app.post("/worlds/:worldId/email/conversations/:threadId/share",requireAuthentic
             await planetGraph.addSharedThread(req.user.id,targetWorldId,{sourceWorldId,blockId:source.blockId,threadId,accountEmail:account.email||"",subject});shared.push(targetWorldId);
         }
         res.json({message:"Conversation reference shared with the selected planets.",worldIds:shared});
-    } catch(error) {res.status(502).json({message:error instanceof Error?error.message:"Unable to share this conversation reference."});}
+    } catch(error) {if(respondGraphStorageUnavailable(res,error))return;res.status(502).json({message:error instanceof Error?error.message:"Unable to share this conversation reference."});}
 });
 
 app.delete("/worlds/:worldId/email/conversations/:threadId/share",requireAuthenticated,async(req,res)=>{
@@ -1017,7 +1978,7 @@ app.delete("/worlds/:worldId/email/conversations/:threadId/share",requireAuthent
     try {
         const graph=await planetGraph.readGraph(req.user.id,worldId);if(!graph.sharedThreads.some(item=>item.threadId===threadId&&item.blockId===blockId))return res.status(404).json({message:"This shared reference was not found in this planet."});
         await planetGraph.removeSharedThread(req.user.id,worldId,blockId,threadId);res.json({message:"Conversation reference removed from this planet."});
-    } catch(error) {res.status(500).json({message:error instanceof Error?error.message:"Unable to remove this planet's conversation reference."});}
+    } catch(error) {if(respondGraphStorageUnavailable(res,error))return;res.status(500).json({message:error instanceof Error?error.message:"Unable to remove this planet's conversation reference."});}
 });
 
 function readWorldActivityConfig(userId, worldId) {
@@ -1197,6 +2158,7 @@ app.post("/auth/login", (req, res) => {
 
 app.post("/auth/logout", (req, res) => {
     if (req.user) addAuditEvent({user: req.user, action: "signed_out"});
+    if(req.user)disposeKnowledgeWatchersForUser(req.user.id);
     removeSession(getCookie(req, "folderrocket_session"));
     clearSessionCookie(res);
     res.json({message: "Signed out."});
@@ -1204,6 +2166,18 @@ app.post("/auth/logout", (req, res) => {
 
 app.get("/auth/me", (req, res) => {
     if (!req.user) return res.status(401).json({message: "Sign in required."});
+    const settings=readDashboardPreferences(req.user.id)||{};
+    for(const [worldId,world] of Object.entries(settings.worlds||{})){
+        if(world?.graphEnabled!==true)continue;
+        const scopeKey=knowledgeScopeKey(req.user.id,worldId);
+        if(initializedKnowledgeScopes.has(scopeKey))continue;
+        initializedKnowledgeScopes.add(scopeKey);
+        void knowledgeScope(req,worldId).then(async scope=>{
+            if(!scope){initializedKnowledgeScopes.delete(scopeKey);return;}
+            await maintainKnowledgeWatcher(req.user,worldId,scope);
+            if(scope.selection.folders&&scope.roots.length){scheduleSelectedFolderRefresh(req.user,worldId,scope);queueKnowledgeSyncJob(req.user,worldId,scope);}
+        }).catch(()=>{initializedKnowledgeScopes.delete(scopeKey);});
+    }
     res.json({user: req.user});
 });
 
@@ -2345,6 +3319,29 @@ app.post("/list-folder-files", async (req, res) => {
     }
 });
 
+async function resolvedUserDesktopRoots() {
+    const candidates=await resolveDesktopRoots();
+    const roots=[];const seen=new Set();
+    for(const candidate of candidates) {
+        try {
+            const real=await fs.promises.realpath(candidate);const stats=await fs.promises.stat(real);
+            if(!stats.isDirectory())continue;
+            const key=process.platform==="win32"?real.toLocaleLowerCase():real;
+            if(!seen.has(key)){seen.add(key);roots.push(real);}
+        } catch(error) { if(error?.code!=="ENOENT"&&error?.code!=="ENOTDIR"&&error?.code!=="EACCES"&&error?.code!=="EPERM")throw error; }
+    }
+    return roots;
+}
+
+async function assertTreeRequestPath(req,candidate,mode="computer") {
+    if(mode!=="desktop")return assertUserPath(req.user,candidate);
+    if(typeof candidate!=="string"||!candidate.trim())throw new Error("Choose a Desktop folder first.");
+    const real=await fs.promises.realpath(path.resolve(candidate));
+    const allowed=await resolvedUserDesktopRoots();
+    if(!allowed.some(root=>isPathWithin(root,real)))throw new Error("This account can only browse folders inside the current Windows Desktop roots.");
+    return real;
+}
+
 app.get("/filesystem/tree-roots", requireAuthenticated, async (req, res) => {
     try {
         const worldId=typeof req.query.worldId==="string"?req.query.worldId:"";
@@ -2357,14 +3354,14 @@ app.get("/filesystem/tree-roots", requireAuthenticated, async (req, res) => {
         }
         if(!mode)mode="computer";
         if(!["computer","desktop"].includes(mode))return res.status(400).json({message:"Tree Rocket root mode is invalid."});
-        let desktopRoot;
+        let desktopRoots=[];
         if(mode==="desktop") {
-            const candidate=await resolveDesktopRoot();
-            try {desktopRoot=await fs.promises.realpath(assertUserPath(req.user,candidate));}
-            catch(error) {return res.status(403).json({message:error instanceof Error?error.message:"Desktop access is not available to this account."});}
+            // Pass the known Windows locations through to the service so it
+            // can return accessible roots plus explicit unavailable-root metadata.
+            desktopRoots=await resolveDesktopRoots();
         }
-        const roots = await listTreeRoots({workspacePath:userWorkspace(req.user), administrator:isAdmin(req.user), mode, desktopRoot});
-        res.json({roots,mode,worldId:worldId||undefined});
+        const roots = await listTreeRoots({workspacePath:userWorkspace(req.user), administrator:isAdmin(req.user), mode, desktopRoots});
+        res.json(treeRootsResponse(roots,mode,worldId));
     } catch (error) {
         res.status(500).json({message: error instanceof Error ? error.message : "Unable to load folder roots."});
     }
@@ -2372,8 +3369,10 @@ app.get("/filesystem/tree-roots", requireAuthenticated, async (req, res) => {
 
 app.post("/filesystem/tree-children", requireAuthenticated, async (req, res) => {
     try {
-        let directory = assertUserPath(req.user, req.body?.path);
-        if (!isAdmin(req.user)) {
+        const mode=req.body?.mode==="desktop"?"desktop":"computer";
+        if(req.body?.worldId!==undefined&&!validWorldId(req.body.worldId))return res.status(400).json({message:"Invalid planet identifier."});
+        let directory = await assertTreeRequestPath(req,req.body?.path,mode);
+        if (mode!=="desktop"&&!isAdmin(req.user)) {
             const [workspaceRealPath, directoryRealPath] = await Promise.all([
                 fs.promises.realpath(userWorkspace(req.user)),
                 fs.promises.realpath(directory)
@@ -2383,7 +3382,9 @@ app.post("/filesystem/tree-children", requireAuthenticated, async (req, res) => 
             }
             directory = directoryRealPath;
         }
-        const contents = await listTreeDirectory(directory, {includeFiles: req.body?.includeFiles === true, includeFolderFileCounts: req.body?.includeFolderFileCounts === true});
+        const folderOffset=Number.isInteger(req.body?.folderOffset)?Math.max(0,req.body.folderOffset):0;
+        const fileOffset=Number.isInteger(req.body?.fileOffset)?Math.max(0,req.body.fileOffset):0;
+        const contents = await listTreeDirectory(directory, {includeFiles: req.body?.includeFiles === true, includeFolderFileCounts: req.body?.includeFolderFileCounts === true, folderOffset, fileOffset});
         res.json(contents);
     } catch (error) {
         const message = error instanceof Error ? error.message : "Unable to read this folder.";
@@ -2406,15 +3407,13 @@ app.post("/filesystem/tree-search", requireAuthenticated, async (req, res) => {
         }
         if(!mode)mode="computer";
         if(!["computer","desktop"].includes(mode))return res.status(400).json({message:"Tree Rocket root mode is invalid."});
-        let desktopRoot;
+        let desktopRoots=[];
         if(mode==="desktop") {
-            const candidate=await resolveDesktopRoot();
-            try {desktopRoot=await fs.promises.realpath(assertUserPath(req.user,candidate));}
-            catch(error) {return res.status(403).json({message:error instanceof Error?error.message:"Desktop access is not available to this account."});}
+            desktopRoots=await resolveDesktopRoots();
         }
-        const roots = await listTreeRoots({workspacePath:userWorkspace(req.user),administrator:isAdmin(req.user),mode,desktopRoot});
+        const roots = await listTreeRoots({workspacePath:userWorkspace(req.user),administrator:isAdmin(req.user),mode,desktopRoots});
         const results = await searchTreeRoots(roots, query);
-        res.json(results);
+        res.json({...results,partial:roots.partial===true,unavailableRoots:roots.unavailableRoots||[]});
     } catch (error) {
         const message = error instanceof Error ? error.message : "Unable to search folders and files.";
         const status = message.includes("at least two characters") ? 400 : 500;
@@ -3010,13 +4009,16 @@ app.get("/email/gmail/messages/view", async (req, res) => {
 
 app.get("/email/gmail/attachments/download", async (req, res) => {
     try {
-        const {messageId, attachmentId, name, mimeType} = req.query;
-        if (typeof messageId !== "string" || typeof attachmentId !== "string" || typeof name !== "string") {
+        const {messageId, attachmentId, partId, name, mimeType} = req.query;
+        if (typeof messageId !== "string" || typeof name !== "string" || (typeof attachmentId !== "string" && typeof partId !== "string") || (typeof attachmentId === "string" && typeof partId === "string")) {
             return res.status(400).json({message: "Identificativo allegato Gmail mancante"});
         }
-        const content = await downloadAttachment(messageId, attachmentId, req.user.id, readAlertBlockId(req));
-        res.setHeader("Content-Type", typeof mimeType === "string" ? mimeType : "application/octet-stream");
-        res.setHeader("Content-Disposition", `${req.query.inline === "true" ? "inline" : "attachment"}; filename="${path.basename(name).replaceAll('"', "")}"`);
+        const inlinePart=typeof partId==="string"?await downloadInlinePart(messageId,partId,req.user.id,readAlertBlockId(req)):null;
+        const content=inlinePart?.content||await downloadAttachment(messageId,attachmentId,req.user.id,readAlertBlockId(req));
+        const contentType=inlinePart?.mimeType||(typeof mimeType === "string" ? mimeType : "application/octet-stream");
+        const fileName=path.basename(inlinePart?.name||name).replaceAll('"', "");
+        res.setHeader("Content-Type", contentType);
+        res.setHeader("Content-Disposition", `${req.query.inline === "true" ? "inline" : "attachment"}; filename="${fileName}"`);
         res.send(content);
     }
     catch (error) {
@@ -3291,6 +4293,7 @@ startEmailAlertScheduler();
 // Mantiene il processo agganciato al terminale anche in ambienti che
 // rilasciano prematuramente gli handle del server HTTP.
 server.ref();
+server.on("close",()=>{for(const entry of knowledgeWatchersByScope.values())entry.watcher.dispose();knowledgeWatchersByScope.clear();});
 server.on("error", error => {
     recordDiagnostic("system", {type:"backend", severity:"critical", category:"lifecycle", message:`Backend non avviato (${error.name || "errore"})`, route:"backend/server.js"});
     console.error("Backend error:", error.name || "unknown error");

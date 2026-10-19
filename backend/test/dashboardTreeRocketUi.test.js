@@ -32,9 +32,11 @@ test("Tree Rocket is mounted from Folder Management and navigates without readin
     assert.doesNotMatch(manager, /<small>Folder map<\/small>/);
     assert.match(manager, /<TreeRocket folders=\{folders\}/);
     assert.match(tree, /className="treeRocketNodeEnter" onClick=\{onOpen\}/);
-    assert.match(tree, /aria-label=\{`Open folder \$\{folder\.name\}`\}/);
+    assert.match(tree, /aria-label=\{`Open folder \$\{displayName\}`\}/);
+    assert.match(tree, /return "My Desktop"/);
+    assert.match(tree, /return "Public Desktop · shared"/);
     assert.match(tree, /className="treeRocketNodeActions"/);
-    assert.match(tree, /<span>Show Files<\/span>/);
+    assert.match(tree, /showingFiles \? "Hide files" : "See files"/);
     assert.match(tree, /Add to Folder Management/);
     assert.match(tree, /<strong id="treeRocketTitle"><span>Tree<\/span><span>Rocket<\/span><\/strong>/);
     assert.match(tree, /aria-label="Tree Rocket view"/);
@@ -65,7 +67,7 @@ test("Tree Rocket is mounted from Folder Management and navigates without readin
     assert.match(tree, /event\.key === "Escape" \|\| \(event\.altKey && event\.key === "ArrowLeft"\)/);
     assert.match(tree, /event\.key === "Backspace" && !editing/);
     assert.match(tree, /event\.stopPropagation\(\)/);
-    assert.match(tree, /includeFiles, includeFolderFileCounts: true/);
+    assert.match(tree, /includeFiles:true, includeFolderFileCounts: true/);
     assert.match(app, /normalizedPath && folders\.some/);
     assert.match(server, /app\.get\("\/filesystem\/tree-roots", requireAuthenticated/);
     assert.match(server, /app\.post\("\/filesystem\/tree-children", requireAuthenticated/);
@@ -91,15 +93,17 @@ test("Tree Rocket is mounted from Folder Management and navigates without readin
     const css = source("src", "App.css");
     assert.match(css, /grid-template-columns:repeat\(auto-fit,minmax\(min\(230px,100%\),270px\)\)/);
     assert.match(css, /\.treeRocketNode:hover,\.treeRocketNode:focus-within/);
-    assert.match(css, /\.treeRocketNodeEnter \{ position:absolute; z-index:0; inset:0;/);
+    assert.match(css, /\.treeRocketNode \{ position:relative; display:grid;[^}]*grid-template-rows:minmax\(44px,auto\) auto auto/);
+    assert.match(css, /\.treeRocketNodeEnter \{ position:relative; z-index:0; display:grid;/);
+    assert.match(css, /\.treeRocketNodeMeta \{ display:flex;/);
     assert.match(css, /\.treeRocketNodeActions \{ position:relative; z-index:2;/);
     assert.match(tree, /document\.addEventListener\("pointerdown", dismissOutside, true\)/);
     assert.match(tree, /includeFolderFileCounts: true/);
     assert.match(server, /includeFolderFileCounts: req\.body\?\.includeFolderFileCounts === true/);
     assert.doesNotMatch(tree, /window\.setTimeout\(onClose/);
-    assert.match(css, /\.treeRocketGraph \{ overflow-x:hidden; overflow-y:auto/);
+    assert.match(css, /\.treeRocketGraph \{[^}]*overflow-x:hidden; overflow-y:auto/);
     assert.match(css, /\.treeRocketOverlay::before \{ background-image:radial-gradient/);
-    assert.match(css.slice(css.lastIndexOf("/* Tree Rocket is a separate, space-themed workspace.")), /\.treeRocketGraph \{[^}]*background-image:none/);
+    assert.doesNotMatch(css, /\.treeRocketGraph \{[^}]*background-image:repeating/);
     assert.match(css.slice(css.lastIndexOf("/* Tree Rocket is a separate, space-themed workspace.")), /\.treeRocketChildren \{[^}]*display:grid[^}]*grid-template-columns:repeat\(auto-fit/);
     assert.match(css.slice(css.lastIndexOf("/* Tree Rocket is a separate, space-themed workspace.")), /@media \(prefers-reduced-motion:reduce\) \{\s*\.treeRocketNode \{ transition:none; \}\s*\.treeRocketNode:hover,\.treeRocketNode:focus-within \{ transform:none; \}\s*\}/);
     assert.doesNotMatch(css.slice(css.lastIndexOf("/* Tree Rocket uses the same full-screen")), /background-size:24px 24px/);
@@ -132,7 +136,7 @@ test("Tree Rocket uses app icons, shared zoom, a fixed root branch and no bottom
     assert.match(refined, /\.treeRocketBrandTitle > strong span:last-child \{ background:linear-gradient\(180deg,#25b8f3,#0872d3\)/);
     assert.match(refined, /\.treeRocketTabs \.treeRocketAppsRefresh \{ display:grid; width:34px; min-height:34px;/);
     assert.match(refined, /\.treeRocketHeaderTools \{ display:flex/);
-    assert.match(refined, /\.treeRocketGraphStage \{ display:flex;[^}]*flex-direction:column; align-items:center/);
+    assert.match(refined, /\.treeRocketGraphStage \{[^}]*display:flex;[^}]*flex-direction:column;[^}]*align-items:center/);
     assert.match(refined, /\.treeRocketChildren \{[^}]*overflow:auto/);
     assert.match(refined, /\.treeRocketChildrenHeading > i \{ display:grid; width:25px; height:25px;[^}]*place-items:center/);
     assert.match(refined, /\.treeRocketAppIcon img \{ display:block; width:74px; height:74px;/);
@@ -144,6 +148,76 @@ test("Tree Rocket uses app icons, shared zoom, a fixed root branch and no bottom
     assert.match(refined, /\.treeRocketAppsPanel > \.treeRocketAppsScroll > \.treeRocketAppGrid \{ justify-items:stretch; \}/);
     assert.match(refined, /\.treeRocketAppsScroll::-webkit-scrollbar \{ display:none/);
     assert.doesNotMatch(refined, /treeRocketWindow.?footer|treeRocketZoom|treeRocketAppsWorkspaceLink/);
+});
+
+test("Tree Rocket shows folder nodes only while preserving file indexing and explicit See files", () => {
+    const tree = source("src", "components", "TreeRocket.tsx");
+    const service = source("backend", "services", "treeRocketService.js");
+    const planetGraphService = source("backend", "services", "planetGraphService.js");
+    const server = source("backend", "server.js");
+    const css = source("src", "App.css");
+    assert.match(tree, /function graphNodeId\(kind:"folder"\|"file", value:string\)/);
+    assert.doesNotMatch(tree, /TreeRocketFileNode|currentFiles\.map|loadMoreGraphFiles/);
+    assert.match(tree, /currentChildren\.map\(folder => <TreeRocketFolderNode/);
+    assert.match(tree, /onShowFiles=\{\(\) => void showFiles\(folder\)\}/);
+    assert.match(tree, /filesView\.files\.map\(file => <div className="treeRocketFile"/);
+    assert.match(tree, /className="treeRocketEdges"/);
+    assert.match(tree, /branch\.addEventListener\("scroll", measure/);
+    assert.match(tree, /new ResizeObserver\(measure\)/);
+    assert.match(tree, /function cancelFileRequest\(\)\s*\{\s*fileRequestSequence\.current \+= 1;\s*fileController\.current\?\.abort\(\)/);
+    assert.match(tree, /if \(!controller\.signal\.aborted && requestId === fileRequestSequence\.current\) setFilesView/);
+    assert.match(tree, /className=\{`treeRocketBody\$\{section === "folders" \? " withSidebar" : ""\}/);
+    assert.match(service, /fileOffset = 0, fileLimit = MAX_TREE_FILES/);
+    assert.match(service, /nextFileOffset:/);
+    assert.match(service, /fileTotal: includeFiles \? files\.length : directFileCount/);
+    assert.match(planetGraphService, /nodes\.push\(fileNode\); edges\.push\(edge\("contains",folderNode\.id,fileNode\.id,"filesystem"\)\)/);
+    assert.match(server, /const fileOffset=Number\.isInteger\(req\.body\?\.fileOffset\)/);
+    assert.match(server, /fileOffset\}\);/);
+    assert.match(css, /\.treeRocketGraphStage \{[^}]*display:flex;[^}]*flex-direction:column/);
+    assert.match(css, /\.treeRocketGraphStage > \.treeRocketRootNode \{ width:min\(230px,100%\); max-width:250px; flex:0 0 auto; align-self:center; \}/);
+    assert.match(css, /\.treeRocketChildren\.hasParent \{ flex:1 1 0; \}/);
+    assert.match(css, /\.treeRocketChildren \{[^}]*overflow:auto; overscroll-behavior:contain/);
+    assert.match(css, /\.treeRocketEdges path \{[^}]*stroke:#8bd0edb8/);
+    assert.match(tree, /M \$\{x1\} \$\{rootMidY\} H \$\{middle\} V \$\{y2\} H \$\{x2\}/);
+    assert.match(tree, /const x = rootRect\.left \+ rootRect\.width \/ 2/);
+});
+
+test("dashboard, planet, graph guide, and reorder presentation retain shared accessible styles", () => {
+    const app = source("src", "App.css");
+    const worlds = source("src", "worlds.css");
+    const changeWorld = source("src", "components", "ChangeWorld.tsx");
+    const planetGraph = source("src", "components", "PlanetGraph.tsx");
+    assert.match(app, /\.appNavigation \.pageMenu \{ border-color:#8fc8ed; background:linear-gradient\(180deg,#e9f7ff,#b8e2fa\)/);
+    assert.match(worlds, /\.changeWorldTitle > img \{ display:block; width:min\(390px,56vw\); height:93px;/);
+    assert.match(changeWorld, /src=\{folderRocketMark\}/);
+    assert.match(changeWorld, /\["planet", "rocky", "ringed", "glowing", "asteroid", "black-hole", "galaxy"\] as WorldPlanetStyle\[\]/);
+    assert.match(changeWorld, /<span className="worldPlanetCore"\/>/);
+    assert.match(changeWorld, /className="worldPlanetRing"/);
+    assert.match(changeWorld, /className="worldBlackHoleDisk"/);
+    assert.match(changeWorld, /className="worldGalaxyArms"/);
+    assert.match(worlds, /\.worldPlanet\.black-hole \.worldPlanetCore \{[^}]*radial-gradient/);
+    assert.match(worlds, /\.worldBlackHoleDisk \{[^}]*conic-gradient/);
+    assert.match(worlds, /\.worldGalaxyArms \{[^}]*repeating-conic-gradient/);
+    assert.match(planetGraph, /className="planetGraphBack worldBackButton"/);
+    assert.match(app, /\.planetGraphRelationshipGuide\[open\] \{ display:grid; grid-template-columns:minmax\(210px,\.34fr\) minmax\(0,1fr\)/);
+    assert.match(app, /@media\(max-width:700px\) \{ \.planetGraphRelationshipGuide\[open\] \{ grid-template-columns:minmax\(0,1fr\)/);
+    assert.match(app, /\.folderTableRow,\.folderTableRow\.orderingFolder,\.folderTableRow\.orderingHead \{ grid-template-columns:17px 22px minmax\(78px,1fr\)/);
+    assert.match(app, /\.folderTableRow\.orderingFolder \.deleteFolder \{ display:inline-grid; visibility:hidden; \}/);
+});
+
+test("Planet Graph indexing warnings are consolidated with accessible, source-scoped retry", () => {
+    const graph = source("src", "components", "PlanetGraph.tsx");
+    assert.match(graph, /className="planetGraphNoticeButton"/);
+    assert.match(graph, /aria-expanded=\{noticesOpen\}/);
+    assert.match(graph, /aria-controls=\{noticesOpen\?"planetGraphNoticePanel":undefined\}/);
+    assert.match(graph, /role="region" aria-label="Planet graph indexing details"/);
+    assert.match(graph, /source\.retryable&&/);
+    assert.match(graph, /refresh\(true,source\.sourceId\)/);
+    assert.match(graph, /retryingSourceId===source\.sourceId/);
+    assert.match(graph, /new Set\(graph\.warnings/);
+    assert.match(graph, /document\.addEventListener\("pointerdown",dismissOutside\)/);
+    assert.match(graph, /document\.addEventListener\("keydown",dismissEscape\)/);
+    assert.match(graph, /noticesButtonRef\.current\?\.focus\(\)/);
 });
 
 test("dashboard folder layouts use compact rows and conditional scroll-edge fades", () => {
@@ -253,7 +327,7 @@ test("Daily Job creates recap drafts manually from accounts connected to the act
     assert.match(daily, /\/cargo-ship\/email-draft/);
     assert.match(daily, /Create recap draft/);
     assert.match(daily, /Include tomorrow’s events and reminders/);
-    assert.match(daily, /No email is sent automatically|Nessuna email viene inviata automaticamente/);
+    assert.match(daily, /No email is sent automatically|Nessuna email viene inviata automaticamente|nessuna email parte automaticamente/i);
     assert.match(server, /rightSourceBlocks/);
     assert.match(server, /if \(block\.accountBlockId === null\) continue/);
     assert.doesNotMatch(daily, /setInterval\(|schedule.*enabled/i);

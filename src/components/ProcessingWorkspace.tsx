@@ -1,7 +1,7 @@
 import {useFilePreview} from '../useFilePreview';
 import {additionalFileIcon} from './AdditionalFileIcons';
-import {useEffect, useMemo, useRef, useState} from "react";
-import {Archive, ArrowRight, ChevronDown, ExternalLink, File, FileCog, FileSpreadsheet, FileText, Flame, FolderCheck, FolderOpen, Image, Pencil, RotateCw, Send, X} from "lucide-react";
+import {useEffect, useLayoutEffect, useMemo, useRef, useState} from "react";
+import {Archive, ArrowRight, ExternalLink, File, FileCog, FileSpreadsheet, FileText, Flame, FolderCheck, FolderOpen, Image, Pencil, RotateCw, Send, X} from "lucide-react";
 import {API_BASE_URL} from "../api";
 import type {ManagedFolder} from "./FolderManagement";
 import FireMountain from "./FireMountain";
@@ -68,6 +68,13 @@ function buildRename(file: FileEntry, parts: RenamePart[]) {
     return `${pieces.join("") || baseName(originalName)}${fileExtension(file.name)}`;
 }
 
+function hasInvalidWindowsNameCharacter(name: string) {
+    return Array.from(name).some(character => {
+        const code = character.charCodeAt(0);
+        return code <= 31 || '<>:"/\\|?*'.includes(character);
+    });
+}
+
 export default function ProcessingWorkspace({folders, onUpdate, storageScope = "default"}: Props) {
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [files, setFiles] = useState<FileEntry[]>([]);
@@ -81,9 +88,11 @@ export default function ProcessingWorkspace({folders, onUpdate, storageScope = "
     const [converting, setConverting] = useState(false);
     const [previewFile, setPreviewFile] = useState<FileEntry | null>(null);
     const previewContent = useFilePreview(previewFile?.path);
-    const [renameParts, setRenameParts] = useState<RenamePart[]>(() => readRenameParts(storageScope));
-    const [renameMenuOpen, setRenameMenuOpen] = useState(false);
-    const renameMenuRef = useRef<HTMLDivElement>(null);
+    const renameParts = useMemo(() => readRenameParts(storageScope), [storageScope]);
+    const [renameDraft, setRenameDraft] = useState<{path: string; name: string} | null>(null);
+    const [renamingPath, setRenamingPath] = useState<string | null>(null);
+    const currentStorageScope = useRef(storageScope);
+    useLayoutEffect(() => { currentStorageScope.current = storageScope; }, [storageScope]);
     const [deliveryFile, setDeliveryFile] = useState<FileEntry | null>(null);
     const [deliveryFolderIds, setDeliveryFolderIds] = useState<string[]>([]);
     const [deliveryBusy, setDeliveryBusy] = useState(false);
@@ -107,27 +116,12 @@ export default function ProcessingWorkspace({folders, onUpdate, storageScope = "
         return () => controller.abort();
     }, [selected?.id, selected?.path, selected?.storage, selected?.virtualFiles]);
 
-    useEffect(() => { localStorage.setItem(`${RENAME_TEMPLATE_KEY}-${storageScope}`, JSON.stringify(renameParts)); }, [renameParts, storageScope]);
-    useEffect(() => {
-        if (!renameMenuOpen) return;
-        const closeOnOutsideClick = (event: PointerEvent) => {
-            if (event.target instanceof Node && !renameMenuRef.current?.contains(event.target)) setRenameMenuOpen(false);
-        };
-        const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setRenameMenuOpen(false); };
-        document.addEventListener("pointerdown", closeOnOutsideClick);
-        document.addEventListener("keydown", closeOnEscape);
-        return () => { document.removeEventListener("pointerdown", closeOnOutsideClick); document.removeEventListener("keydown", closeOnEscape); };
-    }, [renameMenuOpen]);
-
     const fileTypeCounts = useMemo(() => Object.entries(files.reduce<Record<string,number>>((counts,file)=>{const extension=extensionOf(file.name);counts[extension]=(counts[extension]||0)+1;return counts;},{})).sort(([left],[right])=>left.localeCompare(right)),[files]);
     const activeType = type === "all" || fileTypeCounts.some(([extension])=>extension===type) ? type : "all";
     const shown = files.filter(file => matchesType(file.name, activeType));
-    const renamePreview = buildRename({name: `original.${format.toLowerCase()}`, path: "", sourceName: "original"}, renameParts) ?? `Automatic name (_converted.${format.toLowerCase()})`;
     const queuePaths = useMemo(() => new Set(queue.map(file => file.path)), [queue]);
     const choosePreview = (file: FileEntry) => setPreviewFile(file);
     const addToQueue = (file: FileEntry) => { setPreviewFile(file); setQueue(current => current.some(item => item.path === file.path) ? current : [...current, file]); };
-    const addRenamePart = (partType: RenamePart["type"]) => setRenameParts(current => [...current, {id: crypto.randomUUID(), type: partType, value: partType === "text" ? "_" : undefined}]);
-    const updateRenamePart = (id: string, value: string) => setRenameParts(current => current.map(part => part.id === id ? {...part, value} : part));
     const openFile = async (file: FileEntry) => {
         try {
             const response = await fetch(`${API_BASE_URL}/search-files/open`, {method: "POST", headers: {"Content-Type": "application/json"}, credentials: "include", body: JSON.stringify({path: file.path})});
@@ -214,6 +208,42 @@ export default function ProcessingWorkspace({folders, onUpdate, storageScope = "
         return {renamedFiles, failures};
     }
 
+    async function renameConvertedFile(file: FileEntry) {
+        const draft = renameDraft?.path === file.path ? renameDraft.name.trim() : "";
+        if (!draft) { setStatus("Enter a file name."); return; }
+        if (hasInvalidWindowsNameCharacter(draft) || /[ .]$/.test(draft) || /^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(?:\..*)?$/i.test(draft)) {
+            setStatus("This file name contains characters or a name that Windows does not allow.");
+            return;
+        }
+        const extension = fileExtension(file.name);
+        const name = `${draft}${extension}`;
+        if (name === file.name) { setRenameDraft(null); return; }
+        const requestScope = storageScope;
+        setRenamingPath(file.path);
+        setStatus("");
+        try {
+            const response = await fetch(`${API_BASE_URL}/files/rename`, {method: "POST", headers: {"Content-Type": "application/json"}, credentials: "include", body: JSON.stringify({path: file.path, name})});
+            const data = await response.json().catch(() => ({})) as {path?: string; name?: string; message?: string};
+            if (!response.ok || !data.path || !data.name) throw new Error(data.message || "Unable to rename converted file.");
+            if (currentStorageScope.current !== requestScope) return;
+            const renamed = {...file, path: data.path, name: data.name};
+            setConverted(current => current.map(item => item.path === file.path ? {...item, path: data.path!, name: data.name!} : item));
+            setPreviewFile(current => current?.path === file.path ? {...current, path: data.path!, name: data.name!} : current);
+            setDeliveryFile(current => current?.path === file.path ? {...current, path: data.path!, name: data.name!} : current);
+            for (const folder of folders) {
+                if (folder.storage === "imaginary" && folder.virtualFiles?.some(item => item.path === file.path)) {
+                    onUpdate(folder.id, {virtualFiles: folder.virtualFiles.map(item => item.path === file.path ? {...item, path: renamed.path, name: renamed.name} : item)});
+                }
+            }
+            setRenameDraft(null);
+            setStatus(`Renamed to ${data.name}.`);
+        } catch (error) {
+            if (currentStorageScope.current === requestScope) setStatus(error instanceof Error ? error.message : "Unable to rename converted file.");
+        } finally {
+            setRenamingPath(current => current === file.path ? null : current);
+        }
+    }
+
     async function convert() {
         if (!queue.length || converting) return;
         const sourceFiles = [...queue];
@@ -244,25 +274,17 @@ export default function ProcessingWorkspace({folders, onUpdate, storageScope = "
         </aside>
         <section className="processingFiles">
             <section className="processingFolderFiles"><h2><span>{selected?.name ?? "Folder files"}</span><select className="processingSmartFileFilter" aria-label="Filter folder files by format" value={activeType} onChange={event=>setType(event.target.value)}><option value="all">All files ({files.length})</option>{fileTypeCounts.map(([extension,count])=><option value={extension} key={extension}>{extension.toUpperCase()} ({count})</option>)}</select></h2><div className="processingFileList">{shown.map(file => <div className={`processingFile${previewFile?.path === file.path ? " selectedProcessingFile" : ""}`} onClick={() => choosePreview(file)} onDoubleClick={() => void openFile(file)} key={file.path}><button className="fileActionPulse" type="button" title="Send to Fire Mountain" onClick={event => { event.stopPropagation(); window.dispatchEvent(new CustomEvent("folderrocket-add-to-fire", {detail: [file]})); }}><Flame size={16}/></button><span className="processingFileName"><FileKindIcon name={file.name}/>{file.name}</span><span className="processingFileActions"><button className="fileActionPulse" type="button" title="Open file" onClick={event => { event.stopPropagation(); void openFile(file); }}><ExternalLink size={15}/></button><button className="prepareConversion fileActionPulse" type="button" title="Prepare conversion" onClick={event => { event.stopPropagation(); addToQueue(file); }}><ArrowRight size={16}/></button><button className="prepareFormat fileActionPulse" type="button" title="Prepare Change format" onClick={event=>{event.stopPropagation();setFormatQueue(current=>current.some(item=>item.path===file.path)?current:[...current,file]);}}><ArrowRight size={16}/></button></span></div>)}{selected && !shown.length && <p>No files of the selected type.</p>}</div></section>
-            <section className={converted.length ? "convertedFiles" : "convertedFiles emptyConvertedFiles"}><h2>Converted files<button type="button" className="clearConvertedFiles" title="Clear converted files list" aria-label="Clear converted files list" disabled={!converted.length || deliveryBusy || converting} onClick={() => { if (converted.some(file => file.path === previewFile?.path)) setPreviewFile(null); setConverted([]); setConvertedSources([]); setDeliveryFile(null); setDeliveryFolderIds([]); }}><X size={15}/></button></h2><div className="processingFileList">{converted.length ? converted.map(file => <div className="convertedFileWrap" key={file.path}><div className="processingFile convertedFile" onClick={() => setPreviewFile(file)}><span className="processingFileName"><FileKindIcon name={file.name}/>{file.name}</span><span className="processingFileActions convertedFileActions"><button type="button" title="Open converted file" onClick={event => { event.stopPropagation(); void openFile(file); }}><ExternalLink size={15}/></button><button type="button" className="convertedKeepButton" title="Keep this file in its current folder" disabled={keepingPaths.includes(file.path)} onClick={event => { event.stopPropagation(); void keepConvertedFile(file); }}>{keepingPaths.includes(file.path) ? <RotateCw className="spin" size={15}/> : <FolderCheck size={15}/>}</button><button type="button" className={deliveryFile?.path === file.path ? "convertedSendButton active" : "convertedSendButton"} title="Send a copy to FolderRocket folders" onClick={event => { event.stopPropagation(); openDelivery(file); }}><Send size={15}/></button></span></div>{deliveryFile?.path === file.path && <div className="convertedDeliveryMenu"><strong>Send a copy to:</strong><div>{folders.map(folder => <label key={folder.id}><input type="checkbox" checked={deliveryFolderIds.includes(folder.id)} onChange={() => toggleDeliveryFolder(folder.id)}/><FolderOpen size={13}/><span>{folder.name}</span>{folder.storage === "imaginary" && <em>virtual</em>}</label>)}</div><footer><button type="button" onClick={() => { setDeliveryFile(null); setDeliveryFolderIds([]); }} disabled={deliveryBusy}>Cancel</button><button type="button" onClick={() => void sendConvertedCopies()} disabled={!deliveryFolderIds.length || deliveryBusy}>{deliveryBusy ? "Sending…" : "Send copies"}</button></footer></div>}</div>) : <p>Converted files will appear here.</p>}</div></section>
+            <section className={converted.length ? "convertedFiles" : "convertedFiles emptyConvertedFiles"}><h2>Converted files<button type="button" className="clearConvertedFiles" title="Clear converted files list" aria-label="Clear converted files list" disabled={!converted.length || deliveryBusy || converting} onClick={() => { if (converted.some(file => file.path === previewFile?.path)) setPreviewFile(null); setConverted([]); setConvertedSources([]); setDeliveryFile(null); setDeliveryFolderIds([]); }}><X size={15}/></button></h2><div className="processingFileList">{converted.length ? converted.map(file => <div className="convertedFileWrap" key={file.path}><div className="processingFile convertedFile" onClick={() => setPreviewFile(file)}><span className="processingFileName"><FileKindIcon name={file.name}/>{file.name}</span><span className="processingFileActions convertedFileActions"><button type="button" title="Open converted file" onClick={event => { event.stopPropagation(); void openFile(file); }}><ExternalLink size={15}/></button><button type="button" title="Rename converted file" aria-label={`Rename ${file.name}`} disabled={deliveryBusy || keepingPaths.includes(file.path) || renamingPath === file.path} onClick={event => { event.stopPropagation(); setStatus(""); setRenameDraft({path: file.path, name: baseName(file.name)}); }}><Pencil size={14}/></button><button type="button" className="convertedKeepButton" title="Keep this file in its current folder" disabled={keepingPaths.includes(file.path) || renamingPath === file.path} onClick={event => { event.stopPropagation(); void keepConvertedFile(file); }}>{keepingPaths.includes(file.path) ? <RotateCw className="spin" size={15}/> : <FolderCheck size={15}/>}</button><button type="button" className={deliveryFile?.path === file.path ? "convertedSendButton active" : "convertedSendButton"} title="Send a copy to FolderRocket folders" disabled={renamingPath === file.path || keepingPaths.includes(file.path)} onClick={event => { event.stopPropagation(); openDelivery(file); }}><Send size={15}/></button></span></div>{renameDraft?.path === file.path && <form className="convertedFileRename" onSubmit={event => {event.preventDefault(); void renameConvertedFile(file);}}><label><span>New file name</span><input autoFocus value={renameDraft.name} disabled={renamingPath === file.path} onKeyDown={event => {if (event.key === "Escape" && renamingPath !== file.path) setRenameDraft(null);}} onChange={event => setRenameDraft({path: file.path, name: event.target.value})}/><small>Extension kept: {fileExtension(file.name) || "none"}</small></label><button type="submit" disabled={renamingPath === file.path}>{renamingPath === file.path ? "Saving…" : "Save"}</button><button type="button" disabled={renamingPath === file.path} onClick={() => setRenameDraft(null)}>Cancel</button></form>}{deliveryFile?.path === file.path && <div className="convertedDeliveryMenu"><strong>Send a copy to:</strong><div>{folders.map(folder => <label key={folder.id}><input type="checkbox" checked={deliveryFolderIds.includes(folder.id)} onChange={() => toggleDeliveryFolder(folder.id)}/><FolderOpen size={13}/><span>{folder.name}</span>{folder.storage === "imaginary" && <em>virtual</em>}</label>)}</div><footer><button type="button" onClick={() => { setDeliveryFile(null); setDeliveryFolderIds([]); }} disabled={deliveryBusy}>Cancel</button><button type="button" onClick={() => void sendConvertedCopies()} disabled={!deliveryFolderIds.length || deliveryBusy}>{deliveryBusy ? "Sending…" : "Send copies"}</button></footer></div>}</div>) : <p>Converted files will appear here.</p>}</div></section>
         </section>
         <aside className="conversionStack">
-            <section className="conversionPanel conversionToolCard">
-                <h2><span className="conversionCardHeading"><FileCog size={17}/><span>Local conversion<small>Create a copy in another format</small></span></span>{converting&&<RotateCw className="conversionHeaderSpinner local" size={14}/>}</h2>
-                <label className="formatChoiceField localFormatChoice"><span className="formatFieldCopy"><strong>Output format</strong></span><span className="formatSelectShell"><FormatIcon format={format}/><select aria-label="Output format" value={format} onChange={event => setFormat(event.target.value)}><option>PDF</option><option>TXT</option><option>CSV</option><option>XLSX</option></select></span></label>
+            <section className={`conversionPanel conversionToolCard ${queue.length ? "hasQueuedFiles" : "queueEmpty"}`}>
+                <h2 className="localConversionHeading"><span className="conversionCardHeading"><FileCog size={17}/><span>Local conversion<small>Create a copy in another format</small></span></span><label className="formatChoiceField localFormatChoice"><span className="formatSelectShell"><FormatIcon format={format}/><select aria-label="Output format" value={format} onChange={event => setFormat(event.target.value)}><option>PDF</option><option>TXT</option><option>CSV</option><option>XLSX</option></select></span></label>{converting&&<RotateCw className="conversionHeaderSpinner local" size={14}/>}</h2>
                 {queue.length > 0 && <div className="studioQueueHeading"><span>Files to convert</span><strong>{queue.length}</strong></div>}
-                <div className="conversionQueue localConversionQueue">{queue.length ? queue.map(file => <div className="formatQueueRow" key={file.path} onClick={() => choosePreview(file)}><span className="formatQueueName" title={file.name}>{file.name}</span><span className="fileFormatBadge">{extensionOf(file.name).toUpperCase()}</span><button type="button" title="Remove from conversion queue" onClick={event => { event.stopPropagation(); setQueue(current => current.filter(item => item.path !== file.path)); }} disabled={converting}><X size={13}/></button></div>) : null}</div>
-                {queue.length > 0 && <button className="clearConversionQueue" type="button" onClick={() => setQueue([])} disabled={converting}>Clear list</button>}
+                <div className="conversionQueue localConversionQueue" tabIndex={queue.length ? 0 : undefined} aria-label="Files waiting for local conversion">{queue.length ? queue.map(file => <div className="formatQueueRow" key={file.path} role="group" aria-label={`${file.name}, queued for conversion`} tabIndex={0} onKeyDown={event => {if (event.target === event.currentTarget && (event.key === "Enter" || event.key === " ")) {event.preventDefault(); choosePreview(file);}}} onClick={() => choosePreview(file)}><span className="formatQueueName" title={file.name}>{file.name}</span><span className="fileFormatBadge">{extensionOf(file.name).toUpperCase()}</span><button type="button" title="Remove from conversion queue" onClick={event => { event.stopPropagation(); setQueue(current => current.filter(item => item.path !== file.path)); }} disabled={converting}><X size={13}/></button></div>) : null}</div>
                 <button type="button" className={converting ? "convertButton converting" : "convertButton"} disabled={!queue.length || converting} onClick={() => void convert()} title="Convert"><RotateCw className={converting ? "spin" : ""} size={16}/>{converting ? "Converting…" : "Convert files"}</button>
                 {converting && <p className="conversionProgress">Converting files…</p>}{queue.length > 0 && <p className="conversionCount">{`${queue.length} file${queue.length === 1 ? "" : "s"} ready to convert`}</p>}{status && <p className="conversionCount">{status}</p>}{converted.length > 0 && convertedSources.length > 0 && <button className="sendConvertedButton" type="button" onClick={() => window.dispatchEvent(new CustomEvent("folderrocket-add-to-fire", {detail: convertedSources}))}>Send original files to Fire Mountain</button>}
             </section>
             <ChangeFormatPanel files={formatQueue} onRemove={path=>setFormatQueue(current=>current.filter(file=>file.path!==path))} onComplete={async (output,sourceFiles)=>{const result=await applyRenameTemplate(output);setConverted(result.renamedFiles);setConvertedSources(sourceFiles);recordDailyActivity({kind:"studio",summary:`Formatted ${result.renamedFiles.length} file${result.renamedFiles.length===1?"":"s"}`,files:result.renamedFiles.map(file=>file.name),undo:result.renamedFiles.length?{type:"trash-created",paths:result.renamedFiles.map(file=>file.path)}:undefined});if(result.failures.length)setStatus(`${result.failures.length} files could not be renamed.`);}}/>
-            <section className="convertedRenamePanel">
-                <header className="convertedRenameHeader"><div className="conversionRenameMenuRoot" ref={renameMenuRef}><button type="button" className="conversionRenameMenuButton" aria-expanded={renameMenuOpen} aria-haspopup="menu" onClick={() => setRenameMenuOpen(current => !current)}><Pencil size={16}/><strong>Rename</strong><ChevronDown size={14}/></button>{renameMenuOpen && <div className="conversionRenameMenu" role="menu" aria-label="Rename components">{([{type: "original", label: "Original name"}, {type: "converted", label: "_converted"}, {type: "text", label: "Text"}, {type: "date", label: "Date"}] as const).map(option => <button type="button" role="menuitem" key={option.type} onClick={() => { addRenamePart(option.type); setRenameMenuOpen(false); }}>{option.label}</button>)}</div>}</div></header>
-                <div className="conversionRenameBuilder" aria-label="Rename phrase">{renameParts.length ? renameParts.map(part => <span key={part.id} className={`conversionRenamePart ${part.type}`}>{part.type === "original" ? "Original name" : part.type === "converted" ? "_converted" : part.type === "date" ? new Date().toLocaleDateString("en-GB") : <input value={part.value ?? ""} onChange={event => updateRenamePart(part.id, event.target.value)} aria-label="Rename text" />}</span>) : <span className="renamePhraseEmpty">Add blocks to compose the new name</span>}</div>
-                <span className="conversionRenamePreview" title={renamePreview}>Example: {renamePreview}</span>
-                <div className="conversionRenameActions"><button type="button" onClick={() => setRenameParts(emptyRenameParts())} disabled={!renameParts.length}>Reset template</button><button type="button" onClick={() => setRenameParts(current => current.slice(0, -1))} disabled={!renameParts.length}>Delete last</button></div>
-            </section>
             <FireMountain />
         </aside>
     </main>;

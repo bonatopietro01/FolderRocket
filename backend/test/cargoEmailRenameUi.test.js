@@ -34,14 +34,13 @@ test("email account pickers stay in Read attachments without the connected-accou
     assert.match(outlook, /onAccountBlockIdChange\?\.\(event\.target\.value === alertBlockId/);
 });
 
-test("File Studio Rename title opens the component menu and keeps its preview and template", () => {
+test("File Studio hides the Rename composer while keeping its template data and shared logic", () => {
     const studio = readSource("src", "components", "ProcessingWorkspace.tsx");
-    assert.match(studio, /className="conversionRenameMenuButton"[^>]*aria-expanded=\{renameMenuOpen\}[^>]*aria-haspopup="menu"/);
-    assert.match(studio, /<strong>Rename<\/strong>/);
-    assert.match(studio, /className="conversionRenameMenu" role="menu"/);
-    for (const option of ["Original name", "_converted", "Text", "Date"]) assert.ok(studio.includes(`label: "${option}"`));
-    assert.match(studio, /addRenamePart\(option\.type\)/);
-    assert.match(studio, /className="conversionRenamePreview"/);
+    assert.doesNotMatch(studio, /conversionRenameMenuButton|conversionRenameMenu|conversionRenamePreview|Add blocks to compose the new name/);
+    assert.match(studio, /interface RenamePart/);
     assert.match(studio, /folderrocket-conversion-rename-template/);
-    assert.doesNotMatch(studio, /studioRenameSelect|Add block…|Add rename block/);
+    assert.match(studio, /const templateKey = \`\$\{RENAME_TEMPLATE_KEY\}-\$\{storageScope\}\`/);
+    assert.match(studio, /localStorage\.setItem\(templateKey, legacyTemplate\)/);
+    assert.match(studio, /function buildRename\(/);
+    assert.match(studio, /async function applyRenameTemplate\(/);
 });

@@ -1,0 +1,43 @@
+{
+  "description": "FolderRocket local role and skill routing hints. The hooks read stdin only and do not store prompt contents.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "^(startup|resume|clear|compact)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/route.mjs\"",
+            "timeout": 5,
+            "additionalContextLimit": 700
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/route.mjs\"",
+            "timeout": 5,
+            "additionalContextLimit": 500
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "^(app_starter|architect|backend|frontend|ai_engineer|reviewer|prompt_agent)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$(git rev-parse --show-toplevel)/.codex/hooks/route.mjs\"",
+            "timeout": 5,
+            "additionalContextLimit": 500
+          }
+        ]
+      }
+    ]
+  }
+}
