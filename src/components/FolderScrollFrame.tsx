@@ -16,8 +16,9 @@ export default function FolderScrollFrame({layout, itemCount, children}: Props) 
         const viewport = viewportRef.current;
         if (!viewport) return;
         const measure = () => {
-            const scrollPosition = layout === "folders-top" ? viewport.scrollLeft : viewport.scrollTop;
-            const maxScroll = layout === "folders-top"
+            const horizontal = layout === "folders-top";
+            const scrollPosition = horizontal ? viewport.scrollLeft : viewport.scrollTop;
+            const maxScroll = horizontal
                 ? viewport.scrollWidth - viewport.clientWidth
                 : viewport.scrollHeight - viewport.clientHeight;
             const next = {before: scrollPosition > 2, after: maxScroll - scrollPosition > 2};

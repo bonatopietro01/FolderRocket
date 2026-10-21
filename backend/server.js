@@ -935,6 +935,14 @@ function selectedKnowledgeGraph(graph,scope){
     selected.progress={...(graph.progress||{}),limitReached:statuses.some(item=>item.progress?.limitReached===true)};
     return selected;
 }
+const GMAIL_SOURCE_BLOCKER_REASONS=new Set(["provider_unavailable","provider_page_limit","selected_item_missing"]);
+function gmailSourceBlockerAction(reasonCode,status){
+    if(reasonCode==="provider_unavailable")return "Reconnect the Gmail account selected for this planet, then retry Sync now.";
+    if(reasonCode==="provider_page_limit")return "Gmail reached its current message-page limit. Narrow the selected conversations or change the selection, refresh indexing, then retry Sync now.";
+    if(reasonCode==="selected_item_missing")return "One or more selected conversations are unavailable in this Gmail account. Review the conversation selection, then retry Sync now.";
+    if(status==="indexing")return "The selected Gmail source is still indexing. Wait for indexing to finish or retry it in graph details, then retry Sync now.";
+    return "The selected Gmail source has not completed indexing. Check its status in graph details, retry Gmail indexing, then retry Sync now.";
+}
 function selectedKnowledgeBlockers(graph,scope){
     const statuses=new Map((Array.isArray(graph.sourceStatuses)?graph.sourceStatuses:[]).map(item=>[String(item.sourceId||""),item]));
     const blockers=[];
@@ -945,7 +953,8 @@ function selectedKnowledgeBlockers(graph,scope){
         const fallbackLabel=isEmail?"Selected Gmail source":sourceId==="snapshot"?"Selected snapshots":"Selected folder source";
         const candidateLabel=String(source?.label||fallbackLabel).replace(/[\r\n\0]/g," ").slice(0,100);
         const rawLabel=/[\\/]|\b[A-Za-z]:/u.test(candidateLabel)?fallbackLabel:candidateLabel;
-        blockers.push({sourceId:sourceId.slice(0,180),label:rawLabel,status:String(source?.status||"unknown").slice(0,24),reasonCode:"source_index_incomplete",action:isEmail?"Check the selected Gmail source status, then retry Sync now.":"Check that this selected source is available and readable, then retry Sync now.",retryable:source?.retryable===true});
+        const sourceReasonCode=isEmail&&GMAIL_SOURCE_BLOCKER_REASONS.has(source?.reasonCode)?source.reasonCode:"";
+        blockers.push({sourceId:sourceId.slice(0,180),label:rawLabel,status:String(source?.status||"unknown").slice(0,24),reasonCode:"source_index_incomplete",...(sourceReasonCode?{sourceReasonCode}:{}),action:isEmail?gmailSourceBlockerAction(sourceReasonCode,source?.status):"Check that this selected source is available and readable, then retry Sync now.",retryable:source?.retryable===true});
     }
     if(scope.selection.email&&scope.selection.threadMode!=="selected")blockers.push({sourceId:"email-selection",label:"Email conversation selection",status:"incomplete",reasonCode:"content_unavailable",action:"Select specific Gmail conversations or turn off the email source, then retry Sync now.",retryable:false});
     else if(scope.selection.email&&scope.emailSelection?.provider&&scope.emailSelection.provider!=="gmail")blockers.push({sourceId:"email-selection",label:"Selected email source",status:"unavailable",reasonCode:"content_unavailable",action:"Choose a connected Gmail source or turn off the email source, then retry Sync now.",retryable:false});
@@ -997,7 +1006,7 @@ function safeKnowledgeBlockerSummary(blockers,extra={}){
 }
 function knowledgeReadinessFingerprint(scope,graph,reasonSummary){
     const selected=selectedKnowledgeGraph(graph,scope);
-    return planetKnowledge.fingerprint({selection:scope.selection,roots:scope.roots.map(item=>({id:item.id,path:path.resolve(item.path)})).sort((a,b)=>a.id.localeCompare(b.id)),email:scope.selection.email?{provider:scope.emailSelection?.provider||"",blockId:scope.emailSelection?.blockId||"",threadMode:scope.selection.threadMode,threadIds:[...scope.selection.threadIds].sort()}:null,evidenceRevision:planetGraph.contentRevision(selected),reasonCodes:reasonSummary.reasonCodes,blockers:reasonSummary.blockers.map(({sourceId,status,reasonCode,action,retryable})=>({sourceId,status,reasonCode,action,retryable}))});
+    return planetKnowledge.fingerprint({selection:scope.selection,roots:scope.roots.map(item=>({id:item.id,path:path.resolve(item.path)})).sort((a,b)=>a.id.localeCompare(b.id)),email:scope.selection.email?{provider:scope.emailSelection?.provider||"",blockId:scope.emailSelection?.blockId||"",threadMode:scope.selection.threadMode,threadIds:[...scope.selection.threadIds].sort()}:null,evidenceRevision:planetGraph.contentRevision(selected),reasonCodes:reasonSummary.reasonCodes,blockers:reasonSummary.blockers.map(({sourceId,status,reasonCode,sourceReasonCode,action,retryable})=>({sourceId,status,reasonCode,sourceReasonCode,action,retryable}))});
 }
 async function knowledgeScope(req,worldId){
     const found=readWorldRecord(req.user.id,worldId);if(!found.world)return null;
@@ -1044,8 +1053,21 @@ function scheduleSelectedFolderRefresh(user,worldId,scope){
     const key=knowledgeScopeKey(user.id,worldId);if(knowledgeFolderRefreshes.has(key))return;
     knowledgeFolderRefreshes.add(key);
     knowledgePipelineQueue.run(async()=>{
-        try{await refreshSelectedFolderSources(user,worldId,scope);const latest=await knowledgeScope({user},worldId);if(latest){await maintainKnowledgeWatcher(user,worldId,latest);queueKnowledgeSyncJob(user,worldId,latest);}}
-        catch{}
+        try{
+            await refreshSelectedFolderSources(user,worldId,scope);
+            const latest=await knowledgeScope({user},worldId);
+            if(latest){
+                await maintainKnowledgeWatcher(user,worldId,latest);
+                const [graph,knowledge]=await Promise.all([planetGraph.readGraph(user.id,worldId),planetKnowledge.readKnowledge(user.id,worldId)]);
+                const currentScopeMatches=knowledge.sourceSelectionFingerprint===latest.fingerprint&&knowledge.graphRevision===latest.graphRevision;
+                const selectedGraph=selectedKnowledgeGraph(graph,latest);
+                const stableGraphBlocker=selectedKnowledgeBlockers(graph,latest).length>0||selectedGraph.progress?.limitReached===true;
+                const reusableReadyKnowledge=graph.status==="ready"&&knowledge.status==="ready"&&currentScopeMatches;
+                const reusableBlockedKnowledge=graph.status==="partial"&&knowledge.status==="partial"&&knowledge.progress?.stage==="incomplete"&&stableGraphBlocker&&currentScopeMatches;
+                if(!reusableReadyKnowledge&&!reusableBlockedKnowledge)queueKnowledgeSyncJob(user,worldId,latest);
+            }
+        }
+        catch{initializedKnowledgeScopes.delete(key);}
         finally{knowledgeFolderRefreshes.delete(key);}
     });
 }
@@ -2175,7 +2197,7 @@ app.get("/auth/me", (req, res) => {
         void knowledgeScope(req,worldId).then(async scope=>{
             if(!scope){initializedKnowledgeScopes.delete(scopeKey);return;}
             await maintainKnowledgeWatcher(req.user,worldId,scope);
-            if(scope.selection.folders&&scope.roots.length){scheduleSelectedFolderRefresh(req.user,worldId,scope);queueKnowledgeSyncJob(req.user,worldId,scope);}
+            if(scope.selection.folders&&scope.roots.length)scheduleSelectedFolderRefresh(req.user,worldId,scope);
         }).catch(()=>{initializedKnowledgeScopes.delete(scopeKey);});
     }
     res.json({user: req.user});

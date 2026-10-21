@@ -91,10 +91,17 @@ function describeObsidianIncompleteSync(response:ObsidianSyncResponse) {
         selected_source_limit:"Some selected sources exceed the current source limit.",
         content_unavailable:"Some selected content could not be read.",
         knowledge_limit:"The selected material exceeds the current knowledge limit.",
-        source_selection_changed:"The selected sources changed while sync was checking them."
+        source_selection_changed:"The selected sources changed while sync was checking them.",
+        provider_unavailable:"The Gmail provider is currently unavailable.",
+        provider_page_limit:"The selected Gmail source reached its available page limit.",
+        selected_item_missing:"A selected Gmail conversation is no longer available."
     };
     const blockers=(response.reasonSummary?.blockers||[]).filter(blocker=>blocker&&typeof blocker.label==="string"&&typeof blocker.action==="string").slice(0,8);
-    if (blockers.length) return blockers.map(blocker=>`${blocker.label}: ${blocker.action}`).join(" · ").slice(0,900);
+    if (blockers.length) return blockers.map(blocker=>{
+        const specificReason=blocker.sourceReasonCode&&knownReasons[blocker.sourceReasonCode];
+        const status=blocker.status&&blocker.status!=="complete"?` · ${blocker.status}`:"";
+        return `${blocker.label}${status}${specificReason?` · ${specificReason}`:""}: ${blocker.action}`;
+    }).join(" · ").concat(" The last complete custom-vault revision is preserved.").slice(0,900);
     const summary=typeof response.summary==="string"?response.summary.trim().slice(0,300):"";
     const reasonLines=(Array.isArray(response.reasonSummary?.reasonCodes)?response.reasonSummary.reasonCodes:[])
         .filter((code):code is string=>typeof code==="string"&&Boolean(knownReasons[code]))

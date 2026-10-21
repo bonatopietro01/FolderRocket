@@ -3,6 +3,7 @@ export interface ObsidianSourceBlocker {
     label: string;
     status: string;
     reasonCode: string;
+    sourceReasonCode?: string;
     action: string;
     retryable: boolean;
 }

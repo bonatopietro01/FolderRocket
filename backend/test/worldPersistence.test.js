@@ -60,7 +60,7 @@ test("planet artwork and world switch retain distinct styles and reduced-motion 
     const worldsScreen = fs.readFileSync(path.join(__dirname,"..","..","src","components","ChangeWorld.tsx"),"utf8");
     const account = fs.readFileSync(path.join(__dirname,"..","..","src","components","AuthGate.tsx"),"utf8");
     const integrations = fs.readFileSync(path.join(__dirname,"..","..","src","components","IntegrationSetup.tsx"),"utf8");
-    assert.match(css,/\.worldPlanet\.planet::before/);
+    assert.match(css,/\.worldPlanet \{[^}]*border-radius:50%[^}]*background:radial-gradient/);
     assert.match(css,/\.worldPlanet\.glowing::before/);
     assert.match(css,/\.worldPlanet\.ringed\s*>\s*em/);
     assert.match(css,/\.worldPlanet\.ringed::after[^}]*z-index:3[^}]*clip-path:inset\(50% 0 0\)/);

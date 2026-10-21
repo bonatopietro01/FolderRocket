@@ -6184,8 +6184,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .pageNavigation .pageMenuItems button { transition:background-color .14s ease,color .14s ease; }
 .pageNavigation .pageMenuItems button:not(.active):hover { background:linear-gradient(180deg,#e4f5ff,#c7eaff); color:#1e5c85; }
 .folderTableHead { font-size:11px; letter-spacing:.035em; }
-.treeRocketGraphHeading:has(.treeRocketDesktopHint) { flex-wrap:wrap; }
-.treeRocketDesktopHint { flex:0 0 100%; color:#bfd2e1; font-size:10px; line-height:1.35; }
 .emailConversationError { display:flex; align-items:center; justify-content:space-between; gap:10px; }
 .emailConversationError button { flex:0 0 auto; padding:4px 10px; border:1px solid #d79d94; border-radius:6px; background:#fff; color:#8b332a; cursor:pointer; font:inherit; font-weight:750; }
 .emailConversationError button:hover:not(:disabled) { background:#fff4f1; }
@@ -7061,31 +7059,6 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .treeRocketNodeActions .treeRocketAddFolderButton,.treeRocketNodeActions .treeRocketAddedButton { display:grid; width:29px; min-width:29px; max-width:29px; height:27px; min-height:27px; max-height:27px; flex:0 0 29px; place-items:center; box-sizing:border-box; padding:0; }
 .treeRocketNodeActions .treeRocketAddFolderButton svg,.treeRocketNodeActions .treeRocketAddedButton svg { width:14px; height:14px; }
 
-/* Desktop branch view keeps both selectable roots visible above its children. */
-.treeRocketGraphStage.desktopRootStage { display:flex; min-width:0; flex-direction:column; gap:12px; }
-.treeRocketGraphStage.desktopRootStage > .desktopRootChoices { display:grid; width:100%; min-width:0; grid-template-columns:repeat(auto-fit,minmax(min(230px,100%),260px)); justify-content:start; align-items:start; gap:14px; margin:0; padding:0 0 8px; }
-.treeRocketGraphStage.desktopRootStage > .desktopRootChoices > .selectedDesktopRoot { position:relative; top:8px; border-color:#75c7f2; background:linear-gradient(145deg,#d8f2ff,#a1d8f5 62%,#71bce1); box-shadow:0 0 0 2px #72c4f144,0 9px 22px #03101f75; }
-.treeRocketGraphStage.desktopRootStage > .desktopRootChoices > .selectedDesktopRoot .treeRocketNodeEnter strong { color:#123b5d; }
-.treeRocketSubfoldersMeta { display:inline-flex; min-width:0; align-items:center; gap:5px; color:#d9efff; }
-.treeRocketSubfoldersMeta small { color:#a9d4ef; font-size:8px; font-weight:900; letter-spacing:.1em; }
-.treeRocketSubfoldersMeta b { font-size:9px; white-space:nowrap; }
-.treeRocketNodeTitle.hasSubfolders { display:flex; min-width:0; align-items:baseline; flex-wrap:wrap; gap:2px 6px; }
-.treeRocketNodeTitle.hasSubfolders > strong { flex:0 1 auto; }
-.selectedDesktopRoot .treeRocketSubfoldersMeta { color:#123b5d; }
-.selectedDesktopRoot .treeRocketSubfoldersMeta small { color:#315f7d; }
-@media(max-width:640px) {
-  .treeRocketGraphStage.desktopRootStage > .desktopRootChoices { grid-template-columns:repeat(auto-fit,minmax(min(180px,100%),1fr)); gap:10px; }
-}
-
-/* Keep the selected Desktop title and its Subfolders summary on one visible line. */
-.treeRocketGraphStage.desktopRootStage > .desktopRootChoices { grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),320px)); }
-.treeRocketGraphStage.desktopRootStage > .desktopRootChoices > .treeRocketRootNode { width:100%; min-width:0; max-width:320px; }
-.treeRocketGraphStage.desktopRootStage .treeRocketNodeTitle.hasSubfolders { flex-wrap:nowrap; gap:6px; white-space:nowrap; }
-.treeRocketGraphStage.desktopRootStage .treeRocketNodeTitle.hasSubfolders > strong { display:block; max-width:none; max-height:none; flex:0 0 auto; overflow:visible; white-space:nowrap; -webkit-line-clamp:unset; -webkit-box-orient:initial; }
-.treeRocketGraphStage.desktopRootStage .treeRocketSubfoldersMeta { flex:0 0 auto; }
-/* This canvas-level rule has greater specificity than the generic 212px root grid. */
-.treeRocketGraphCanvas:has(.desktopRootStage) .treeRocketGraphStage.desktopRootStage > .treeRocketChildren.rootNodes.desktopRootChoices { grid-template-columns:repeat(auto-fit,minmax(min(320px,100%),320px)); }
-
 /* R23-R26: retain the large centered wordmark above one bottom-aligned header row. */
 .app > .appHeader,.app:has(.applicationsView) > .appHeader,.app:has(.emailConversationsPage) > .appHeader { display:block!important; position:relative; box-sizing:border-box; height:132px!important; min-height:132px; flex:0 0 132px!important; }
 .appLogo { top:1px; left:50%; width:390px; max-width:56%; height:93px; object-fit:contain; transform:translateX(-50%); }
@@ -7114,14 +7087,31 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .treeRocketBreadcrumbSubfolders i { font-style:normal; }
 @media(max-width:850px) { .treeRocketBreadcrumbSubfolders { gap:4px; padding-inline:5px; } .treeRocketBreadcrumbSubfolders b { max-width:18vw; } }
 
-/* R20: keep the selected Computer root tab and child folder tabs inside the scrollable stage. */
+/* Keep the selected root tab and child folder tabs inside the scrollable stage. */
 .treeRocketGraph.hasOpenBranch .treeRocketGraphCanvas { overflow:visible; }
-.treeRocketGraph.hasOpenBranch .treeRocketGraphStage:not(.desktopRootStage) { overflow:visible; padding-top:12px; }
-.treeRocketGraph.hasOpenBranch .treeRocketGraphStage:not(.desktopRootStage) > .treeRocketBranch { min-height:0; overflow:visible; }
-.treeRocketGraph.hasOpenBranch .treeRocketGraphStage:not(.desktopRootStage) > .treeRocketBranch > .treeRocketChildren.hasParent { padding-top:17px; }
+.treeRocketGraph.hasOpenBranch .treeRocketGraphStage { overflow:visible; padding-top:12px; }
+.treeRocketGraph.hasOpenBranch .treeRocketGraphStage > .treeRocketBranch { min-height:0; overflow:visible; }
+.treeRocketGraph.hasOpenBranch .treeRocketGraphStage > .treeRocketBranch > .treeRocketChildren.hasParent { padding-top:17px; }
 
 /* A dismissed unchanged warning remains available as a compact, consultable status. */
 .obsidianAutoSyncCompact { position:fixed; z-index:10030; top:8px; right:12px; display:grid; max-width:min(460px,calc(100vw - 24px)); gap:5px; }
 .obsidianAutoSyncCompact > button,.obsidianAutoSyncCompact > div { padding:7px 10px; border:1px solid #d2ad64; border-radius:8px; background:#fff8e9; color:#76520a; box-shadow:0 4px 14px #1c293326; font-size:11px; font-weight:750; }
 .obsidianAutoSyncCompact > div { display:flex; align-items:center; gap:8px; }
 .obsidianAutoSyncCompact > div button { flex:0 0 auto; border:1px solid #dab867; border-radius:6px; background:#fff; color:#654500; cursor:pointer; padding:5px 7px; }
+
+/* R27: reclaim the empty band below the centered mark. The shared 96px
+   header leaves a 2px gap below the 93px logo and a 3px gap below controls. */
+.app > .appHeader,.app:has(.applicationsView) > .appHeader,.app:has(.emailConversationsPage) > .appHeader { height:96px!important; min-height:96px; flex:0 0 96px!important; }
+.app > .pageFrame { top:0; }
+@media(max-width:900px) {
+  .app > .appHeader,.app:has(.applicationsView) > .appHeader,.app:has(.emailConversationsPage) > .appHeader { height:100px!important; min-height:100px; flex-basis:100px!important; }
+}
+
+/* R31: the source columns keep explicit accessible names without a visible
+   generic heading taking space from their blocks. */
+.dashboard > .sourceBlocksColumn { padding-top:0; }
+
+@media(min-width:1100px) {
+  .treeRocketChildren.hasParent:not(.emptyChildren) { grid-template-columns:repeat(auto-fit,minmax(min(150px,100%),1fr)); justify-content:stretch; gap:26px 12px; }
+  .treeRocketChildren.hasParent > .treeRocketNode { width:100%; max-width:none; min-width:0; }
+}

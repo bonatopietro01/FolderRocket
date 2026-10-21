@@ -173,7 +173,9 @@ test("Obsidian route derives source scopes from current graph configuration and 
     const route=server.slice(server.indexOf('app.post("/worlds/:worldId/obsidian/sync"'),server.indexOf('app.get("/worlds/:worldId/graph"'));
     assert.match(route,/selectedSourceScopeIds\.add\(`filesystem:folder:\$\{root\.id\}`\)/,"filesystem scope IDs must match graphSourceId values prefixed with folder:");
     assert.match(route,/selectedSourceScopeIds\.add\(`gmail:\$\{emailSelection\.blockId\}`\)/);
-    assert.match(route,/graph\.status==="ready"&&graph\.progress\?\.limitReached!==true&&expectedGraphSourceIds\.every\(sourceId=>graphStatuses\.get\(sourceId\)==="complete"\)/);
+    assert.match(route,/queueKnowledgeSyncJob\(req\.user,worldId,currentScope\);await job\.done/);
+    assert.match(route,/if\(!currentKnowledgeMatches\|\|currentKnowledge\.status!=="ready"\)/);
+    assert.match(route,/selectedKnowledgeBlockers\(latestGraph,currentScope\)/);
     assert.match(route,/else if\(selection\?\.provider==="outlook"&&sourceSelection\.email\)/,"unsupported Outlook should block pruning only while email is selected");
     assert.match(route,/filterGraphBySources\(graph,sourceSelection,\{emailBlockIds:selectedEmailBlocks,folderRoots:syncFolderRoots\}\)/);
     assert.doesNotMatch(route,/completeSelection\s*=\s*req\.body\?\.completeSelection/,"the client cannot claim that a sync is complete");

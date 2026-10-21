@@ -18,9 +18,16 @@ test("dashboard Sources omit their headings, place add controls after blocks, an
     const column=read("../src/components/DashboardSourceColumn.tsx");
     const css=read("../src/App.css");
     assert.match(column,/className="sourcesBlockList"[\s\S]*className="sourcesAddFooter"/);
-    assert.match(column,/<div className="sourcesColumnHeader"><strong>\{title\}<\/strong><\/div>/);
+    assert.doesNotMatch(column,/<div className="sourcesColumnHeader"><strong>\{title\}<\/strong><\/div>/);
+    assert.match(column,/aria-label=\{`\$\{className === "sourcesColumn" \? "Left" : "Right"\} \$\{title\.toLowerCase\(\)\} dashboard column`\}/);
     assert.match(column,/aria-label=\{`Add \$\{title\.toLowerCase\(\)\} block`\}/);
     assert.match(css,/\.dashboardFoldersTop \.foldersContainer \{[^}]*justify-content:center/);
+});
+
+test("folder scroll edge indicators follow the active layout axis",()=>{
+    const frame=read("../src/components/FolderScrollFrame.tsx");
+    assert.match(frame,/layout === "folders-top"[\s\S]*viewport\.scrollLeft[\s\S]*viewport\.scrollTop/);
+    assert.match(frame,/viewport\.scrollWidth - viewport\.clientWidth[\s\S]*viewport\.scrollHeight - viewport\.clientHeight/);
 });
 
 test("dashboard add-block picker escapes clipped source scrollers and remains keyboard-dismissible",()=>{
@@ -102,7 +109,7 @@ test("Tree Rocket Desktop roots exclude linked Folder Management folders",()=>{
     assert.match(tree,/mode=\$\{treeRootMode\}/);
     assert.match(tree,/return "My Desktop"/);
     assert.match(tree,/return "Public Desktop · shared"/);
-    assert.match(tree,/Personal and shared Public Desktop folders are shown as separate roots\./);
+    assert.match(tree,/treeRootMode === "desktop" \? "Desktop roots" : "Computer"/);
     assert.match(tree,/displayName=\{treeRootMode==="desktop"\?desktopRootLabel\(folder\):folder\.name\}/);
     assert.match(tree,/Load next page of folders/);
     assert.match(tree,/Load the next page of direct folders\./);

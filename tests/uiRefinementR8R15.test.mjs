@@ -65,15 +65,15 @@ test("R14 gives TreeRocket add and check actions the same centered footprint", (
     assert.match(treeActions, /\.treeRocketAddFolderButton svg,\.treeRocketNodeActions \.treeRocketAddedButton svg \{ width:14px; height:14px; \}/);
 });
 
-test("R15 retains both desktop roots during browsing and keeps the dynamic subfolder count with the shared root", () => {
+test("R37 supersedes R15 persistent roots with the same current-folder stage for Desktop and Computer", () => {
     const tree = read("../src/components/TreeRocket.tsx");
     const css = read("../src/App.css");
-    assert.match(tree, /className="treeRocketChildren rootNodes desktopRootChoices"[\s\S]*?roots\.map/);
+    assert.match(tree, /className="treeRocketGraphStage"/);
     assert.match(tree, /desktopRootLabel\(folder\)/);
-    assert.match(tree, /pathStack\[0\]\?\.path/);
-    assert.match(tree, /fetchFolderContents\(folder,false,\[folder\]\)/);
-    assert.match(tree, /treeRootMode==="computer"&&<span className="treeRocketBreadcrumbSubfolders"/);
-    assert.match(tree, /className="treeRocketSubfoldersMeta"[\s\S]*?directFolderCount/);
-    assert.match(css, /\.selectedDesktopRoot \{[^}]*top:8px; border-color:#75c7f2; background:linear-gradient/);
-    assert.match(css, /\.treeRocketGraphCanvas:has\(\.desktopRootStage\) \.treeRocketGraphStage\.desktopRootStage > \.treeRocketChildren\.rootNodes\.desktopRootChoices \{[^}]*min\(320px,100%\)/);
+    assert.match(tree, /<span className="treeRocketBreadcrumbSubfolders"[\s\S]*?contents\?\.folderTotal/);
+    assert.doesNotMatch(tree, /treeRootMode==="computer"&&<span className="treeRocketBreadcrumbSubfolders"/);
+    assert.doesNotMatch(tree, /desktopRootStage|desktopRootChoices|selectedDesktopRoot|treeRocketSubfoldersMeta/);
+    assert.doesNotMatch(css, /desktopRootStage|desktopRootChoices|selectedDesktopRoot|treeRocketSubfoldersMeta/);
+    assert.match(tree, /currentFolderDisplay[^\n]*className="treeRocketGraphStage"/);
+    assert.match(tree, /folder=\{\{\.\.\.currentFolderDisplay, directFolderCount:contents\?\.folderTotal\?\?currentChildren\.length\}\}/);
 });

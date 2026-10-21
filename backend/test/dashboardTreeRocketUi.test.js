@@ -54,7 +54,7 @@ test("Tree Rocket is mounted from Folder Management and navigates without readin
     assert.match(tree, /Added to Folder Management/);
     assert.match(tree, /Add folders from this location/);
     assert.doesNotMatch(tree, /<small>FOLDERROCKET<\/small>|Indietro|Radici|Mostra file|Cerca cartelle|Nessuna sottocartella/);
-    assert.match(tree, /event\.stopPropagation\(\); onShowFiles\(\)/);
+    assert.match(tree, /event\.stopPropagation\(\); onShowFiles\(event\.currentTarget\)/);
     assert.match(tree, /event\.stopPropagation\(\); onAdd\(\)/);
     assert.match(tree, /onContextMenu=\{event => \{event\.preventDefault\(\); back\(\);\}\}/);
     assert.match(tree, /cameraByPath = useRef\(new Map<string, TreeCamera>\(\)\)/);
@@ -64,7 +64,8 @@ test("Tree Rocket is mounted from Folder Management and navigates without readin
     assert.match(tree, /graph\.scrollTop = \(graph\.scrollHeight - graph\.clientHeight\) \* \(camera\?\.scrollProgress \?\? 0\)/);
     assert.match(tree, /function handleKeyDown\(event: KeyboardEvent\)/);
     assert.match(tree, /window\.addEventListener\("keydown", handleKeyDown, true\)/);
-    assert.match(tree, /event\.key === "Escape" \|\| \(event\.altKey && event\.key === "ArrowLeft"\)/);
+    assert.match(tree, /if \(event\.key === "Escape"\)/);
+    assert.match(tree, /\(event\.altKey && event\.key === "ArrowLeft"\) \|\| \(event\.key === "Backspace" && !editing\)/);
     assert.match(tree, /event\.key === "Backspace" && !editing/);
     assert.match(tree, /event\.stopPropagation\(\)/);
     assert.match(tree, /includeFiles:true, includeFolderFileCounts: true/);
@@ -159,14 +160,14 @@ test("Tree Rocket shows folder nodes only while preserving file indexing and exp
     assert.match(tree, /function graphNodeId\(kind:"folder"\|"file", value:string\)/);
     assert.doesNotMatch(tree, /TreeRocketFileNode|currentFiles\.map|loadMoreGraphFiles/);
     assert.match(tree, /currentChildren\.map\(folder => <TreeRocketFolderNode/);
-    assert.match(tree, /onShowFiles=\{\(\) => void showFiles\(folder\)\}/);
+    assert.match(tree, /onShowFiles=\{trigger => void showFiles\(folder,trigger\)\}/);
     assert.match(tree, /filesView\.files\.map\(file => <div className="treeRocketFile"/);
-    assert.match(tree, /className="treeRocketEdges"/);
-    assert.match(tree, /branch\.addEventListener\("scroll", measure/);
-    assert.match(tree, /new ResizeObserver\(measure\)/);
-    assert.match(tree, /function cancelFileRequest\(\)\s*\{\s*fileRequestSequence\.current \+= 1;\s*fileController\.current\?\.abort\(\)/);
+    assert.match(tree, /className="treeRocketBranch"/);
+    assert.match(tree, /document\.addEventListener\("scroll", schedule, true\)/);
+    assert.match(tree, /new ResizeObserver\(schedule\)/);
+    assert.match(tree, /fileRequestSequence\.current \+= 1;\s*fileController\.current\?\.abort\(\)/);
     assert.match(tree, /if \(!controller\.signal\.aborted && requestId === fileRequestSequence\.current\) setFilesView/);
-    assert.match(tree, /className=\{`treeRocketBody\$\{section === "folders" \? " withSidebar" : ""\}/);
+    assert.match(tree, /className=\{`treeRocketBody\$\{section === "folders" && searchResults \? " withSidebar" : ""\}/);
     assert.match(service, /fileOffset = 0, fileLimit = MAX_TREE_FILES/);
     assert.match(service, /nextFileOffset:/);
     assert.match(service, /fileTotal: includeFiles \? files\.length : directFileCount/);
@@ -177,9 +178,10 @@ test("Tree Rocket shows folder nodes only while preserving file indexing and exp
     assert.match(css, /\.treeRocketGraphStage > \.treeRocketRootNode \{ width:min\(230px,100%\); max-width:250px; flex:0 0 auto; align-self:center; \}/);
     assert.match(css, /\.treeRocketChildren\.hasParent \{ flex:1 1 0; \}/);
     assert.match(css, /\.treeRocketChildren \{[^}]*overflow:auto; overscroll-behavior:contain/);
-    assert.match(css, /\.treeRocketEdges path \{[^}]*stroke:#8bd0edb8/);
-    assert.match(tree, /M \$\{x1\} \$\{rootMidY\} H \$\{middle\} V \$\{y2\} H \$\{x2\}/);
-    assert.match(tree, /const x = rootRect\.left \+ rootRect\.width \/ 2/);
+    assert.match(tree, /className="treeRocketGraphStage"/);
+    assert.match(tree, /className="treeRocketBranch" aria-label=\{`Subfolders in \$\{currentFolderDisplay\.name\}`\}/);
+    assert.doesNotMatch(tree, /desktopRootStage|desktopRootChoices/);
+    assert.doesNotMatch(css, /\.treeRocketGraphStage\.desktopRootStage/);
 });
 
 test("dashboard, planet, graph guide, and reorder presentation retain shared accessible styles", () => {
@@ -187,10 +189,11 @@ test("dashboard, planet, graph guide, and reorder presentation retain shared acc
     const worlds = source("src", "worlds.css");
     const changeWorld = source("src", "components", "ChangeWorld.tsx");
     const planetGraph = source("src", "components", "PlanetGraph.tsx");
-    assert.match(app, /\.appNavigation \.pageMenu \{ border-color:#8fc8ed; background:linear-gradient\(180deg,#e9f7ff,#b8e2fa\)/);
+    assert.match(app, /\.pageNavigation \.pageMenuItems > button\.active \{[^}]*background:linear-gradient\(180deg,#dff2ff,#c3e5fa\)/);
     assert.match(worlds, /\.changeWorldTitle > img \{ display:block; width:min\(390px,56vw\); height:93px;/);
     assert.match(changeWorld, /src=\{folderRocketMark\}/);
-    assert.match(changeWorld, /\["planet", "rocky", "ringed", "glowing", "asteroid", "black-hole", "galaxy"\] as WorldPlanetStyle\[\]/);
+    assert.match(changeWorld, /\["planet", "ringed", "glowing", "asteroid", "black-hole", "galaxy"\] as WorldPlanetStyle\[\]/);
+    assert.match(source("src", "worlds.ts"), /\["rocky", "planet", "ringed", "glowing", "asteroid", "black-hole", "galaxy"\]/);
     assert.match(changeWorld, /<span className="worldPlanetCore"\/>/);
     assert.match(changeWorld, /className="worldPlanetRing"/);
     assert.match(changeWorld, /className="worldBlackHoleDisk"/);
