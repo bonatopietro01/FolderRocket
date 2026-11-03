@@ -6,6 +6,7 @@ const os=require("node:os");
 const path=require("node:path");
 const test=require("node:test");
 const planetGraph=require("../services/planetGraphService");
+const planetKnowledge=require("../services/planetKnowledgeService");
 
 async function freePort(){
     const server=net.createServer();
@@ -187,14 +188,14 @@ test("Obsidian sync ignores an incomplete unselected source, reports selected bl
     const unavailable=await request("/worlds/work/obsidian/sync","POST",{});
     assert.equal(unavailable.status,409,await unavailable.clone().text());
     const unavailableData=await unavailable.json();
-    const contentBlocker=unavailableData.reasonSummary.blockers.find(item=>item.sourceId==="folder:selected-root"&&item.reasonCode==="content_unavailable");
-    assert.ok(contentBlocker&&contentBlocker.label==="Selected synthetic source"&&contentBlocker.action,"content extraction failures identify the selected source and next action");
+    assert.ok(unavailableData.reasonSummary.reasonCodes.includes("source_selection_changed"),"a graph revision change marks the existing wiki stale and requires a rebuild");
+    assert.deepEqual(unavailableData.reasonSummary.blockers,[],"the stale-wiki response does not claim an unverified source failure or expose its path");
     assert.doesNotMatch(JSON.stringify(unavailableData.reasonSummary),/R22 unavailable synthetic evidence|[A-Za-z]:\\/i);
     assert.deepEqual(await directoryDigest(vaultPath),baselineVault,"an unavailable selected file preserves the last complete vault byte-for-byte");
     const unavailableFingerprint=unavailableData.readinessFingerprint;
     const contentSummary=await (await request("/worlds/work/knowledge?summary=1")).json();
-    assert.equal(contentSummary.status,"blocked");
-    assert.ok(contentSummary.reasonSummary.blockers.some(item=>item.sourceId==="folder:selected-root"&&item.reasonCode==="content_unavailable"));
+    assert.equal(contentSummary.status,"blocked",JSON.stringify(contentSummary));
+    assert.ok(contentSummary.reasonSummary.reasonCodes.includes("source_selection_changed"));
     assert.equal(contentSummary.readinessFingerprint,unavailableFingerprint);
     const unavailableRetry=await request("/worlds/work/obsidian/sync","POST",{});
     assert.equal(unavailableRetry.status,409);
@@ -207,6 +208,23 @@ test("Obsidian sync ignores an incomplete unselected source, reports selected bl
     const contentRecovered=await request("/worlds/work/obsidian/sync","POST",{});
     assert.equal(contentRecovered.status,200,await contentRecovered.clone().text());
     assert.notEqual((await contentRecovered.json()).readinessFingerprint,unavailableFingerprint,"restored selected content changes readiness and permits sync");
+    baselineVault=await directoryDigest(vaultPath);
+
+    graph=await planetGraph.readGraph(user.id,"work",graphRoot);
+    const missingSelectedNode=graph.nodes.find(item=>item.id===fileNode.id);
+    missingSelectedNode.sourceRef={...missingSelectedNode.sourceRef,path:path.join(selectedRoot,"R22 missing evidence after rebuild.txt")};
+    await planetGraph.writeGraph(graph,graphRoot);
+    const currentScope=await (await request("/worlds/work/knowledge?summary=1")).json();
+    // Persist the synthetic result of a manual rebuild at the current graph revision.
+    const rebuiltKnowledge=await planetKnowledge.readKnowledge(user.id,"work",path.join(root,"data","planet-knowledge"));
+    await planetKnowledge.writeKnowledge({...rebuiltKnowledge,status:"partial",sourceSelectionFingerprint:currentScope.sourceSelectionFingerprint,graphRevision:currentScope.revision,exclusions:[{sourceId:fileNode.id,reason:"No readable local text was extracted from this file."}]},path.join(root,"data","planet-knowledge"));
+    const extractionSync=await request("/worlds/work/obsidian/sync","POST",{});
+    assert.equal(extractionSync.status,409,await extractionSync.clone().text());
+    const extractionData=await extractionSync.json();
+    const extractionBlocker=extractionData.reasonSummary.blockers.find(item=>item.sourceId==="folder:selected-root"&&item.reasonCode==="content_unavailable");
+    assert.ok(extractionBlocker&&extractionBlocker.label==="Selected synthetic source"&&extractionBlocker.action&&extractionBlocker.retryable===true,`a current wiki extraction failure identifies the selected source and next action: ${JSON.stringify(extractionData.reasonSummary)}`);
+    assert.doesNotMatch(JSON.stringify(extractionData.reasonSummary),/R22 missing evidence after rebuild|[A-Za-z]:\\/i);
+    assert.deepEqual(await directoryDigest(vaultPath),baselineVault,"a current-revision extraction failure preserves the last complete custom vault byte-for-byte");
 
     graph=await planetGraph.readGraph(user.id,"work",graphRoot);
     graph.sourceStatuses=planetGraph.normalizeSourceStatuses(graph.sourceStatuses.map(item=>item.sourceId==="folder:selected-root"?planetGraph.sourceStatus({...item,label:selectedRoot,status:"failed",reasonCode:"source_read_failed",message:"Synthetic selected source failure.",retryable:true}):item));

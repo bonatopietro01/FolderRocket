@@ -1385,11 +1385,15 @@ app.get("/worlds/:worldId/wiki/preview",requireAuthenticated,async(req,res)=>{
 
 app.get("/worlds/:worldId/wiki",requireAuthenticated,async(req,res)=>{
     const worldId=String(req.params.worldId||"");if(!validWorldId(worldId))return res.status(400).json({message:"Invalid planet identifier."});
-    const found=readWorldRecord(req.user.id,worldId);if(!found.world)return res.status(404).json({message:"Planet not found."});
+    const scope=await knowledgeScope(req,worldId);if(!scope)return res.status(404).json({message:"Planet not found."});
     try{
         const knowledge=await planetKnowledge.readKnowledge(req.user.id,worldId);
+        const job=knowledgeJobsByScope.get(knowledgeScopeKey(req.user.id,worldId))||null;
+        const active=job&&!['completed','cancelled','failed'].includes(job.status);
+        const matches=knowledge.sourceSelectionFingerprint===scope.fingerprint&&knowledge.graphRevision===scope.graphRevision;
+        const status=active?job.status:matches?knowledge.status:knowledge.sourceSelectionFingerprint?"stale":knowledge.status;
         const page=planetWiki.listPages(knowledge.notes,{query:req.query.query,kind:req.query.kind,cursor:req.query.cursor,limit:req.query.limit});
-        res.json({worldId,status:knowledge.status,total:page.total,pageSize:page.pageSize,nextCursor:page.nextCursor,pages:page.pages});
+        res.json({worldId,status,total:page.total,pageSize:page.pageSize,nextCursor:page.nextCursor,pages:page.pages});
     }catch(error){res.status(500).json({message:error instanceof Error?error.message:"Unable to read this planet wiki."});}
 });
 
@@ -1417,7 +1421,9 @@ app.get("/worlds/:worldId/knowledge",requireAuthenticated,async(req,res)=>{
             const matchingKnowledge=knowledge.sourceSelectionFingerprint===scope.fingerprint;
             const extra=matchingKnowledge&&knowledge.status==="partial"&&!blockers.length?{contentIncomplete:true}:{};
             const contentBlockers=matchingKnowledge&&knowledge.status==="partial"?knowledgeContentBlockers(knowledge.exclusions,scope,graph):[];
-            const reasonSummary=blockers.length?safeKnowledgeBlockerSummary(blockers):matchingJob?.reasonSummary?.reasonCodes?.length?{...matchingJob.reasonSummary,blockers:matchingJob.reasonSummary.blockers||contentBlockers}:contentBlockers.length?safeKnowledgeBlockerSummary(contentBlockers,extra):safeKnowledgeBlockerSummary([],extra);
+            const knowledgeStale=Boolean(knowledge.sourceSelectionFingerprint&&!matchingKnowledge);
+            const staleSummary=knowledgeStale?{...summarizeKnowledgeBlockers({sourceSelectionChanged:true}),blockers:[]}:null;
+            const reasonSummary=blockers.length?safeKnowledgeBlockerSummary(blockers):matchingJob?.reasonSummary?.reasonCodes?.length?{...matchingJob.reasonSummary,blockers:matchingJob.reasonSummary.blockers||contentBlockers}:contentBlockers.length?safeKnowledgeBlockerSummary(contentBlockers,extra):staleSummary||safeKnowledgeBlockerSummary([],extra);
             const readinessFingerprint=knowledgeReadinessFingerprint(scope,graph,reasonSummary);
             const status=blockers.some(item=>item.status==="indexing")||active?"indexing":reasonSummary.reasonCodes.length||blockers.length?"blocked":"ready";
             return res.json({worldId,status,sourceSelectionFingerprint:scope.fingerprint,revision:scope.graphRevision,readinessFingerprint,reasonSummary:{reasonCodes:reasonSummary.reasonCodes||[],counts:reasonSummary.counts||{},blockers:(reasonSummary.blockers||[]).slice(0,20)}});

@@ -105,6 +105,14 @@ test("backend starts with isolated data and shuts down cleanly through stdin", {
         assert.ok(workGraph.nodes.some(item=>item.label==="work-binary.bin"));
         assert.ok(!JSON.stringify(workGraph).includes(knowledgeFixtureText),"file contents are never indexed");
         assert.equal(workGraph.sourceStatuses.find(item=>item.sourceId==="folder:graph-work-root")?.status,"complete");
+        let wikiIndex={};
+        const wikiIndexDeadline=Date.now()+10_000;
+        while(Date.now()<wikiIndexDeadline){
+            wikiIndex=await fetch(`http://127.0.0.1:${port}/worlds/work/wiki?limit=1`,requestOptions).then(response=>response.json());
+            if(wikiIndex.status==="ready")break;
+            await new Promise(resolve=>setTimeout(resolve,25));
+        }
+        assert.equal(wikiIndex.status,"ready","manual graph indexing completes the queued wiki generation before Obsidian sync");
         const firstKnowledgeSync=await fetch(`http://127.0.0.1:${port}/worlds/work/obsidian/sync`,{...requestOptions,method:"POST",headers:{...requestOptions.headers,"Content-Type":"application/json"},body:JSON.stringify({})});
         assert.equal(firstKnowledgeSync.status,200,await firstKnowledgeSync.clone().text());
         const firstKnowledgeSyncData=await firstKnowledgeSync.json();
@@ -125,7 +133,7 @@ test("backend starts with isolated data and shuts down cleanly through stdin", {
         assert.equal(incompleteKnowledgeSync.status,409,await incompleteKnowledgeSync.clone().text());
         const incompleteKnowledgeSyncData=await incompleteKnowledgeSync.json();
         assert.equal(incompleteKnowledgeSyncData.code,"KNOWLEDGE_INCOMPLETE");
-        assert.ok(incompleteKnowledgeSyncData.reasonSummary.reasonCodes.includes("content_unavailable"));
+        assert.ok(incompleteKnowledgeSyncData.reasonSummary.reasonCodes.includes("source_selection_changed"),"a graph revision change requires the wiki to be rebuilt before the next sync");
         assert.deepEqual(await directoryContents(knowledgeVault),completeCustomVault,"an incomplete knowledge generation preserves the last complete custom vault revision");
         const unselectedMailbox=await fetch(`http://127.0.0.1:${port}/worlds/work/email/conversations?blockId=account-not-selected`,requestOptions);
         assert.equal(unselectedMailbox.status,403);

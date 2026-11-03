@@ -5,7 +5,6 @@ const net=require("node:net");
 const os=require("node:os");
 const path=require("node:path");
 const test=require("node:test");
-const planetGraph=require("../services/planetGraphService");
 
 async function freePort(){
     const probe=net.createServer();
@@ -15,7 +14,7 @@ async function freePort(){
     return port;
 }
 
-test("a transient startup refresh persistence error can be retried for the same user and planet",{timeout:45_000},async t=>{
+test("login does not start automatic planet graph or wiki ingestion",{timeout:45_000},async t=>{
     const root=await fs.mkdtemp(path.join(os.tmpdir(),"folderrocket-refresh-retry-"));
     const backendCwd=path.join(root,"backend-cwd");
     await fs.mkdir(backendCwd,{recursive:true});
@@ -64,23 +63,12 @@ test("a transient startup refresh persistence error can be retried for the same 
     const graphSettings=await request("/settings/worlds/work","PUT",{graphEnabled:true});
     assert.equal(graphSettings.status,200,await graphSettings.text());
 
-    await fs.writeFile(marker,"fail exactly one selected refresh graph write");
+    await fs.writeFile(marker,"automatic indexing must not consume this marker");
     const firstCheck=await request("/auth/me");
     assert.equal(firstCheck.status,200,await firstCheck.text());
-    const retryDeadline=Date.now()+15_000;
-    let graph;
-    let retryCheck;
-    const graphRoot=path.join(root,"data","planet-graphs");
-    while(Date.now()<retryDeadline){
-        if(!await fs.stat(marker).then(()=>true,()=>false)){
-            retryCheck=await request("/auth/me");
-        }
-        graph=await planetGraph.readGraph(user.id,"work",graphRoot);
-        if(graph.status==="ready")break;
-        await new Promise(resolve=>setTimeout(resolve,100));
-    }
-    assert.equal(await fs.stat(marker).then(()=>false,()=>true),true,"the injected one-time persistence failure was consumed");
-    assert.equal(retryCheck?.status,200,"a later /auth/me is accepted while the retry is scheduled");
-    assert.equal(graph.status,"ready",`same user/world refresh retries and completes; statuses=${JSON.stringify(graph.sourceStatuses)}; output=${output}`);
-    assert.equal(graph.sourceStatuses.find(item=>item.sourceId==="folder:retry-root")?.status,"complete");
+    await new Promise(resolve=>setTimeout(resolve,300));
+    const wiki=await request("/worlds/work/wiki?limit=1");
+    assert.equal(wiki.status,200,await wiki.clone().text());
+    assert.notEqual((await wiki.json()).status,"ready","wiki generation remains manual until the user starts a rebuild");
+    assert.equal(await fs.stat(marker).then(()=>true,()=>false),true,"login and selected-folder setup do not start an automatic graph write");
 });
