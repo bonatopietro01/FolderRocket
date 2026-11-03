@@ -4,7 +4,8 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const {legacyEmailAccountCandidates, normalizeEmailAccount, resolveWorldEmailAccount} = require("../services/worldEmailAccountService");
-const {syncVault, normalizeSourceSelection, filterRecordsBySources, filterGraphBySources, graphRecords, normalizeRecordBatch, MAX_NOTES} = require("../services/obsidianVaultService");
+const graphStore = require("../services/planetGraphService");
+const {syncVault, normalizeSourceSelection, fileOnlySourceSelection, filterRecordsBySources, filterGraphBySources, graphRecords, normalizeRecordBatch, MAX_NOTES} = require("../services/obsidianVaultService");
 const {listTreeRoots, resolveDesktopRoot} = require("../services/treeRocketService");
 const {resolveManagedObsidianVault} = require("../../desktop/obsidianVaultProtocol.cjs");
 const {buildProviderAccountCatalog} = require("../services/providerAccountCatalog");
@@ -110,19 +111,16 @@ test("Obsidian sync is idempotent and preserves manually edited generated notes"
     assert.equal(conflict.status,"conflict");
 });
 
-test("Obsidian source selection is versioned, defaults old settings to enabled, and filters graph and sync records", () => {
+test("file-only projection keeps legacy settings readable but excludes every non-file source", () => {
     const legacy=normalizeSourceSelection(undefined);
     assert.equal(legacy.version,2);
     assert.equal(legacy.email,true);
-    const selected={...legacy,folders:false,email:false};
-    const graph=filterGraphBySources({nodes:[{id:"f",type:"file"},{id:"e",type:"email-thread"},{id:"a",type:"activity"}],edges:[{id:"ef",from:"e",to:"f"},{id:"ea",from:"e",to:"a"}]},selected);
-    assert.deepEqual(graph.nodes.map(item=>item.id),["a"]);
+    const selected=fileOnlySourceSelection({...legacy,folders:true,email:true,activity:true,clientNotes:true,attachments:true,threadMode:"selected",threadIds:["thread-1"]});
+    assert.equal(selected.email,false);assert.equal(selected.activity,false);assert.equal(selected.clientNotes,false);assert.equal(selected.attachments,false);assert.equal(selected.threadMode,"all");assert.deepEqual(selected.threadIds,[]);
+    const graph=filterGraphBySources({nodes:[{id:"f",type:"file",sourceType:"filesystem",sourceRef:{path:"C:/Work/a.txt"}},{id:"e",type:"email-thread",sourceType:"gmail"},{id:"a",type:"activity",sourceType:"folderrocket"}],edges:[{id:"ef",from:"e",to:"f"},{id:"ea",from:"e",to:"a"}]},selected);
+    assert.deepEqual(graph.nodes.map(item=>item.id),["f"]);
     assert.deepEqual(graph.edges,[]);
-    assert.deepEqual(filterRecordsBySources([{id:"1",kind:"email-conversation"},{id:"2",kind:"post-it"}],selected).map(item=>item.id),["2"]);
-    const threadSelection={...legacy,email:true,threadMode:"selected",threadIds:["thread-1"]};
-    const emailGraph=filterGraphBySources({nodes:[{id:"t1",type:"email-thread",sourceType:"gmail",sourceRef:{threadId:"thread-1"}},{id:"m1",type:"email-message",sourceType:"gmail",sourceRef:{threadId:"thread-1"}},{id:"t2",type:"email-thread",sourceType:"gmail",sourceRef:{threadId:"thread-2"}},{id:"p",type:"person",sourceType:"gmail-contact",sourceRef:{kind:"email-address"}}],edges:[{id:"1",from:"t1",to:"m1"},{id:"2",from:"t2",to:"p"}]},threadSelection);
-    assert.deepEqual(emailGraph.nodes.map(item=>item.id),["t1","m1"]);
-    assert.deepEqual(emailGraph.edges.map(item=>item.id),["1"]);
+    assert.deepEqual(filterRecordsBySources([{id:"1",kind:"email-conversation",sourceScopeId:"gmail:account"},{id:"2",kind:"post-it",sourceScopeId:"client-category:clientNotes"},{id:"3",kind:"file",sourceScopeId:"filesystem:folder-a"},{id:"4",kind:"overview"}],selected).map(item=>item.id),["3","4"]);
 });
 
 test("disabling activity/search sources removes the same nodes from graph and generated vault records", () => {
@@ -138,11 +136,11 @@ test("disabling activity/search sources removes the same nodes from graph and ge
     assert.deepEqual(vaultRecords.filter(item=>item.kind==="folder").map(item=>item.sourceId),["folder-1"]);
 
     const enabled=normalizeSourceSelection({version:2,activity:true});
-    assert.deepEqual(filterGraphBySources(graph,enabled).nodes.map(item=>item.id),["folder-1","activity-1","search-1"]);
-    assert.deepEqual(filterRecordsBySources(graphRecords(graph,"Work"),enabled).filter(item=>["folder","activity","search"].includes(item.kind)).map(item=>item.sourceId),["folder-1","activity-1","search-1"]);
+    assert.deepEqual(filterGraphBySources(graph,enabled).nodes.map(item=>item.id),["folder-1"]);
+    assert.deepEqual(filterRecordsBySources(graphRecords(graph,"Work"),enabled).filter(item=>["folder","activity","search"].includes(item.kind)).map(item=>item.sourceId),["folder-1"]);
 });
 
-test("planet graph projection includes only the Gmail credential selected in that planet",()=>{
+test("planet graph projection never includes Gmail records",()=>{
     const graph={nodes:[
         {id:"t-work",type:"email-thread",sourceType:"gmail",sourceRef:{blockId:"work-account",threadId:"work-thread"}},
         {id:"m-work",type:"email-message",sourceType:"gmail",sourceRef:{blockId:"work-account",threadId:"work-thread"}},
@@ -154,10 +152,9 @@ test("planet graph projection includes only the Gmail credential selected in tha
         {id:"work-contact",from:"p-work",to:"m-work",provenance:"gmail-header"},
         {id:"old-contact",from:"p-old",to:"m-old",provenance:"gmail-header"}
     ]};
-    const result=filterGraphBySources(graph,normalizeSourceSelection(),{emailBlockIds:["work-account"]});
-    assert.deepEqual(result.nodes.map(item=>item.id),["t-work","m-work","p-work"]);
-    assert.deepEqual(result.edges.map(item=>item.id),["work-contact"]);
-    assert.equal(filterGraphBySources(graph,normalizeSourceSelection(),{emailBlockIds:[]}).nodes.length,0,"a planet without a selected Gmail account must not display cached Gmail data");
+    const result=filterGraphBySources(graph,normalizeSourceSelection(),{folderRoots:[]});
+    assert.deepEqual(result.nodes,[]);
+    assert.deepEqual(result.edges,[]);
 });
 
 test("Obsidian record limit reports omitted unique source records rather than silently truncating",()=>{
@@ -227,6 +224,7 @@ test("authenticated per-world Obsidian and account settings stay local and world
     const worldTreeSearch=await fetch(`${base}/filesystem/tree-search`,{...auth,method:"POST",headers:{...auth.headers,"Content-Type":"application/json"},body:JSON.stringify({query:"notes",worldId:"work",mode:"computer"})});assert.equal(worldTreeSearch.status,200);const treeSearchResult=await worldTreeSearch.json();assert.ok(Array.isArray(treeSearchResult.folders));assert.ok(Array.isArray(treeSearchResult.files));
     const authUser=await fetch(`${base}/auth/me`,auth).then(response=>response.json()).then(value=>value.user);
     const legacyVault=path.join(authUser.workspacePath,".folderrocket","obsidian","work");await fs.mkdir(path.join(legacyVault,".folderrocket"),{recursive:true});await fs.writeFile(path.join(legacyVault,".folderrocket","vault.json"),JSON.stringify({ownerId:authUser.id,worldId:"work"}));await fs.writeFile(path.join(legacyVault,"manual.md"),"Do not lose me.\n");
+    await syncVault({vaultPath:legacyVault,worldId:"work",ownerId:authUser.id,records:[{id:"client:daily-job:historic",kind:"daily-job",sourceScopeId:"client-category:activity",title:"Historic record",notePath:"FolderRocket/Entities/historic-record.md",content:"Previously generated note"}],completeSelection:true,selectedSourceScopeIds:["client-category:activity"]});
     const config=await fetch(`${base}/worlds/work/obsidian`,auth);assert.equal(config.status,200);const configData=await config.json();assert.equal(configData.config.enabled,false);assert.equal(configData.config.autoSync,false);assert.match(configData.config.vaultPath,/\.folderrocket[\\/]obsidian[\\/]work$/i,"opening before sync keeps pointing at the verified legacy vault");
     const invalidAutoSync=await fetch(`${base}/worlds/work/obsidian`,{...auth,method:"PUT",headers:{...auth.headers,"Content-Type":"application/json"},body:JSON.stringify({autoSync:"true"})});assert.equal(invalidAutoSync.status,400);
     const enabled=await fetch(`${base}/worlds/work/obsidian`,{...auth,method:"PUT",headers:{...auth.headers,"Content-Type":"application/json"},body:JSON.stringify({enabled:true,autoSync:true})});assert.equal(enabled.status,200);assert.equal((await enabled.json()).config.autoSync,true);
@@ -236,9 +234,11 @@ test("authenticated per-world Obsidian and account settings stay local and world
     const indexing=await fetch(`${base}/worlds/work/graph/index`,{...auth,method:"POST",headers:{...auth.headers,"Content-Type":"application/json"},body:JSON.stringify({snapshot:{}})});assert.equal(indexing.status,202);
     let graphSummary;for(let attempt=0;attempt<200;attempt++){await new Promise(resolve=>setTimeout(resolve,25));const response=await fetch(`${base}/worlds/work/graph?summary=1`,auth);graphSummary=await response.json();if(graphSummary.graphStatus!=="indexing")break;}
     assert.equal(graphSummary.graphStatus,"ready","the Obsidian integration fixture syncs only after its selected graph sources are complete");
+    let wikiIndex;for(let attempt=0;attempt<200;attempt++){await new Promise(resolve=>setTimeout(resolve,25));wikiIndex=await (await fetch(`${base}/worlds/work/wiki?limit=1`,auth)).json();if(wikiIndex.status==="ready")break;}
+    assert.equal(wikiIndex.status,"ready","Obsidian sync consumes the latest manual wiki generation and does not start one");
     const sync=await fetch(`${base}/worlds/work/obsidian/sync`,{...auth,method:"POST",headers:{...auth.headers,"Content-Type":"application/json"},body:JSON.stringify({})});assert.equal(sync.status,200,await sync.clone().text());
-    const syncData=await sync.json();assert.ok(syncData.result.warnings.some(item=>item.includes('"folders"')));assert.deepEqual(syncData.result.sourceSelection,{version:2,folders:false,email:false,alerts:true,activity:true,snapshots:true,clientNotes:true,attachments:true,threadMode:"selected",threadIds:["thread-1"],folderMode:"all",folderIds:[],fileTypeMode:"all",fileTypes:[],excludedFileIds:[],includeSubfolders:true});assert.equal(await fs.readFile(path.join(syncData.config.vaultPath,"manual.md"),"utf8"),"Do not lose me.\n");assert.equal((await fs.readFile(path.join(legacyVault,"manual.md"),"utf8")),"Do not lose me.\n");assert.match(syncData.config.vaultPath,/Lavoro$/);
-    const persisted=await fetch(`${base}/worlds/work/obsidian`,auth);const persistedData=await persisted.json();assert.equal(persistedData.config.status,"ready");assert.equal(persistedData.config.sourceSelection.folders,false);assert.equal(persistedData.config.autoSync,true);assert.match(persistedData.config.vaultPath,/Lavoro$/,"a verified legacy migration is persisted as this planet's active vault path");
+    const syncData=await sync.json();assert.deepEqual(syncData.result.warnings,[]);assert.deepEqual(syncData.result.sourceSelection,{version:2,folders:false,email:false,alerts:false,activity:false,snapshots:false,clientNotes:false,attachments:false,threadMode:"all",threadIds:[],folderMode:"all",folderIds:[],fileTypeMode:"all",fileTypes:[],excludedFileIds:[],includeSubfolders:true});assert.equal(await fs.readFile(path.join(syncData.config.vaultPath,"manual.md"),"utf8"),"Do not lose me.\n");assert.match(await fs.readFile(path.join(syncData.config.vaultPath,"FolderRocket","Entities","historic-record.md"),"utf8"),/Previously generated note/,"notes written by older excluded categories remain present");assert.equal((await fs.readFile(path.join(legacyVault,"manual.md"),"utf8")),"Do not lose me.\n");assert.match(syncData.config.vaultPath,/Lavoro$/);
+    const persisted=await fetch(`${base}/worlds/work/obsidian`,auth);const persistedData=await persisted.json();assert.equal(persistedData.config.status,"ready");assert.equal(persistedData.config.sourceSelection.folders,false);assert.equal(persistedData.config.sourceSelection.email,false);assert.equal(persistedData.config.sourceSelection.activity,false);assert.equal(persistedData.config.autoSync,true);assert.match(persistedData.config.vaultPath,/Lavoro$/,"a verified legacy migration is persisted as this planet's active vault path");
     const personal=await fetch(`${base}/worlds/personal/obsidian`,auth);assert.equal((await personal.json()).config.enabled,false,"one planet's vault setting must not leak to another");
     const previousTokenDirectory=process.env.FOLDERROCKET_TOKEN_DIR;process.env.FOLDERROCKET_TOKEN_DIR=path.join(root,"tokens");
     try {
@@ -246,7 +246,20 @@ test("authenticated per-world Obsidian and account settings stay local and world
         emailTokenStore.saveConnection("gmail",authUser.id,{email:"selected@example.test",accessToken:"synthetic-access-token",refreshToken:"synthetic-refresh-token",expiresAt:Date.now()+3600000},"gmail-settings-fixture");
         const selectedAccount=await fetch(`${base}/settings/worlds/work`,{...auth,method:"PUT",headers:{...auth.headers,"Content-Type":"application/json"},body:JSON.stringify({emailAccount:{provider:"gmail",blockId:"gmail-settings-fixture"}})});assert.equal(selectedAccount.status,200,await selectedAccount.text());
         const selectedAccountSettings=await fetch(`${base}/settings/worlds/work`,auth);assert.equal(selectedAccountSettings.status,200);assert.equal((await selectedAccountSettings.json()).world.emailAccount.email,"selected@example.test","selected Gmail email should be read from the raw connected-account catalog");
+        const graphRoot=path.join(root,"data","planet-graphs");
+        await graphStore.selectConversation(authUser.id,"work",{provider:"gmail",blockId:"gmail-settings-fixture",threadId:"same-sender-target",sender:"same@example.test",subject:"Synthetic subject",accountEmail:"selected@example.test"},{rootDirectory:graphRoot});
+        await graphStore.selectConversation(authUser.id,"work",{provider:"gmail",blockId:"gmail-settings-fixture",threadId:"same-sender-sibling",sender:"same@example.test",subject:"Synthetic sibling",accountEmail:"selected@example.test"},{rootDirectory:graphRoot});
+        const removeConversation=await fetch(`${base}/worlds/work/email/conversations/same-sender-target/removal`,{...auth,method:"POST",headers:{...auth.headers,"Content-Type":"application/json"},body:JSON.stringify({action:"remove",blockId:"gmail-settings-fixture",summary:{subject:"Synthetic subject",from:"same@example.test",date:"2026-10-24T10:30:00Z"}})});assert.equal(removeConversation.status,200,await removeConversation.text());
+        let removedGraph=await graphStore.readGraph(authUser.id,"work",graphRoot);assert.deepEqual(removedGraph.selectedConversations.map(item=>item.threadId),["same-sender-sibling"]);assert.equal(removedGraph.removedConversations[0].subject,"Synthetic subject");assert.equal((await graphStore.readGraph(authUser.id,"personal",graphRoot)).removedConversations.length,0);
+        const restoreConversation=await fetch(`${base}/worlds/work/email/conversations/same-sender-target/removal`,{...auth,method:"POST",headers:{...auth.headers,"Content-Type":"application/json"},body:JSON.stringify({action:"restore",blockId:"gmail-settings-fixture"})});assert.equal(restoreConversation.status,200,await restoreConversation.text());
+        removedGraph=await graphStore.readGraph(authUser.id,"work",graphRoot);assert.ok(removedGraph.selectedConversations.some(item=>item.threadId==="same-sender-target"));assert.ok(removedGraph.selectedConversations.some(item=>item.threadId==="same-sender-sibling"));assert.deepEqual(removedGraph.removedConversations,[]);
+        const removeInboxOnly=await fetch(`${base}/worlds/work/email/conversations/inbox-only-thread/removal`,{...auth,method:"POST",headers:{...auth.headers,"Content-Type":"application/json"},body:JSON.stringify({action:"remove",blockId:"gmail-settings-fixture",summary:{subject:"Inbox only",from:"inbox@example.test",date:"2026-10-24T10:31:00Z"}})});assert.equal(removeInboxOnly.status,200,await removeInboxOnly.text());
+        removedGraph=await graphStore.readGraph(authUser.id,"work",graphRoot);assert.equal(removedGraph.removedConversations[0].selectedReference?.threadId,"inbox-only-thread","removing a mailbox thread captures its exact local restore reference");
         const removeChat=await fetch(`${base}/worlds/work/graph/chats`,{...auth,method:"POST",headers:{...auth.headers,"Content-Type":"application/json"},body:JSON.stringify({blockId:"gmail-settings-fixture",threadId:"not-selected",selected:false})});assert.equal(removeChat.status,200,"chat selection persistence is independent of Obsidian email-source inclusion");
+        const unlink=await fetch(`${base}/settings/worlds/work`,{...auth,method:"PUT",headers:{...auth.headers,"Content-Type":"application/json"},body:JSON.stringify({emailAccount:null})});assert.equal(unlink.status,200,await unlink.text());
+        const restoreInboxOnly=await fetch(`${base}/worlds/work/email/conversations/inbox-only-thread/removal`,{...auth,method:"POST",headers:{...auth.headers,"Content-Type":"application/json"},body:JSON.stringify({action:"restore",blockId:"gmail-settings-fixture"})});assert.equal(restoreInboxOnly.status,200,await restoreInboxOnly.text());
+        removedGraph=await graphStore.readGraph(authUser.id,"work",graphRoot);assert.ok(removedGraph.selectedConversations.some(item=>item.threadId==="inbox-only-thread"),"the exact inbox thread remains restorable after unlinking its planet account");
+        const unlinked=await fetch(`${base}/settings/worlds/work`,auth).then(response=>response.json());assert.equal(unlinked.world.emailAccount,null);assert.ok(unlinked.emailAccounts.gmail.some(item=>item.blockId==="gmail-settings-fixture"),"unlinking a planet preserves the globally connected Gmail account");
         emailTokenStore.saveConnection("outlook",authUser.id,{email:"outlook@example.test",accessToken:"synthetic-outlook-access-token",refreshToken:"synthetic-outlook-refresh-token",expiresAt:Date.now()+3600000},"outlook-settings-fixture");
         const selectedOutlook=await fetch(`${base}/settings/worlds/work`,{...auth,method:"PUT",headers:{...auth.headers,"Content-Type":"application/json"},body:JSON.stringify({emailAccount:{provider:"outlook",blockId:"outlook-settings-fixture"}})});assert.equal(selectedOutlook.status,200,await selectedOutlook.text());
         const outlookBadge=await fetch(`${base}/worlds/work/email/notifications`,auth);assert.equal(outlookBadge.status,501);assert.deepEqual(await outlookBadge.json(),{code:"provider_unsupported",message:"Outlook inbox notifications are not available yet. Gmail notifications are supported for the selected account."});

@@ -27,7 +27,7 @@ import DiagnosticsCenter from "./components/DiagnosticsCenter";
 import {captureDiagnostic, setDiagnosticWorld} from "./diagnostics";
 import {clearObsidianAutoSyncPause, dismissObsidianIncompleteSync, recordObsidianIncompleteSync, recordObsidianSyncSuccess, shouldPauseObsidianAutoSync, shouldShowObsidianIncompleteSync, type ObsidianKnowledgeSummary, type ObsidianReasonSummary} from "./obsidianSyncRetry";
 import {activeWorldStorageScope, loadWorkspaceWorldState, worldsStorageKey, type WorldAssistantCapability, type WorldAssistantModel, type WorkspaceWorld, type WorldTreeRootMode} from "./worlds";
-import {buildWorldObsidianClientRecords, readWorldActivitySnapshot, selectWorldActivitySnapshot} from "./worldActivitySnapshot";
+import {readWorldActivitySnapshot, selectWorldActivitySnapshot} from "./worldActivitySnapshot";
 import PlanetGraph from "./components/PlanetGraph";
 import EmailConversations from "./components/EmailConversations";
 
@@ -43,6 +43,7 @@ const ApplicationsWorkspace = lazy(() => import("./components/ApplicationsWorksp
 const DashboardFolderBrowser = lazy(() => import("./components/DashboardFolderBrowser"));
 const DailyJob = lazy(() => import("./components/DailyJob"));
 const TeamsSourcePanel = lazy(() => import("./components/TeamsSourcePanel"));
+const PlanetWiki = lazy(() => import("./components/PlanetWiki"));
 
 type Folder = ManagedFolder;
 interface DashboardWidths { left: number; center: number; right: number; }
@@ -66,11 +67,11 @@ type ObsidianSyncReply = {status?:string;lastSyncAt?:string;written?:number;unch
 type ObsidianSyncResponse = {ok:boolean;status:number;result?:ObsidianSyncReply;config?:WorkspaceWorld["obsidian"];message?:string;code?:string;reasonSummary?:ObsidianReasonSummary;readinessFingerprint?:string;summary?:string};
 const obsidianSyncInFlight = new Map<string, {signature:string;request:Promise<ObsidianSyncResponse>}>();
 
-function requestObsidianSync(userId:string, worldId:string, storageScope:string, signature=""): Promise<ObsidianSyncResponse> {
+function requestObsidianSync(userId:string, worldId:string, signature=""): Promise<ObsidianSyncResponse> {
     const key=`${userId}:${worldId}`;
     const existing=obsidianSyncInFlight.get(key);
-    if(existing) return existing.signature===signature ? existing.request : existing.request.catch(()=>undefined).then(()=>requestObsidianSync(userId,worldId,storageScope,signature));
-    const request=fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(worldId)}/obsidian/sync`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({records:buildWorldObsidianClientRecords(storageScope)})})
+    if(existing) return existing.signature===signature ? existing.request : existing.request.catch(()=>undefined).then(()=>requestObsidianSync(userId,worldId,signature));
+    const request=fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(worldId)}/obsidian/sync`,{method:"POST",credentials:"include"})
         .then(async response=>{
             const data=await response.json().catch(()=>({})) as {result?:ObsidianSyncReply;config?:WorkspaceWorld["obsidian"];message?:string;code?:string;reasonSummary?:ObsidianReasonSummary;readinessFingerprint?:string;summary?:string};
             if(response.ok) clearObsidianAutoSyncPause(key);
@@ -82,10 +83,12 @@ function requestObsidianSync(userId:string, worldId:string, storageScope:string,
 }
 
 function getObsidianSyncSignature(world:WorkspaceWorld) {
-    return JSON.stringify({obsidian:{enabled:world.obsidian?.enabled===true,autoSync:world.obsidian?.autoSync===true,vaultPath:world.obsidian?.vaultPath||"",sourceSelection:world.obsidian?.sourceSelection||{}},emailProvider:world.emailAccount?.provider||"",emailBlockId:world.emailAccount?.blockId||""});
+    const source=world.obsidian?.sourceSelection;
+    return JSON.stringify({obsidian:{enabled:world.obsidian?.enabled===true,autoSync:world.obsidian?.autoSync===true,vaultPath:world.obsidian?.vaultPath||"",sourceSelection:{folders:source?.folders!==false,folderMode:source?.folderMode||"all",folderIds:source?.folderIds||[],fileTypeMode:source?.fileTypeMode||"all",fileTypes:source?.fileTypes||[],includeSubfolders:source?.includeSubfolders!==false,excludedFileIds:source?.excludedFileIds||[]}}});
 }
 
 function describeObsidianIncompleteSync(response:ObsidianSyncResponse) {
+    if(response.code==="KNOWLEDGE_INCOMPLETE") return "This planet’s wiki is missing or out of date for the selected files. Open this planet’s Obsidian vault settings, rebuild the wiki, then retry Sync now. The last complete vault revision is preserved.";
     const knownReasons:Record<string,string>={
         source_index_incomplete:"Some selected sources are still being prepared.",
         selected_source_limit:"Some selected sources exceed the current source limit.",
@@ -356,7 +359,7 @@ function WorldWorkspace({user, onLogout, world, worlds, worldNames, onOpenWorlds
                         setObsidianAutoSyncNeedsSettings(false);
                         setObsidianAutoSyncStatusOpen(false);
                         if(shouldPauseObsidianAutoSync(obsidianAutoSyncKey,obsidianSyncSignature,fingerprint)) return;
-                        return requestObsidianSync(user.id,world.id,workspaceScope,obsidianSyncSignature).then(syncResponse=>{
+                        return requestObsidianSync(user.id,world.id,obsidianSyncSignature).then(syncResponse=>{
                             if(!alive)return;
                             if(!syncResponse.ok) {
                                 if(syncResponse.code==="KNOWLEDGE_INCOMPLETE") {
@@ -371,7 +374,7 @@ function WorldWorkspace({user, onLogout, world, worlds, worldNames, onOpenWorlds
                                     setObsidianAutoSyncWarning("Automatic Obsidian sync failed. The last successful vault data is preserved; try Sync now or check Diagnostics.");
                                     setObsidianAutoSyncNeedsSettings(false);
                                 }
-                                if(!failureReported){failureReported=true;captureDiagnostic(user.id,{type:"http",category:"obsidian-auto-sync",message:syncResponse.message||"Automatic Obsidian sync failed.",route:`/worlds/${world.id}/obsidian/sync`,method:"POST",status:syncResponse.status,worldId:world.id});}
+                                if(syncResponse.code!=="KNOWLEDGE_INCOMPLETE"&&!failureReported){failureReported=true;captureDiagnostic(user.id,{type:"http",category:"obsidian-auto-sync",message:syncResponse.message||"Automatic Obsidian sync failed.",route:`/worlds/${world.id}/obsidian/sync`,method:"POST",status:syncResponse.status,worldId:world.id});}
                                 return;
                             }
                             recordObsidianSyncSuccess(obsidianAutoSyncKey,obsidianSyncSignature);
@@ -516,45 +519,6 @@ function WorldWorkspace({user, onLogout, world, worlds, worldNames, onOpenWorlds
         window.addEventListener("storage", onStorage);
         return () => { active = false; window.clearTimeout(timer); window.clearInterval(interval); window.removeEventListener("folderrocket:daily-activity", sync); window.removeEventListener("folderrocket:sticky-notes-updated", sync); window.removeEventListener("folderrocket-calendar-context", sync); window.removeEventListener("storage", onStorage); };
     }, [world.activityNotifications?.enabled, selectedDigestSources, world.id, workspaceScope]);
-    useEffect(() => {
-        const snapshotsEnabled = world.obsidian?.sourceSelection?.snapshots !== false;
-        if (!world.graphEnabled) return;
-        let timer=0;
-        let interval=0;
-        let active=true;
-        let inFlight=false;
-        const controller=new AbortController();
-        const uploadSnapshot=()=>{
-            if(!snapshotsEnabled||!active||controller.signal.aborted)return;
-            window.clearTimeout(timer);
-            timer=window.setTimeout(()=>{
-                if(!active||controller.signal.aborted||inFlight)return;
-                inFlight=true;
-                void fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(world.id)}/graph/snapshot`,{method:"POST",credentials:"include",keepalive:true,headers:{"Content-Type":"application/json"},body:JSON.stringify({snapshot:readWorldActivitySnapshot(workspaceScope)}),signal:controller.signal})
-                    .then(response=>{if(!response.ok)return;})
-                    .catch(()=>{})
-                    .finally(()=>{inFlight=false;});
-            },300);
-        };
-        const uploadActivity=(event:Event)=>{
-            if(!active||controller.signal.aborted)return;
-            const activity=(event as CustomEvent<{kind?:string;summary?:string}>).detail;
-            if(!activity||typeof activity.kind!=="string"||typeof activity.summary!=="string"||!activity.summary.trim())return;
-            const operationId=typeof crypto.randomUUID==="function"?crypto.randomUUID():`${Date.now()}-${Math.random().toString(36).slice(2)}`;
-            void fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(world.id)}/graph/activity`,{method:"POST",credentials:"include",keepalive:true,headers:{"Content-Type":"application/json"},body:JSON.stringify({activity:{worldId:world.id,operationId,at:new Date().toISOString(),kind:activity.kind.slice(0,48),summary:activity.summary.slice(0,240)}}),signal:controller.signal}).catch(()=>{});
-            uploadSnapshot();
-        };
-        const onStorage=(event:StorageEvent)=>{if(event.key?.includes(workspaceScope)&&(event.key.includes("daily-job")||event.key.includes("sticky-notes")||event.key.includes("daily-calendars")))uploadSnapshot();};
-        window.addEventListener("folderrocket:daily-activity",uploadActivity);
-        if(snapshotsEnabled){
-            uploadSnapshot();
-            interval=window.setInterval(uploadSnapshot,60_000);
-            window.addEventListener("folderrocket:sticky-notes-updated",uploadSnapshot);
-            window.addEventListener("folderrocket-calendar-context",uploadSnapshot);
-            window.addEventListener("storage",onStorage);
-        }
-        return()=>{active=false;controller.abort();window.clearTimeout(timer);window.clearInterval(interval);window.removeEventListener("folderrocket:daily-activity",uploadActivity);window.removeEventListener("folderrocket:sticky-notes-updated",uploadSnapshot);window.removeEventListener("folderrocket-calendar-context",uploadSnapshot);window.removeEventListener("storage",onStorage);};
-    },[world.graphEnabled,world.obsidian?.sourceSelection?.snapshots,world.id,workspaceScope]);
     const previousUsbIds = useRef<string[]>([]);
     useEffect(() => {
         const drives = usbStatus.drives ?? [];
@@ -925,6 +889,8 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     const [worldSettingsTargetId,setWorldSettingsTargetId]=useState<string|undefined>();
     const [graphTargetWorld,setGraphTargetWorld]=useState<WorkspaceWorld|null>(null);
     const [graphReturnToPicker,setGraphReturnToPicker]=useState(false);
+    const [graphReturnToWiki,setGraphReturnToWiki]=useState(false);
+    const [wikiTargetWorld,setWikiTargetWorld]=useState<WorkspaceWorld|null>(null);
     const [graphFocusThreadId,setGraphFocusThreadId]=useState("");
     const [worldTravelTarget, setWorldTravelTarget] = useState<WorkspaceWorld | null>(null);
     const [worldSwitchError, setWorldSwitchError] = useState("");
@@ -988,7 +954,7 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
             if(command.worldId!==activeWorld.id){setObsidianCommandNotice("Obsidian requested a sync for another planet. Switch to that planet to synchronize its vault.");return;}
             if(!activeWorld.obsidian?.enabled){setObsidianCommandNotice("Obsidian sync is disabled for this planet. Enable it in Fly To Another Planet settings.");return;}
             setObsidianCommandNotice("Synchronizing this planet’s Obsidian vault…");
-            void requestObsidianSync(user.id,activeWorld.id,activeWorldStorageScope(user.id,activeWorld.id),getObsidianSyncSignature(activeWorld)).then(response=>{
+            void requestObsidianSync(user.id,activeWorld.id,getObsidianSyncSignature(activeWorld)).then(response=>{
                 if(!response.ok)throw new Error("Vault synchronization failed.");
                 const result=response.result;
                 const detail=result?.warnings?.length?` Warnings: ${result.warnings.join(" ")}`:"";
@@ -1119,9 +1085,6 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
         window.dispatchEvent(new CustomEvent("folderrocket-world-ai-mode", {detail:{worldId:updated.id, enabled:updated.aiEnabled}}));
         setWorlds(current => current.map(world => world.id === updated.id ? updated : world));
         if (previous) setWorldSettingsReady(current => ({...current,[updated.id]:"ready"}));
-        if(updated.graphEnabled&&!previous?.graphEnabled){
-            void fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(updated.id)}/graph/index`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({snapshot:readWorldActivitySnapshot(activeWorldStorageScope(user.id,updated.id))})}).catch(()=>{});
-        }
     }
 
     const activeWorldIdForCallbacks = activeWorld.id;
@@ -1169,8 +1132,9 @@ function App({user, onLogout}: {user: FolderRocketUser; onLogout: () => Promise<
     return <div className="worldApplicationRoot">
         {obsidianCommandNotice&&<div className="obsidianCommandNotice" role="status" aria-live="polite"><span>{obsidianCommandNotice}</span><button type="button" onClick={()=>setObsidianCommandNotice("")} aria-label="Dismiss Obsidian status">×</button></div>}
         <WorldWorkspace key={`${user.id}-${activeWorld.id}`} user={user} onLogout={onLogout} world={activeWorld} worlds={worlds} worldNames={worldNames} onOpenWorlds={() => setWorldPickerOpen(true)} onOpenWorldSettings={() => {setWorldSettingsTargetId(activeWorld.id);setWorldPickerOpen(true);}} onViewGraph={(world,threadId)=>{setWorldPickerOpen(false);setGraphReturnToPicker(false);setGraphFocusThreadId(threadId||"");setGraphTargetWorld(world);}} onWorldAiModeChange={updateWorldAiMode} onTreeRootModeChange={mode=>updateWorld({...activeWorld,treeRootMode:mode})} settingsPreloaded={preloadedSettingsWorldId === activeWorld.id} worldAccountReady={worldSettingsReady[activeWorld.id]}/>
-        {worldPickerOpen && !isCargoShipWindow && <ChangeWorld worlds={worlds} activeWorldId={activeWorld.id} userId={user.id} storageScope={activeWorldStorageScope(user.id, activeWorld.id)} initialEditWorldId={worldSettingsTargetId} onSyncObsidian={(worldId,signature)=>requestObsidianSync(user.id,worldId,activeWorldStorageScope(user.id,worldId),signature||getObsidianSyncSignature(worlds.find(item=>item.id===worldId)||activeWorld))} onSelect={selectWorld} onViewGraph={world=>{setWorldPickerOpen(false);setGraphFocusThreadId("");setGraphReturnToPicker(true);setGraphTargetWorld(world);}} onInvokeAssistant={invokeWorldAssistant} switchError={worldSwitchError} onBack={() => {setWorldPickerOpen(false);setWorldSettingsTargetId(undefined);}} onAdd={addWorld} onUpdate={updateWorld} onDelete={deleteWorld}/>}
-        {graphTargetWorld&&!isCargoShipWindow&&<PlanetGraph key={`${user.id}:${graphTargetWorld.id}`} userId={user.id} world={worlds.find(item=>item.id===graphTargetWorld.id)||graphTargetWorld} active={activeWorld.id===graphTargetWorld.id} focusThreadId={graphFocusThreadId} worldNames={worldNames} onClose={()=>{setGraphTargetWorld(null);setWorldPickerOpen(graphReturnToPicker);setGraphReturnToPicker(false);setGraphFocusThreadId("");}} onOpenConversation={threadId=>{const target=worlds.find(item=>item.id===graphTargetWorld.id);setGraphTargetWorld(null);setWorldPickerOpen(false);setGraphReturnToPicker(false);setGraphFocusThreadId("");if(target?.id===activeWorld.id)window.dispatchEvent(new CustomEvent("folderrocket-open-email-thread",{detail:{worldId:target.id,threadId}}));}} onEnable={async()=>{const current=worlds.find(item=>item.id===graphTargetWorld.id);if(current)await updateWorld({...current,graphEnabled:true});}}/>}
+        {worldPickerOpen && !isCargoShipWindow && <ChangeWorld worlds={worlds} activeWorldId={activeWorld.id} storageScope={activeWorldStorageScope(user.id, activeWorld.id)} initialEditWorldId={worldSettingsTargetId} onSyncObsidian={(worldId,signature)=>requestObsidianSync(user.id,worldId,signature||getObsidianSyncSignature(worlds.find(item=>item.id===worldId)||activeWorld))} onSelect={selectWorld} onViewGraph={world=>{setWorldPickerOpen(false);setGraphFocusThreadId("");setGraphReturnToPicker(true);setGraphTargetWorld(world);}} onOpenWiki={world=>{setWorldPickerOpen(false);setWorldSettingsTargetId(undefined);setWikiTargetWorld(world);}} onInvokeAssistant={invokeWorldAssistant} switchError={worldSwitchError} onBack={() => {setWorldPickerOpen(false);setWorldSettingsTargetId(undefined);}} onAdd={addWorld} onUpdate={updateWorld} onDelete={deleteWorld}/>}
+        {wikiTargetWorld&&!isCargoShipWindow&&!graphTargetWorld&&<Suspense fallback={<div className="planetWikiLoading" role="status">Opening planet wiki…</div>}><PlanetWiki key={`${user.id}:${wikiTargetWorld.id}`} world={worlds.find(item=>item.id===wikiTargetWorld.id)||wikiTargetWorld} onClose={()=>{setWikiTargetWorld(null);setWorldPickerOpen(true);}} onViewGraph={()=>{const target=worlds.find(item=>item.id===wikiTargetWorld.id)||wikiTargetWorld;setGraphReturnToWiki(true);setGraphReturnToPicker(false);setWikiTargetWorld(null);setGraphTargetWorld(target);setGraphFocusThreadId("");}}/></Suspense>}
+        {graphTargetWorld&&!isCargoShipWindow&&<PlanetGraph key={`${user.id}:${graphTargetWorld.id}`} userId={user.id} world={worlds.find(item=>item.id===graphTargetWorld.id)||graphTargetWorld} active={activeWorld.id===graphTargetWorld.id} focusThreadId={graphFocusThreadId} worldNames={worldNames} onClose={()=>{const returnToWiki=graphReturnToWiki;setGraphTargetWorld(null);setWorldPickerOpen(graphReturnToPicker);setGraphReturnToPicker(false);setGraphReturnToWiki(false);setGraphFocusThreadId("");if(returnToWiki){setWikiTargetWorld(worlds.find(item=>item.id===graphTargetWorld.id)||graphTargetWorld);}}} onOpenConversation={threadId=>{const target=worlds.find(item=>item.id===graphTargetWorld.id);setGraphTargetWorld(null);setWorldPickerOpen(false);setGraphReturnToPicker(false);setGraphReturnToWiki(false);setGraphFocusThreadId("");if(target?.id===activeWorld.id)window.dispatchEvent(new CustomEvent("folderrocket-open-email-thread",{detail:{worldId:target.id,threadId}}));}} onEnable={async()=>{const current=worlds.find(item=>item.id===graphTargetWorld.id);if(current)await updateWorld({...current,graphEnabled:true});}}/>}
         {worldTravelTarget && <div className="worldTravelScreen" role="status" aria-live="polite" aria-busy="true" style={{"--planet-color":worldTravelTarget.color,"--world-travel-duration":"700ms"} as CSSProperties}><div className="worldTravelStars"/><p className="worldTravelStatus">Preparazione dell’ambiente</p><div className="worldTravelDestination"><WorldPlanet world={worldTravelTarget}/><strong>{worldTravelTarget.name}</strong></div><div className="worldTravelShip" aria-hidden="true"><Rocket size={44}/></div></div>}
     </div>;
 }

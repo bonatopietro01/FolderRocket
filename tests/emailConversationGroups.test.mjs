@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import {readFile} from "node:fs/promises";
 import {groupEmailConversations, normalizedSenderIdentity} from "../src/components/emailConversationGroups.ts";
 import {emailConversationScopeKey, emailConversationSelectionKey} from "../src/components/emailConversationScope.ts";
 
@@ -47,4 +48,16 @@ test("conversation grouping prefers the correspondent when the newest message is
     const groups=groupEmailConversations(rows);
     assert.equal(groups.length,1);
     assert.deepEqual(groups[0].threads.map(item=>item.threadId),["provider-thread-a","provider-thread-b"]);
+});
+
+test("planet conversation removal uses a persistent per-thread endpoint and exposes restore without provider deletion", async () => {
+    const component=await readFile(new URL("../src/components/EmailConversations.tsx",import.meta.url),"utf8");
+    assert.match(component,/removedThreads/);
+    assert.match(component,/Removed from this planet/);
+    assert.match(component,/Restore conversation/);
+    assert.match(component,/\/removal/);
+    assert.match(component,/JSON\.stringify\(\{action,blockId,summary\}\)/);
+    assert.match(component,/changeConversationVisibility\("remove",selected\)/);
+    assert.doesNotMatch(component,/method:"DELETE"[^\n]*\/share/);
+    assert.match(component,/Gmail conversation is unchanged/);
 });

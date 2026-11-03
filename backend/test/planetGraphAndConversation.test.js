@@ -55,7 +55,52 @@ test("chat selection metadata persists when email graph indexing is disabled wit
     const server=await fs.readFile(path.join(__dirname,"..","server.js"),"utf8");
     const chatRoutes=server.slice(server.indexOf('app.get("/worlds/:worldId/graph/chats"'),server.indexOf('app.post("/worlds/:worldId/graph/index"'));
     assert.doesNotMatch(chatRoutes,/sourceSelection\)\.email===false\)return res\.status\(409\)/,"email source selection must not block chat browsing or selection metadata");
-    assert.match(chatRoutes,/includeNode:emailSourceEnabled/);
+    assert.doesNotMatch(chatRoutes,/includeNode:emailSourceEnabled/);
+    assert.match(server,/fileOnlySourceSelection\(found\.world\.obsidian\?\.sourceSelection\)/,"graph and knowledge use the filesystem-only source policy");
+    const graphIndex=server.slice(server.indexOf('app.post("/worlds/:worldId/graph/index"'),server.indexOf('app.post("/worlds/:worldId/graph/activity"'));
+    assert.doesNotMatch(graphIndex,/listGmailConnectedAccounts|collectPlanetGmailSource|snapshotGraphItems|emailAlertSettingsService/);
+});
+
+test("conversation removal is a persistent exact-thread tombstone with scoped restore",async t=>{
+    const root=await fs.mkdtemp(path.join(os.tmpdir(),"folderrocket-conversation-removal-"));t.after(()=>fs.rm(root,{recursive:true,force:true}));
+    await graphStore.selectConversation("user-a","work",{provider:"gmail",blockId:"gmail-work",threadId:"same-sender-removed",sender:"same@example.test",subject:"Selected thread",accountEmail:"owner@example.test"},{rootDirectory:root});
+    await graphStore.selectConversation("user-a","work",{provider:"gmail",blockId:"gmail-work",threadId:"same-sender-sibling",sender:"same@example.test",subject:"Sibling thread",accountEmail:"owner@example.test"},{rootDirectory:root});
+    await graphStore.addSharedThread("user-a","work",{sourceWorldId:"personal",blockId:"gmail-work",threadId:"same-sender-removed",subject:"Shared thread",accountEmail:"owner@example.test"},{rootDirectory:root});
+    await graphStore.removeConversation("user-a","work","gmail-work","same-sender-removed",{subject:"Visible subject",from:"same@example.test",date:"2026-10-24T10:30:00Z",body:"must not persist"},{rootDirectory:root});
+    let graph=await graphStore.readGraph("user-a","work",root);
+    assert.deepEqual(graph.selectedConversations.map(item=>item.threadId),["same-sender-sibling"],"the matching sender's sibling stays selected");
+    assert.deepEqual(graph.sharedThreads,[]);
+    assert.equal(graph.removedConversations.length,1);
+    assert.equal(graph.removedConversations[0].subject,"Visible subject");
+    assert.equal(graph.removedConversations[0].from,"same@example.test");
+    assert.equal(graph.removedConversations[0].date,"2026-10-24T10:30:00Z");
+    assert.equal(JSON.stringify(graph).includes("must not persist"),false,"message body is never stored");
+    assert.equal((await graphStore.readGraph("user-a","personal",root)).removedConversations.length,0,"tombstones are planet scoped");
+    graph=await graphStore.restoreConversation("user-a","work","gmail-work","same-sender-removed",{rootDirectory:root});
+    assert.ok(graph.selectedConversations.some(item=>item.threadId==="same-sender-removed"));
+    assert.ok(graph.selectedConversations.some(item=>item.threadId==="same-sender-sibling"));
+    assert.ok(graph.sharedThreads.some(item=>item.threadId==="same-sender-removed"&&item.sourceWorldId==="personal"));
+    assert.deepEqual(graph.removedConversations,[]);
+
+    const server=await fs.readFile(path.join(__dirname,"..","server.js"),"utf8");
+    const route=server.slice(server.indexOf('app.post("/worlds/:worldId/email/conversations/:threadId/removal"'),server.indexOf('app.get("/worlds/:worldId/email/notifications"'));
+    assert.match(route,/planetGraph\.removeConversation/);assert.match(route,/planetGraph\.restoreConversation/);
+    assert.doesNotMatch(route,/sendGmail|modifyMessage|trashMessage|deleteGmail|listGmailInboxThreads|getGmailThread/,"remove and restore are local reference operations only");
+    const listing=server.slice(server.indexOf('app.get("/worlds/:worldId/email/conversations"'),server.indexOf('app.post("/worlds/:worldId/email/conversations/:threadId/removal"'));
+    assert.match(listing,/removedKeys\.has\(`\$\{source\.blockId\}:\$\{item\.id\}`\)/,"removal filters exact thread IDs, not senders");
+    assert.match(listing,/removedThreads/);
+});
+
+test("conversation removal refuses new tombstones at its explicit limit without evicting prior removals",async t=>{
+    const root=await fs.mkdtemp(path.join(os.tmpdir(),"folderrocket-conversation-removal-limit-"));t.after(()=>fs.rm(root,{recursive:true,force:true}));
+    const graph=graphStore.emptyGraph("user-a","work");
+    graph.removedConversations=Array.from({length:501},(_,index)=>({blockId:"gmail-work",threadId:`removed-${index}`,removedAt:"2026-10-24T10:00:00Z"}));
+    await graphStore.writeGraph(graph,root);
+    await assert.rejects(graphStore.removeConversation("user-a","work","gmail-work","removed-over-limit",{}, {rootDirectory:root}),error=>error?.code==="CONVERSATION_REMOVAL_LIMIT");
+    const persisted=await graphStore.readGraph("user-a","work",root);
+    assert.equal(persisted.removedConversations.length,501);
+    assert.equal(persisted.removedConversations[0].threadId,"removed-0");
+    assert.equal(persisted.removedConversations.at(-1).threadId,"removed-500");
 });
 
 test("legacy planet graphs without a chat-selection marker retain their prior inbox behavior",async t=>{
@@ -64,17 +109,15 @@ test("legacy planet graphs without a chat-selection marker retain their prior in
     assert.equal((await graphStore.readGraph("user-a","work",root)).conversationSelectionConfigured,false);
 });
 
-test("planet graph adds stable membership and only explicit activity-to-file links",async t=>{
+test("planet graph persistence keeps only world and local filesystem nodes",async t=>{
     const root=await fs.mkdtemp(path.join(os.tmpdir(),"folderrocket-graph-membership-"));t.after(()=>fs.rm(root,{recursive:true,force:true}));
     const world=graphStore.node("world","folderrocket","work","Work",{kind:"world",worldId:"work"});
     const file=graphStore.node("file","filesystem","C:/synthetic/report.pdf","report.pdf",{kind:"file",path:"C:/synthetic/report.pdf"});
     const snapshot=graphStore.snapshotGraphItems({activities:[{kind:"activity",operationId:"op-1",summary:"Reviewed report",at:"2026-10-06T10:00:00Z",files:["C:/synthetic/report.pdf"]}]});
     const edges=graphStore.addWorldMembershipEdges("work",world,[world,file,...snapshot.nodes],snapshot.edges);
-    assert.ok(edges.some(item=>item.from===world.id&&item.to===snapshot.nodes[0].id&&item.provenance.startsWith("planet-membership:work:")));
-    assert.ok(edges.some(item=>item.from===snapshot.nodes[0].id&&item.to===file.id&&item.provenance==="explicit-activity-file-path"));
     assert.equal(graphStore.addWorldMembershipEdges("work",world,[world,file,...snapshot.nodes],edges).filter(item=>item.id===edges.find(edge=>edge.provenance==="explicit-activity-file-path").id).length,1);
     await graphStore.replaceIndexedGraph("user-a","work",[world,file,...snapshot.nodes],edges,{stage:"complete",processed:0,total:0,limitReached:false},{rootDirectory:root});
-    const persisted=await graphStore.readGraph("user-a","work",root);assert.ok(persisted.edges.length>=2);
+    const persisted=await graphStore.readGraph("user-a","work",root);assert.deepEqual(persisted.nodes.map(item=>item.type),["world","file"]);assert.equal(persisted.edges.length,0);
 });
 
 test("sender conversation query is limited to a rolling 30-day inbox scope and rejects query injection",()=>{
@@ -82,7 +125,7 @@ test("sender conversation query is limited to a rolling 30-day inbox scope and r
     assert.equal(senderInboxQuery("Alice@example.com"),"newer_than:30d from:alice@example.com");
     assert.throws(()=>senderInboxQuery("alice@example.com OR in:anywhere"),/invalid/i);
     const server=require("node:fs").readFileSync(require("node:path").join(__dirname,"..","server.js"),"utf8");
-    const route=server.slice(server.indexOf('app.get("/worlds/:worldId/email/conversations"'),server.indexOf('app.get("/worlds/:worldId/email/notifications"'));
+    const route=server.slice(server.indexOf('app.get("/worlds/:worldId/email/conversations"'),server.indexOf('app.post("/worlds/:worldId/email/conversations/:threadId/removal"'));
     assert.match(route,/const selected=activeAccount\?\.provider==="gmail"\?\[\{blockId:activeAccount\.blockId\}\]:\[\]/);
     assert.match(route,/listGmailInboxThreads\(\{maxResults:sender\?20:40,[\s\S]*?query:sender\?senderQuery:"newer_than:30d"/);
     assert.match(route,/senderScopedItems=sender\?inboxItems\.filter/);
@@ -105,7 +148,7 @@ test("email notification routes observe the selected planet inbox in sync mode a
 
 test("conversation fetch failures expose safe retry codes and retain request correlation without provider content", async () => {
     const server=await fs.readFile(path.join(__dirname,"..","server.js"),"utf8");
-    const conversationRoutes=server.slice(server.indexOf('app.get("/worlds/:worldId/email/conversations"'),server.indexOf('app.get("/worlds/:worldId/email/notifications"'));
+    const conversationRoutes=server.slice(server.indexOf('app.get("/worlds/:worldId/email/conversations"'),server.indexOf('app.post("/worlds/:worldId/email/conversations/:threadId/removal"'));
     assert.match(conversationRoutes,/classifyGmailConversationFailure\(error\)/);
     assert.match(conversationRoutes,/req\.folderRocketBackendErrorName=failure\.diagnosticType/);
     assert.match(conversationRoutes,/code:failure\.code,message:"FolderRocket could not load/);
@@ -241,19 +284,21 @@ test("single-source graph retries retain last-good source data while full refres
     const stale=await graphStore.replaceIndexedSourceGraph("user-a","work",graphStore.sourceStatus({sourceId:"folder:a",type:"folder",label:"A",status:"failed",reasonCode:"permission_denied",message:"FolderRocket does not have permission to read this source.",retryable:true}),[world],[],{rootDirectory:root,sourcePath:"C:/synthetic/a",sourceStatuses});
     assert.ok(stale.nodes.some(item=>item.id===fileA.id),"failed refresh must retain the source's last-good file nodes");
     assert.ok(stale.edges.some(item=>item.from===folderA.id&&item.to===fileA.id),"failed refresh must retain the source's last-good links");
-    assert.ok(stale.nodes.some(item=>item.id===fileB.id)&&stale.nodes.some(item=>item.id===thread.id)&&stale.nodes.some(item=>item.id===activity.id));
+    assert.ok(stale.nodes.some(item=>item.id===fileB.id),"failed refresh must retain other selected filesystem sources");
+    assert.ok(!stale.nodes.some(item=>item.id===thread.id||item.id===message.id||item.id===activity.id),"file-only graph must not restore excluded conversation or activity nodes from a last-good snapshot");
     assert.match(stale.sourceStatuses.find(item=>item.sourceId==="folder:a").message,/Previously indexed data remains available/);
     assert.equal(stale.status,"partial");
 
     const newFileA=graphStore.node("file","filesystem","C:/synthetic/a/new.pdf","new.pdf",{kind:"file",path:"C:/synthetic/a/new.pdf",graphSourceId:"folder:a"});
     const refreshed=await graphStore.replaceIndexedSourceGraph("user-a","work",graphStore.sourceStatus({sourceId:"folder:a",type:"folder",label:"A",status:"complete",processed:2}),[world,folderA,newFileA],[graphStore.edge("contains",folderA.id,newFileA.id,"filesystem")],{rootDirectory:root,sourcePath:"C:/synthetic/a",sourceStatuses:stale.sourceStatuses});
     assert.ok(!refreshed.nodes.some(item=>item.id===fileA.id),"successful source refresh removes stale nodes owned by that source");
-    assert.ok(refreshed.nodes.some(item=>item.id===fileB.id)&&refreshed.nodes.some(item=>item.id===thread.id)&&refreshed.nodes.some(item=>item.id===activity.id));
+    assert.ok(refreshed.nodes.some(item=>item.id===fileB.id),"successful source refresh retains other selected filesystem sources");
+    assert.ok(!refreshed.nodes.some(item=>item.id===thread.id||item.id===message.id||item.id===activity.id),"file-only graph must not restore excluded conversation or activity nodes");
     assert.ok(refreshed.edges.some(item=>item.from===folderB.id&&item.to===fileB.id));
 
-    const freshNodes=[world,folderA,newFileA,folderB,fileB,thread,message];
-    const freshEdges=[graphStore.edge("contains",folderA.id,newFileA.id,"filesystem"),graphStore.edge("contains",folderB.id,fileB.id,"filesystem"),graphStore.edge("contains",thread.id,message.id,"gmail")];
-    const snapshotRefreshed=await graphStore.replaceIndexedGraph("user-a","work",freshNodes,freshEdges,{stage:"complete",processed:6,total:4,limitReached:false},{rootDirectory:root,sourceStatuses:refreshed.sourceStatuses});
+    const freshNodes=[world,folderA,newFileA,folderB,fileB];
+    const freshEdges=[graphStore.edge("contains",folderA.id,newFileA.id,"filesystem"),graphStore.edge("contains",folderB.id,fileB.id,"filesystem")];
+    const snapshotRefreshed=await graphStore.replaceIndexedGraph("user-a","work",freshNodes,freshEdges,{stage:"complete",processed:5,total:4,limitReached:false},{rootDirectory:root,sourceStatuses:refreshed.sourceStatuses});
     assert.ok(!snapshotRefreshed.nodes.some(item=>item.id===activity.id),"a successful snapshot refresh replaces old activity records absent from the new snapshot");
 
     const deselected=await graphStore.replaceIndexedGraph("user-a","work",[world,folderA,newFileA],[graphStore.edge("contains",folderA.id,newFileA.id,"filesystem")],{stage:"complete",processed:3,total:1,limitReached:false},{rootDirectory:root,sourceStatuses:[snapshotRefreshed.sourceStatuses.find(item=>item.sourceId==="folder:a")]});
@@ -270,7 +315,7 @@ test("Gmail graph nodes retain thread metadata and provider references, never me
     assert.ok(!JSON.stringify(nodes).includes("private body must not enter the local graph"));
 });
 
-test("activity upserts deduplicate by operation id and shared references do not change index state", async t => {
+test("file-only graph persistence excludes activity and email nodes while retaining conversation references", async t => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "folderrocket-graph-events-"));
     t.after(() => fs.rm(root, {recursive:true, force:true}));
     const folder=graphStore.node("folder","filesystem","configured-root","Work folder",{kind:"folder",path:"C:/synthetic/work"});
@@ -281,9 +326,9 @@ test("activity upserts deduplicate by operation id and shared references do not 
     await graphStore.upsertActivity("user-a", "source", activity, {rootDirectory:root});
     await graphStore.upsertActivity("user-a", "source", activity, {rootDirectory:root});
     const source = await graphStore.readGraph("user-a", "source", root);
-    assert.equal(source.nodes.filter(item => item.sourceRef?.operationId === "operation-1").length, 1);
+    assert.equal(source.nodes.filter(item => item.sourceRef?.operationId === "operation-1").length, 0);
     assert.ok(source.nodes.some(item=>item.id===folder.id),"recording activity must not erase indexed folders");
-    assert.ok(source.nodes.some(item=>item.id===thread.id),"recording activity must not erase indexed Gmail threads");
+    assert.ok(!source.nodes.some(item=>item.id===thread.id),"email is not a graph node");
 
     const reminder=graphStore.node("reminder","sticky-note","reminder-1","Synthetic reminder",{kind:"reminder",at:"2026-10-04T12:00:00.000Z"});
     await graphStore.replaceSnapshotGraphData("user-a","source",[reminder],[],{rootDirectory:root});
@@ -291,15 +336,15 @@ test("activity upserts deduplicate by operation id and shared references do not 
     const afterSnapshot=await graphStore.readGraph("user-a","source",root);
     assert.ok(!afterSnapshot.nodes.some(item=>item.id===reminder.id),"removed snapshot items should be pruned");
     assert.ok(afterSnapshot.nodes.some(item=>item.id===folder.id));
-    assert.ok(afterSnapshot.nodes.some(item=>item.id===thread.id));
+    assert.ok(!afterSnapshot.nodes.some(item=>item.id===thread.id));
 
     const destination = await graphStore.addSharedThread("user-a", "destination", {sourceWorldId:"source", blockId:"gmail-work", threadId:"thread-1", subject:"Synthetic subject"}, {rootDirectory:root});
     assert.equal(destination.status, "disabled", "sharing a conversation alone does not enable graph indexing");
     assert.equal(destination.sharedThreads.length, 1);
-    assert.equal(destination.nodes[0].sourceRef.sourceWorldId, "source");
+    assert.deepEqual(destination.nodes,[]);
     await graphStore.replaceIndexedGraph("user-a","destination",[],[],{stage:"complete",processed:0,total:0,limitReached:false},{rootDirectory:root});
     const reindexedDestination=await graphStore.readGraph("user-a","destination",root);
-    assert.ok(reindexedDestination.nodes.some(item=>item.type==="email-thread"&&item.sourceRef.threadId==="thread-1"&&item.details.shared===true),"reindexing preserves explicit shared-thread references");
+    assert.ok(reindexedDestination.sharedThreads.some(item=>item.threadId==="thread-1"),"reindexing preserves explicit shared-thread references outside graph nodes");
     const removed = await graphStore.removeSharedThread("user-a", "destination", "gmail-work", "thread-1", {rootDirectory:root});
     assert.equal(removed.sharedThreads.length, 0);
     assert.equal(removed.status, "ready");

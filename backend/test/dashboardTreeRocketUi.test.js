@@ -196,11 +196,11 @@ test("dashboard, planet, graph guide, and reorder presentation retain shared acc
     assert.match(source("src", "worlds.ts"), /\["rocky", "planet", "ringed", "glowing", "asteroid", "black-hole", "galaxy"\]/);
     assert.match(changeWorld, /<span className="worldPlanetCore"\/>/);
     assert.match(changeWorld, /className="worldPlanetRing"/);
-    assert.match(changeWorld, /className="worldBlackHoleDisk"/);
-    assert.match(changeWorld, /className="worldGalaxyArms"/);
+    assert.match(changeWorld, /className="worldPlanetArtwork blackHoleArtwork"/);
+    assert.match(changeWorld, /className="worldPlanetArtwork galaxyArtwork"/);
     assert.match(worlds, /\.worldPlanet\.black-hole \.worldPlanetCore \{[^}]*radial-gradient/);
-    assert.match(worlds, /\.worldBlackHoleDisk \{[^}]*conic-gradient/);
-    assert.match(worlds, /\.worldGalaxyArms \{[^}]*repeating-conic-gradient/);
+    assert.match(worlds, /\.worldPlanetArtwork \{[^}]*object-fit:contain/);
+    assert.match(worlds, /\.worldPlanet\.black-hole \.worldBlackHoleDisk,\.worldPlanet\.galaxy \.worldGalaxyArms \{ display:none; \}/);
     assert.match(planetGraph, /className="planetGraphBack worldBackButton"/);
     assert.match(app, /\.planetGraphRelationshipGuide\[open\] \{ display:grid; grid-template-columns:minmax\(210px,\.34fr\) minmax\(0,1fr\)/);
     assert.match(app, /@media\(max-width:700px\) \{ \.planetGraphRelationshipGuide\[open\] \{ grid-template-columns:minmax\(0,1fr\)/);
@@ -330,7 +330,7 @@ test("Daily Job creates recap drafts manually from accounts connected to the act
     assert.match(daily, /\/cargo-ship\/email-draft/);
     assert.match(daily, /Create recap draft/);
     assert.match(daily, /Include tomorrow’s events and reminders/);
-    assert.match(daily, /No email is sent automatically|Nessuna email viene inviata automaticamente|nessuna email parte automaticamente/i);
+    assert.doesNotMatch(daily, /Prepara una bozza per il mittente che scegli qui|Planet inbox for Conversations and alerts|No email is sent automatically|Nessuna email viene inviata automaticamente|nessuna email parte automaticamente/i);
     assert.match(server, /rightSourceBlocks/);
     assert.match(server, /if \(block\.accountBlockId === null\) continue/);
     assert.doesNotMatch(daily, /setInterval\(|schedule.*enabled/i);

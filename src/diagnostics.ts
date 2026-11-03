@@ -268,12 +268,22 @@ export function installDiagnostics(userId: string) {
             const requestId = response.headers.get("X-FolderRocket-Diagnostic-Id") || clientRequestId;
             if (!response.ok) {
                 const body = await response.clone().json().catch(() => null) as {message?: unknown; code?: unknown} | null;
+                const expectedStartupAuthCheck = diagnosticsUserId === "startup"
+                    && details.method === "GET"
+                    && details.route === "/auth/me"
+                    && response.status === 401;
+                const expectedIncompleteWikiSync = response.status === 409
+                    && details.method === "POST"
+                    && details.route.startsWith("/worlds/")
+                    && details.route.endsWith("/obsidian/sync")
+                    && details.route.split("/").filter(Boolean).length === 4
+                    && body?.code === "KNOWLEDGE_INCOMPLETE";
                 const expectedMissingResource = response.status === 404 && (
                     details.route === "/domain/preview" && body?.code === "REMOTE_PAGE_NOT_FOUND"
                     || details.route === "/list-folder-files" && body?.code === "FOLDER_NOT_FOUND"
                     || details.method === "GET" && /^\/settings\/worlds\/[^/]+$/.test(details.route) && body?.code === "WORLD_SETTINGS_NOT_FOUND"
                 );
-                if (!expectedMissingResource) captureDiagnostic(diagnosticsUserId, {
+                if (!expectedStartupAuthCheck && !expectedIncompleteWikiSync && !expectedMissingResource) captureDiagnostic(diagnosticsUserId, {
                     id: requestId || crypto.randomUUID(),
                     type: "http",
                     category: details.route.split("/").filter(Boolean)[0] || "backend",

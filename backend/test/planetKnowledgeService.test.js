@@ -122,9 +122,13 @@ test("backend graph contract binds freshness to content, exports managed Markdow
     assert.match(server,/next\.managedMarkdown=\{path:scope\.managedMarkdownPath,revision:scope\.graphRevision/);
     assert.match(server,/active\.pendingGeneration\.replace\(\{scope,user\}\)/);
     assert.match(server,/knowledgePipelineQueue\.run\(\(\)=>\{[\s\S]*?runKnowledgeSync\(job/);
-    assert.match(server,/selectedFolderWatcher\.createSelectedFolderWatcher/);
-    assert.match(server,/refreshSelectedFolderSources\(user,worldId,scope\)/);
-    assert.match(server,/app\.post\("\/worlds\/:worldId\/knowledge\/sync"[\s\S]*?scheduleSelectedFolderRefresh\(req\.user,worldId,scope\)/);
-    assert.match(server,/automaticWatcher:knowledgeWatchersByScope\.has\(key\)/);
+    assert.match(server,/automaticWatcher:false/);
+    assert.doesNotMatch(server,/app\.get\("\/auth\/me"[\s\S]*?scheduleSelectedFolderRefresh/);
+    assert.doesNotMatch(server,/app\.post\("\/worlds\/:worldId\/knowledge\/sync"[\s\S]*?scheduleSelectedFolderRefresh/);
+    assert.match(server,/app\.post\("\/worlds\/:worldId\/graph\/index"[\s\S]*?queueKnowledgeSyncJob\(req\.user,worldId,latestScope\)/);
+    const obsidianSync=server.slice(server.indexOf('app.post("/worlds/:worldId/obsidian/sync"'),server.indexOf('app.get("/worlds/:worldId/graph"'));
+    assert.doesNotMatch(obsidianSync,/queueKnowledgeSyncJob/);
+    assert.match(obsidianSync,/currentKnowledge\.graphRevision===currentScope\.graphRevision/);
+    assert.match(obsidianSync,/Rebuild the wiki manually, then retry Obsidian sync/);
     assert.match(server,/currentKnowledge\.status!=="ready"[\s\S]*?custom Obsidian vault remains at its last complete revision/);
 });

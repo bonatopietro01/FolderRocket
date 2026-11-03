@@ -15,8 +15,13 @@ test("account workspace path validation rejects links that escape the workspace"
     await fs.mkdir(privateOutside);
     await fs.mkdir(privateInside);
     await fs.writeFile(path.join(privateOutside, "private.txt"), "synthetic");
-    await fs.symlink(privateOutside, path.join(workspace, "external-link"), process.platform === "win32" ? "junction" : "dir");
-    await fs.symlink(privateInside, path.join(workspace, "internal-link"), process.platform === "win32" ? "junction" : "dir");
+    try {
+        await fs.symlink(privateOutside, path.join(workspace, "external-link"), process.platform === "win32" ? "junction" : "dir");
+        await fs.symlink(privateInside, path.join(workspace, "internal-link"), process.platform === "win32" ? "junction" : "dir");
+    } catch (error) {
+        if (["EPERM", "EACCES", "ENOTSUP", "EINVAL"].includes(error?.code)) return t.skip(`Symbolic links are unavailable in this sandbox: ${error.code}`);
+        throw error;
+    }
 
     assert.throws(
         () => assertWorkspacePath(workspace, path.join(workspace, "external-link", "private.txt")),

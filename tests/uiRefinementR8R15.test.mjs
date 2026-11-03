@@ -35,7 +35,7 @@ test("R10 refined by R17 keeps distinct non-Planet artwork with the saved color 
 test("R11 removes the empty-account wording from Gmail while retaining clear and account-selection actions", () => {
     const gmail = read("../src/components/GmailSourcePanel.tsx");
     assert.doesNotMatch(gmail, /No account selected/);
-    assert.match(gmail, /Choose an account/);
+    assert.match(gmail, /Choose account/);
     assert.match(gmail, /Clear selection/);
     assert.match(gmail, /onAccountBlockIdChange\?\.\(null\)/);
     assert.match(gmail, /Choose account/);

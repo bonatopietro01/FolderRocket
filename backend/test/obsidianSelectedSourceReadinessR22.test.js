@@ -79,6 +79,12 @@ test("Obsidian sync ignores an incomplete unselected source, reports selected bl
     const sourceSelection={version:2,folders:true,email:false,alerts:false,activity:false,snapshots:false,clientNotes:false,attachments:false,threadMode:"selected",threadIds:[],folderMode:"selected",folderIds:["selected-root"],fileTypeMode:"all",fileTypes:[],excludedFileIds:[],includeSubfolders:true};
     const obsidianSettings=await request("/worlds/work/obsidian","PUT",{enabled:true,autoSync:false,vaultPath,sourceSelection});
     assert.equal(obsidianSettings.status,200,await obsidianSettings.text());
+    const wikiPreview=await request("/worlds/work/wiki/preview");
+    assert.equal(wikiPreview.status,200,await wikiPreview.clone().text());
+    const wikiPreviewData=await wikiPreview.json();
+    assert.equal(wikiPreviewData.readiness,"ready",JSON.stringify(wikiPreviewData.blockers));
+    assert.equal(wikiPreviewData.candidateCount,1,"preview must scan the configured private root before graph indexing");
+    assert.doesNotMatch(JSON.stringify(wikiPreviewData),/[A-Za-z]:\\/i,"preview diagnostics must not expose absolute filesystem paths");
     const indexed=await request("/worlds/work/graph/index","POST",{snapshot:{}});
     assert.equal(indexed.status,202,await indexed.text());
     const graphRoot=path.join(root,"data","planet-graphs");
@@ -91,8 +97,16 @@ test("Obsidian sync ignores an incomplete unselected source, reports selected bl
     }
     assert.equal(graph.status,"ready",JSON.stringify({status:graph.status,sourceStatuses:graph.sourceStatuses}));
     assert.equal(graph.sourceStatuses.find(item=>item.sourceId==="folder:selected-root")?.status,"complete");
+    let wikiIndex;
+    const wikiDeadline=Date.now()+15_000;
+    while(Date.now()<wikiDeadline){wikiIndex=await (await request("/worlds/work/wiki?limit=1")).json();if(wikiIndex.status==="ready")break;await new Promise(resolve=>setTimeout(resolve,50));}
+    assert.equal(wikiIndex?.status,"ready","graph indexing must finish its queued manual wiki generation before Obsidian export");
     const firstSync=await request("/worlds/work/obsidian/sync","POST",{});
     assert.equal(firstSync.status,200,await firstSync.text());
+    const successfulConfigResponse=await request("/worlds/work/obsidian");
+    const successfulConfig=(await successfulConfigResponse.json()).config;
+    assert.equal(successfulConfig.lastAttemptStatus,"ready");
+    assert.ok(Date.parse(successfulConfig.lastAttemptAt));
     let baselineVault=await directoryDigest(vaultPath);
     assert.ok(Object.keys(baselineVault).some(name=>name.toLowerCase().endsWith(".md")));
     const beforeUnselectedChange=await (await request("/worlds/work/knowledge?summary=1")).json();
@@ -110,6 +124,7 @@ test("Obsidian sync ignores an incomplete unselected source, reports selected bl
     const successfulVault=await directoryDigest(vaultPath);
     assert.ok(Object.keys(successfulVault).some(name=>name.toLowerCase().endsWith(".md")),"selected records remain synchronized when only an unselected source failed");
     baselineVault=successfulVault;
+    const latestCompleteConfig=(await (await request("/worlds/work/obsidian")).json()).config;
 
     graph=await planetGraph.readGraph(user.id,"work",graphRoot);
     graph.sourceStatuses=planetGraph.normalizeSourceStatuses(graph.sourceStatuses.map(item=>item.sourceId==="folder:selected-root"?planetGraph.sourceStatus({...item,status:"failed",reasonCode:"source_read_failed",message:"Synthetic selected source failure.",retryable:true}):item));
@@ -123,6 +138,12 @@ test("Obsidian sync ignores an incomplete unselected source, reports selected bl
     assert.ok(blockedData.reasonSummary.blockers.some(item=>item.sourceId==="folder:selected-root"&&item.label==="Selected synthetic source"&&item.status==="failed"&&item.action&&item.retryable===true));
     assert.doesNotMatch(JSON.stringify(blockedData.reasonSummary),/R22 selected source|selected-note\.txt|sourcePath|[A-Za-z]:\\/i);
     assert.deepEqual(await directoryDigest(vaultPath),baselineVault,"a selected source failure preserves the last complete custom vault byte-for-byte");
+    const blockedConfigResponse=await request("/worlds/work/obsidian");
+    const blockedConfig=(await blockedConfigResponse.json()).config;
+    assert.equal(blockedConfig.lastAttemptStatus,"incomplete");
+    assert.ok(Date.parse(blockedConfig.lastAttemptAt));
+    assert.equal(blockedConfig.lastSyncAt,latestCompleteConfig.lastSyncAt,"an incomplete attempt must not replace the last successful timestamp");
+    assert.deepEqual(blockedConfig.lastResult,latestCompleteConfig.lastResult,"an incomplete attempt must retain the previous successful result separately");
     const repeated=await request("/worlds/work/obsidian/sync","POST",{});
     assert.equal(repeated.status,409);
     const repeatedData=await repeated.json();
@@ -148,12 +169,14 @@ test("Obsidian sync ignores an incomplete unselected source, reports selected bl
 
     const limitedVault=await directoryDigest(vaultPath);
     const overLimit=await request("/worlds/work/obsidian/sync","POST",{records:Array.from({length:501},(_,index)=>({id:`synthetic-${index}`,kind:"post-it",content:"Synthetic record"}))});
-    assert.equal(overLimit.status,409,await overLimit.clone().text());
+    assert.equal(overLimit.status,200,await overLimit.clone().text());
     const overLimitData=await overLimit.json();
-    assert.equal(overLimitData.code,"KNOWLEDGE_INCOMPLETE");
-    assert.ok(overLimitData.reasonSummary.blockers.some(item=>item.sourceId==="client-record-limit"&&item.reasonCode==="selected_source_limit"&&item.action));
-    assert.ok(overLimitData.readinessFingerprint);
-    assert.deepEqual(await directoryDigest(vaultPath),limitedVault,"late request-limit rejection preserves the last complete vault");
+    assert.equal(overLimitData.result.status,"ready");
+    assert.equal(overLimitData.result.counts.clientRecords,0,"client-held post-it and reminder records are excluded from this filesystem-only sync");
+    assert.equal(overLimitData.result.counts.attachments,0);
+    assert.equal(overLimitData.result.warnings.some(item=>/client record|post-it|reminder|daily jobs|file studio|attachment/i.test(item)),false);
+    assert.ok(Object.keys(limitedVault).length>0,`the preceding complete file-only sync produced a vault baseline; entries=${Object.keys(limitedVault).join(",")}; result=${JSON.stringify(overLimitData.result)}`);
+    baselineVault=await directoryDigest(vaultPath);
 
     graph=await planetGraph.readGraph(user.id,"work",graphRoot);
     const fileNode=graph.nodes.find(item=>item.type==="file"&&item.sourceRef?.graphSourceId==="folder:selected-root");
@@ -167,7 +190,7 @@ test("Obsidian sync ignores an incomplete unselected source, reports selected bl
     const contentBlocker=unavailableData.reasonSummary.blockers.find(item=>item.sourceId==="folder:selected-root"&&item.reasonCode==="content_unavailable");
     assert.ok(contentBlocker&&contentBlocker.label==="Selected synthetic source"&&contentBlocker.action,"content extraction failures identify the selected source and next action");
     assert.doesNotMatch(JSON.stringify(unavailableData.reasonSummary),/R22 unavailable synthetic evidence|[A-Za-z]:\\/i);
-    assert.deepEqual(await directoryDigest(vaultPath),limitedVault,"an unavailable selected file preserves the last complete vault byte-for-byte");
+    assert.deepEqual(await directoryDigest(vaultPath),baselineVault,"an unavailable selected file preserves the last complete vault byte-for-byte");
     const unavailableFingerprint=unavailableData.readinessFingerprint;
     const contentSummary=await (await request("/worlds/work/knowledge?summary=1")).json();
     assert.equal(contentSummary.status,"blocked");

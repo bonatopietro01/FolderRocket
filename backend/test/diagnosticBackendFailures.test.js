@@ -64,15 +64,17 @@ test("graph writes remain serialized per target while a rename is pending",async
     const firstGate=new Promise(resolve=>{releaseFirst=resolve;});
     const calls=[];
     const rename=async(source,target)=>{calls.push(source);if(calls.length===1)await firstGate;return fs.rename(source,target);};
-    const first=graph.writeGraph({...graph.emptyGraph("user-a","work"),status:"ready"},root,{rename});
+    const first=graph.writeGraph({...graph.emptyGraph("user-a","work"),status:"ready",nodes:[{id:"first-folder",type:"folder",sourceType:"filesystem",label:"first-folder"}]},root,{rename});
     await new Promise(resolve=>setTimeout(resolve,10));
-    const second=graph.writeGraph({...graph.emptyGraph("user-a","work"),status:"partial"},root,{rename});
+    const second=graph.writeGraph({...graph.emptyGraph("user-a","work"),status:"partial",nodes:[{id:"second-folder",type:"folder",sourceType:"filesystem",label:"second-folder"}]},root,{rename});
     await new Promise(resolve=>setTimeout(resolve,10));
     assert.equal(calls.length,1);
     releaseFirst();
     await Promise.all([first,second]);
     assert.equal(calls.length,2);
-    assert.equal((await graph.readGraph("user-a","work",root)).status,"partial");
+    const persisted=await graph.readGraph("user-a","work",root);
+    assert.equal(persisted.status,"ready","non-file readiness is excluded from the file-only graph projection");
+    assert.deepEqual(persisted.nodes.map(item=>item.label),["second-folder"],"the later serialized file-only graph write is persisted");
 }));
 
 test("diagnostic routes retain scope gates and classify only expected storage and settings failures",async()=>{

@@ -32,6 +32,7 @@ function assertWorkspacePath(workspacePath, candidatePath, {allowMissing = false
                 existingPath = parent;
                 continue;
             }
+            if (error?.code === "ENOTDIR") throw Object.assign(new Error("The requested path has a non-directory parent."), {code: "ENOTDIR"});
             if (error?.code === "ENOENT") throw new Error("The requested file or folder does not exist.");
             throw new Error("Unable to validate the requested file or folder.");
         }

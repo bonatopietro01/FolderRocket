@@ -51,3 +51,68 @@ test("frontend diagnostics redact Windows paths that contain spaces", async () =
     });
     assert.equal(captured?.message, "Failed at [local path] (EACCES)");
 });
+
+test("expected startup session and incomplete-wiki responses do not become diagnostic errors", async () => {
+    const sourcePath = path.join(projectRoot, "src", "diagnostics.ts");
+    const source = fs.readFileSync(sourcePath, "utf8");
+    const output = require("typescript").transpileModule(source, {
+        compilerOptions: {
+            module: require("typescript").ModuleKind.CommonJS,
+            target: require("typescript").ScriptTarget.ES2022
+        }
+    }).outputText;
+    const module = {exports: {}};
+    const captures = [];
+    const mockWindow = {
+        location: {pathname: "/", href: "http://localhost/"},
+        __folderRocketDiagnosticsInstalled: false,
+        dispatchEvent(event) {
+            if (event.type === "folderrocket:diagnostic-captured") captures.push(event.detail);
+        },
+        addEventListener() {},
+        setTimeout,
+        async fetch(input) {
+            const url = new URL(typeof input === "string" ? input : input.url, this.location.href);
+            if (url.pathname === "/auth/me") return new Response(JSON.stringify({message: "Sign in required."}), {status: 401, headers: {"Content-Type": "application/json"}});
+            if (url.pathname === "/worlds/work/obsidian/sync") return new Response(JSON.stringify({code: "KNOWLEDGE_INCOMPLETE", message: "Rebuild the wiki."}), {status: 409, headers: {"Content-Type": "application/json"}});
+            return new Response("{}", {status: 200});
+        }
+    };
+    vm.runInNewContext(output, {
+        module,
+        exports: module.exports,
+        require: id => id === "./api" ? {API_BASE_URL: "http://localhost"} : require(id),
+        Map,
+        Date,
+        Promise,
+        Event,
+        CustomEvent,
+        URL,
+        Request,
+        Response,
+        Headers,
+        performance: {now: () => 1, getEntriesByType: () => []},
+        document: {readyState: "loading", addEventListener() {}},
+        console: {warn() {}},
+        crypto: require("node:crypto").webcrypto,
+        window: mockWindow,
+        localStorage: {getItem: () => null, setItem() {}, removeItem() {}}
+    });
+
+    await module.exports.readLocalDiagnostics("startup");
+    module.exports.installDiagnostics("startup");
+    const startupAuth = await mockWindow.fetch("http://localhost/auth/me");
+    assert.equal(startupAuth.status, 401);
+    assert.equal(captures.length, 0, "pre-login session discovery is expected during startup");
+
+    await module.exports.readLocalDiagnostics("synthetic-user");
+    module.exports.installDiagnostics("synthetic-user");
+    const authenticatedAuth = await mockWindow.fetch("http://localhost/auth/me");
+    assert.equal(authenticatedAuth.status, 401);
+    assert.equal(captures.at(-1)?.status, 401, "a later session failure must remain diagnosable");
+
+    captures.length = 0;
+    const wikiPrecondition = await mockWindow.fetch("http://localhost/worlds/work/obsidian/sync", {method: "POST"});
+    assert.equal(wikiPrecondition.status, 409);
+    assert.equal(captures.length, 0, "an actionable wiki readiness response is shown in the sync UI, not repeated as a diagnostic failure");
+});

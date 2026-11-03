@@ -353,3 +353,100 @@ Limits: this verifies the instrumented synthetic profile, not personal Desktop c
 R37 skill_usage and handoffs: coordinator READ/APPLIED `requirement-traceability`, `surgical-patch`, and `verify-and-stop` from `.agents/skills/<name>/SKILL.md`; READ/APPLIED the bundled `computer-use` SKILL.md plus guidance/API/confirmation documents for native synthetic-window inspection. The preceding read-only Frontend diagnosis applied `investigate-first` and `codebase-design`. Frontend implementation READ/APPLIED `surgical-patch`, `requirement-traceability`, and `verify-and-stop`; returned its two-file ownership and passing lint/build/diff checks. Final Reviewer is strictly read-only and will return actual skill_usage. No commit or push.
 
 R37 final read-only review: APPROVED, with no actionable scoped defect and no fix/re-review cycle required. Reviewer inspected source, tests, plan, screenshots and recorded metrics; applied `requirement-traceability` and `verify-and-stop` (READ/APPLIED, `.agents/skills/<name>/SKILL.md`). Its approval covers R37's documented synthetic scenarios and does not close earlier unresolved requirements, other-zoom/clipboard/search-pagination limits, or D4. All pre-existing product changes, including the user's R34 rollback, remain preserved. No commit or push.
+
+## R38–R53 — Targeted Gmail, TreeRocket, planet, graph, and conversation fixes — 2026-10-24
+
+Questo aggiornamento continua il registro senza riscrivere R1–R37. Il redesign generale R54 (Orbita, Mission Control e Costellazione) è stato annullato dall'utente: queste proposte non sono criteri né riferimenti per l'implementazione. Nessun layout applicativo era stato cambiato dai mockup.
+
+### Purpose / Big Picture
+
+Rendere più chiari i controlli Gmail per pianeta, impedire l'anteprima automatica indesiderata dei link Domain, stabilizzare le card TreeRocket e i conteggi, rimuovere due testi superflui da Email Recap, distinguere i tipi visuali dei pianeti e limitare Planet Graph/Knowledge e Obsidian ai file e alle cartelle del pianeta. Consentire inoltre di scollegare un account dal solo pianeta corrente e rimuovere/ripristinare una singola conversazione nel layout Conversations esistente. Nessuna email provider deve essere cancellata; note Obsidian preesistenti, account globali, altri pianeti, semantica R37 e D4 vanno preservati.
+
+### Progress
+
+- [x] (2026-10-24 11:11Z) Intake del prompt completo, istruzioni repository e handoff R37 letti; baseline Git verificata pulita su `feature/desktop-foundation` a `7cddd56fe912755f27cd2d7edefb1fb5303c38b8`.
+- [x] (2026-10-24 11:11Z) Skill `requirement-traceability`, `project-graph-context`, `investigate-first` e `diagnosing-bugs` lette e applicate al coordinamento; Architect incaricato in sola lettura per i contratti R50–R53 prima dei writer.
+- [x] Contratti R50–R53 concordati con Architect; ownership dei file UI/backend distinta e senza writer sovrapposti.
+- [x] Implementare R38–R53 con regressioni sintetiche; mantenere intatte R1–R37, R34, R37 e D4.
+- [x] Verifiche complete: suite backend, test UI mirati, lint, build, sintassi server e diff check passati dopo il ciclo di correzione.
+- [x] Chiudere la re-review strettamente read-only e registrarne l'esito. Verdetto finale CHANGES_REQUIRED (DEEP): R41 resta parziale senza misure comparative e verifica Electron post-patch; R51 ha un percorso catch 400 generico che non persiste l'ultimo tentativo.
+
+### Surprises & Discoveries
+
+- Il codice di Graphify presente in `graphify-out/` risulta generato il 2026-10-09, mentre il checkout include evidenze R37 del 2026-10-19. È quindi uno snapshot non dimostrato attuale; non usarlo come prova e non rigenerarlo implicitamente. Le relazioni adottate nel piano saranno confermate nei sorgenti e nei test correnti.
+- Il problema R41 di scroll laterale e lentezza entrando in una cartella non ha una diagnosi misurata. Una prima misura non è valida perché il tempo includeva una pausa fissa di 400 ms; un successivo tentativo non ha completato la navigazione della pagina e non ha prodotto una baseline utilizzabile. Non usare quei numeri come evidenza.
+- La sola cattura sintetica disponibile prima della patch mostra una barra di scorrimento verticale a destra della griglia di 20 sottocartelle. Non dimostra una regressione riproducibile né la causa del rallentamento. La patch riserva spazio per la scrollbar verticale e mantiene raggiungibile l'overflow orizzontale utile; non è disponibile una cattura Electron post-patch né un confronto temporale valido, quindi R41 resta non misurato.
+
+### Decision Log
+
+- 2026-10-24, utente: R50/R51 usano soltanto file e cartelle del pianeta; URL Domain non sono sorgenti autonome. Gmail, calendario e altri pannelli restano disponibili. Un file effettivamente salvato in una cartella locale inclusa resta un file valido anche se proviene da email o Domain.
+- 2026-10-24, utente: R52 scollega un account soltanto dal pianeta corrente e conserva disponibilità e collegamenti negli altri pianeti.
+- 2026-10-24, utente: R54 è annullato; mantenere il layout generale corrente e applicare solo modifiche mirate R38–R53.
+- 2026-10-24, coordinatore: non eliminare note/vault esistenti, non invocare disconnessioni provider globali e non modificare selezioni conversazioni necessarie a Conversations per applicare lo scope file-only.
+
+### Outcomes & Retrospective
+
+R38–R40 e R42–R53 sono implementati e le regressioni pertinenti passano nei test sorgente/backend; l'aspetto visivo live resta non verificato senza una cattura Electron aggiornata. La re-review finale strettamente read-only è CHANGES_REQUIRED (DEEP), con due rilievi MEDIUM: R51, il catch finale della POST `/worlds/:worldId/obsidian/sync` risponde 400 senza registrare `lastAttemptAt`, `lastAttemptStatus` o `status` per errori generici dopo un precedente successo; R41, mancano una misura valida di latenza e una cattura Electron post-patch. I precedenti rilievi su R51 incompleto 409 e R53 restore/cap risultano corretti e coperti. Il solo ciclo consentito di fix/re-review è stato consumato, quindi i due punti restano esplicitamente aperti senza ulteriori modifiche al codice. R54 resta annullato. Nessun account reale, vault personale o servizio provider è stato usato.
+
+### Context and Orientation
+
+Il repository è `C:\Users\bonat\OneDrive - University of Illinois Chicago\Desktop\VibingApp`, branch `feature/desktop-foundation`, baseline pulita al commit indicato sopra. Il piano mantiene il registro storico in questo solo documento, come richiesto da `PLANS.md`. D4 resta aperto; le prove limitate di R35/R36 e l'implementazione R37 valgono soltanto nei termini già registrati.
+
+I requisiti stabili sono R38 Gmail account control; R39 Domain preview; R40 dimensioni card; R41 diagnosi scroll/performance; R42 posizione Add; R43 contrasto conteggi; R44 tab Folder/Apps; R45 testi Email Recap; R46 pianeti distinti; R47 Star; R48 Galaxy; R49 Black Hole; R50 Planet Graph/Knowledge file-only; R51 Obsidian file-only; R52 unlink account per pianeta; R53 rimozione e ripristino persistenti della singola conversazione. R54 resta annullato.
+
+| ID | Owner | Criterio osservabile | Stato |
+|---|---|---|---|
+| R38 | Frontend | Nessun badge esterno `Choose an account`; il menu `Read attachments` mostra una sola associazione reale con stati loading/none/error distinti. | Test sorgente passati; runtime visivo non verificato. |
+| R39 | Frontend | URL salvato, Invio e refresh non mostrano testo estratto automatico; iframe e analisi esplicita/AI restano funzionanti. | Test sorgente passati; runtime visivo non verificato. |
+| R40 | Frontend | Le card cartella mantengono dimensioni coerenti tra livelli, nomi e stati contenuto, preservando R37. | Test sorgente passati; runtime visivo non verificato. |
+| R41 | Frontend + coordinatore | Scenario sintetico riproduce o smentisce separatamente scrollbar e lag; causa provata con misure e confronto prima/dopo. | PARZIALE / NON MISURATO: overflow orizzontale resta scorribile e la scrollbar verticale ha gutter stabile; nessuna misura valida della latenza né cattura post-patch. |
+| R42 | Frontend | Add/check resta allineato in basso a destra anche in cartelle vuote o senza `See files`. | Test sorgente passati; runtime visivo non verificato. |
+| R43 | Frontend | Conteggi cartelle/file più scuri e leggibili sullo sfondo corrente. | Test sorgente passati; runtime visivo non verificato. |
+| R44 | Frontend | Tab Folder/Apps restano dentro il proprio contenitore in stati normale, hover e attivo. | Test sorgente passati; runtime visivo non verificato. |
+| R45 | Frontend | I due testi specificati sono assenti; recap e associazione account restano disponibili. | Test sorgente passati; runtime visivo non verificato. |
+| R46 | Frontend | Stili salvati restano riconoscibili in picker e card piccole senza alterare nomi, colori, selezione o marker AI. | CSS e regressioni sorgente passano; riconoscibilità visiva in Electron non verificata. |
+| R47 | Frontend | Star ha volume e luminosità riconoscibili come pianeta. | CSS e regressioni sorgente passano; resa visiva in Electron non verificata. |
+| R48 | Frontend | Galaxy mostra nucleo/struttura e profondità leggibili anche in piccolo. | CSS e regressioni sorgente passano; resa visiva in Electron non verificata. |
+| R49 | Frontend | Black Hole mostra centro scuro e bordo luminoso distinguibile dagli altri stili. | CSS e regressioni sorgente passano; resa visiva in Electron non verificata. |
+| R50 | Backend (policy), Frontend (settings UI) | Graph/Knowledge contiene file e cartelle del pianeta; nessuna sorgente non-file autonoma; metadati Conversations preservati. | Backend e test UI sintetici passati; nessun account reale usato. |
+| R51 | Backend (pipeline), Frontend (settings UI) | Obsidian usa file/cartelle, non avverte categorie escluse, non cancella note e preserva last-good su incompletezza reale. | Backend e test UI sintetici passati; incomplete 409 persiste stato/orario ultimo tentativo senza sostituire ultimo successo o last-good byte per byte. |
+| R52 | Frontend (UI), Backend (API esistente) | Disconnessione aggiorna solo il pianeta corrente via `emailAccount: null`; account globale e altri pianeti restano associati. | API e test UI sintetici passati; account reale non usato. |
+| R53 | Backend (API/persistenza), Frontend (UI) | Rimozione e restore per thread/account persistono nel pianeta corrente; stesso mittente, altri pianeti e provider restano intatti. | Test backend/frontend sintetici passati; thread inbox ripristinabile dopo unlink account; oltre 500 tombstone l'API rifiuta nuove rimozioni senza eliminare le precedenti; nessuna modifica al provider. |
+
+Verifiche finali (2026-10-24): `node --test --test-concurrency=1` in `backend/` ha passato 185/185 test; il pacchetto mirato sorgente/UI ha passato 32/32; suite backend mirata R50–R53 ha passato 35/35; `npm run lint`, `npm run build`, `node --check backend/server.js` e `git diff --check` sono passati. La build segnala il chunk JS principale da 599,28 kB oltre la soglia informativa di 500 kB. Il caso Windows junction è stato saltato perché il sandbox nega la creazione; i restanti test sintetici coprono isolamento e restore. La verifica R51 confronta l'ultima sync completa riuscita e conferma la conservazione byte per byte su risposta 409 incompleta, registrando separatamente stato e orario dell'ultimo tentativo. I test R53 verificano il restore dopo unlink e il limite esplicito senza evizione. Restano mancanti la verifica visiva Electron post-patch e le misure comparative R41.
+
+### Plan of Work
+
+Architect definisce prima i contratti di persistenza e i confini R50–R53. Frontend possiede i componenti React/TypeScript/CSS e le relative regressioni UI; Backend possiede route, servizi di scope/index/vault e persistenza conversazioni e le relative regressioni backend. Nessun file ha più di un writer; il coordinatore possiede questo piano e le verifiche d'integrazione non assegnate. R41 segue una riproduzione sintetica e misure prima/dopo; ogni correzione deve spiegare quale misura la giustifica. Reviewer controlla tutto in sola lettura; al massimo un ciclo di fix e re-review.
+
+### Concrete Steps
+
+1. Dalla radice, verificare `git status --short --branch` e `git diff --check`; leggere le interfacce correnti, l'output Architect e i test che coprono ciascun flusso.
+2. Dopo l'accordo sui contratti, applicare i pacchetti UI e backend nei file concordati, aggiornando i test in cartelle con ownership distinta.
+3. Eseguire i test mirati; dalla radice eseguire `npm run lint`, `npm run build`, `npm test`, e da `backend/` `node --check server.js` se il server cambia. Usare Node >=24 per i test workspace indicati da `AGENTS.md` quando pertinenti.
+4. Verificare UI e R41 con profilo Electron sintetico isolato se il runtime è disponibile; in caso contrario dichiarare esattamente quali prove statiche/browser sono state eseguite e che non provano Electron.
+5. Eseguire `git diff --check`, controllare `git status` per segreti/dati locali e richiedere il Reviewer read-only. Non fare commit o push.
+
+### Validation and Acceptance
+
+Ogni R38–R53 richiede un'evidenza collegata al criterio osservabile dell'ID e non una sola build riuscita. I test sintetici, lint e build sono passati come registrato sopra. Non sono stati usati account, documenti o vault personali né servizi provider reali. La regressione R41 resta aperta: non c'è una misura valida di scroll width/client width né un confronto temporale prima/dopo; la cattura pre-patch è soltanto un indizio visivo e la build non prova il runtime Electron.
+
+### Idempotence and Recovery
+
+Non migrare o cancellare note, file, account globali o dati provider. Le modifiche di scope devono mantenere la revisione vault completa e le note esistenti. Se una verifica o una scrittura locale fallisce, fermare quel pacchetto, preservare il precedente stato leggibile, registrare output e riprendere con la fixture isolata. Non ripristinare/resetta file del checkout: correggere solo i file posseduti dal task e mantenere tutte le modifiche di lavoro rilevate al momento dell'esecuzione.
+
+### Artifacts and Notes
+
+Gli artefatti ammessi sono log di test sintetici e catture del profilo Electron isolato, sotto `output/r38-r53/` ignorato da Git. Non conservare token, account personali, documenti reali o contenuti del vault. Il grafo Graphify preesistente è stale e non fa parte dell'evidenza.
+
+### Interfaces and Dependencies
+
+Architect ha confermato che la politica file-only deve essere applicata dal backend a indicizzazione, knowledge e Obsidian; le selezioni/condivisioni conversazioni restano metadati separati nel grafo per pianeta. `graphEnabled` e `obsidian.enabled` restano flag distinti. R52 riusa `PUT /settings/worlds/:worldId` con `emailAccount: null`, che blocca il fallback legacy e cambia solo il pianeta corrente.
+
+Contratto R53 concordato tra coordinatore, Backend e Frontend: `POST /worlds/:worldId/email/conversations/:threadId/removal` con `{ action: 'remove' | 'restore', blockId, summary: { subject, from, date } }`; la route è autenticata e limitata a utente/pianeta/account-thread o riferimento condiviso esatto. I metadati display sono ridotti e validati, senza corpo email. Lo stato rimosso è un tombstone persistente per `blockId + threadId` che conserva solo i riferimenti locali necessari al ripristino; il GET delle conversazioni del pianeta restituisce `removedThreads` distinto dalla inbox corrente. Il filtro sopprime solo l'ID esatto, mai il mittente. Il solo `selected:false` non basta con la selezione esistente per mittente.
+
+### Revision Notes
+
+- 2026-10-24: aggiunto il seguito R38–R53 a questo unico piano, preservando il registro R1–R37 e registrando R54 come annullato dall'utente.
+- 2026-10-24: prima review DEEP CHANGES_REQUIRED (tre finding MEDIUM su R41/R51/R53 più evizione silenziosa oltre 500 tombstone). Nel solo ciclo mirato sono stati persistiti stato/timestamp dell'ultimo tentativo Obsidian senza sovrascrivere l'ultimo successo, catturato il riferimento locale dei thread inbox e abilitato restore esatto dopo unlink, reso esplicito il limite di 500 senza evizione e riaperto overflow-x ad auto. Test RED hanno riprodotto i regressi prima dell'implementazione; suite mirate e complete sono verdi. Re-review strettamente read-only in attesa; R41 resta non misurato.
+- 2026-10-24: re-review finale DEEP CHANGES_REQUIRED. Reviewer conferma corretti i precedenti rilievi R51 409 e R53 restore/cap; trova ancora il percorso catch 400 generico R51 privo di persistenza dello stato dell'ultimo tentativo e R41 senza misure/cattura Electron post-patch. Il ciclo di fix/re-review è esaurito: entrambi restano aperti. Reviewer ha applicato `requirement-traceability` e `verify-and-stop` in sola lettura.

@@ -40,6 +40,14 @@ function normalizeSourceSelection(value, fallback) {
     return result;
 }
 
+// Graph and Obsidian use the planet's selected filesystem roots only. Keep the
+// legacy keys in the persisted settings shape for compatibility, but never let
+// them enable a non-file source in backend collection or projection.
+function fileOnlySourceSelection(value, fallback) {
+    const selection=normalizeSourceSelection(value,fallback);
+    return {...selection,email:false,alerts:false,activity:false,snapshots:false,clientNotes:false,attachments:false,threadMode:"all",threadIds:[]};
+}
+
 function sourceCategory(kind) {
     if (["folder", "file"].includes(kind)) return "folders";
     if (kind.startsWith("email-") || ["email-thread", "email-message", "email-conversation"].includes(kind)) return "email";
@@ -52,10 +60,11 @@ function sourceCategory(kind) {
 }
 
 function filterRecordsBySources(records, sourceSelection) {
-    const selection = normalizeSourceSelection(sourceSelection);
+    const selection = fileOnlySourceSelection(sourceSelection);
     return (Array.isArray(records) ? records : []).filter(record => {
-        const category = sourceCategory(String(record?.kind || ""));
-        return category === "always" || selection[category] !== false;
+        if(String(record?.kind||"")==="overview")return true;
+        const sourceScopeId=typeof record?.sourceScopeId==="string"?record.sourceScopeId:"";
+        return selection.folders===true&&(/^(filesystem|knowledge):/.test(sourceScopeId)||["file","folder"].includes(String(record?.kind||"")));
     });
 }
 
@@ -69,42 +78,26 @@ function pathIsWithin(rootPath, candidatePath) {
     return relative === "" || (relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative));
 }
 
-function filterGraphBySources(graph, sourceSelection, {emailBlockIds,folderRoots} = {}) {
-    const selection = normalizeSourceSelection(sourceSelection);
-    const allowedEmailBlocks = Array.isArray(emailBlockIds) ? new Set(emailBlockIds.filter(item => typeof item === "string" && item)) : null;
+function filterGraphBySources(graph, sourceSelection, {folderRoots} = {}) {
+    const selection = fileOnlySourceSelection(sourceSelection);
     const selectedRoots = Array.isArray(folderRoots) ? folderRoots.filter(item => item && typeof item.path === "string" && item.path) : [];
     const selectedRootMode = selection.folderMode === "selected";
     const hasRootScope = Array.isArray(folderRoots);
     const allowedFileTypes = new Set(selection.fileTypes);
     const nodes = (Array.isArray(graph?.nodes) ? graph.nodes : []).filter(item => {
-        const emailNode = item?.sourceType === "gmail" || item?.sourceType === "gmail-contact" || item?.sourceRef?.kind === "email-address";
-        if (emailNode) {
-            if (selection.email === false) return false;
-            if (allowedEmailBlocks && item?.type !== "person" && !allowedEmailBlocks.has(item?.sourceRef?.blockId) && item?.details?.shared !== true && !item?.sourceRef?.sourceWorldId) return false;
-            const threadId = item?.sourceRef?.threadId;
-            return selection.threadMode !== "selected" || !threadId || item?.sourceType === "gmail-contact" || selection.threadIds.includes(threadId);
+        if(item?.type==="world")return true;
+        if(item?.sourceType!=="filesystem"||!(item?.type==="folder"||item?.type==="file"))return false;
+        if (selection.folders === false) return false;
+        const nodePath = typeof item?.sourceRef?.path === "string" ? item.sourceRef.path : "";
+        if (!nodePath) return !selectedRootMode && !hasRootScope;
+        if (hasRootScope && !selectedRoots.some(root => pathIsWithin(root.path, nodePath))) return false;
+        if (item.type === "folder" && selection.includeSubfolders === false && hasRootScope && !selectedRoots.some(root => pathIsWithin(root.path, nodePath) && pathIsWithin(nodePath, root.path))) return false;
+        if (item.type === "file") {
+            if (selection.fileTypeMode === "selected" && !allowedFileTypes.has(String(item.details?.extension || require("node:path").extname(nodePath)).toLowerCase())) return false;
+            if (selection.includeSubfolders === false && hasRootScope && !selectedRoots.some(root => pathIsWithin(root.path, require("node:path").dirname(nodePath)) && pathIsWithin(require("node:path").dirname(nodePath), root.path))) return false;
         }
-        const category = sourceCategory(String(item?.type || ""));
-        if (category === "folders") {
-            if (selection.folders === false) return false;
-            const nodePath = typeof item?.sourceRef?.path === "string" ? item.sourceRef.path : "";
-            if (!nodePath) return !selectedRootMode && !hasRootScope;
-            if (hasRootScope && !selectedRoots.some(root => pathIsWithin(root.path, nodePath))) return false;
-            if (item.type === "folder" && selection.includeSubfolders === false && hasRootScope && !selectedRoots.some(root => pathIsWithin(root.path, nodePath) && pathIsWithin(nodePath, root.path))) return false;
-            if (item.type === "file") {
-                if (selection.fileTypeMode === "selected" && !allowedFileTypes.has(String(item.details?.extension || require("node:path").extname(nodePath)).toLowerCase())) return false;
-                if (selection.includeSubfolders === false && hasRootScope && !selectedRoots.some(root => pathIsWithin(root.path, require("node:path").dirname(nodePath)) && pathIsWithin(require("node:path").dirname(nodePath), root.path))) return false;
-            }
-        }
-        return category === "always" || selection[category] !== false;
+        return true;
     });
-    if (selection.email && (selection.threadMode === "selected" || allowedEmailBlocks)) {
-        const messageIds = new Set(nodes.filter(item => item.type === "email-message").map(item => item.id));
-        const contactIds = new Set((Array.isArray(graph?.edges) ? graph.edges : []).filter(edge => edge?.provenance === "gmail-header" && messageIds.has(edge.to)).map(edge => edge.from));
-        for (let index = nodes.length - 1; index >= 0; index--) {
-            if ((nodes[index].sourceType === "gmail-contact" || nodes[index].type === "person") && !contactIds.has(nodes[index].id)) nodes.splice(index, 1);
-        }
-    }
     const nodeIds = new Set(nodes.map(item => item.id));
     const edges = (Array.isArray(graph?.edges) ? graph.edges : []).filter(item => nodeIds.has(item?.from) && nodeIds.has(item?.to));
     return {...graph, nodes, edges};
@@ -531,4 +524,4 @@ function markdownEmailThread(thread, accountEmail, worldId) {
     return {id:`email:${thread.id}`,kind:"email-conversation",sourceId:thread.id,title:thread.messages?.[0]?.subject || thread.id,updatedAt:messages.at(-1)?.receivedAt || new Date().toISOString(),content};
 }
 
-module.exports = {MAX_NOTES, SOURCE_KEYS, SOURCE_SELECTION_VERSION, GRAPH_FILE_TYPES, normalizeSourceSelection, sourceCategory, filterRecordsBySources, filterGraphBySources, safeSlug, toMarkdown, normalizeRecords, normalizeRecordBatch, initializeVault, syncVault, copyDownloadedAttachments, graphRecords, markdownEmailThread};
+module.exports = {MAX_NOTES, SOURCE_KEYS, SOURCE_SELECTION_VERSION, GRAPH_FILE_TYPES, normalizeSourceSelection, fileOnlySourceSelection, sourceCategory, filterRecordsBySources, filterGraphBySources, safeSlug, toMarkdown, normalizeRecords, normalizeRecordBatch, initializeVault, syncVault, copyDownloadedAttachments, graphRecords, markdownEmailThread};

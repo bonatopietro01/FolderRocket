@@ -73,6 +73,7 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
     const [pathDraft, setPathDraft] = useState("");
     const [fileFormat, setFileFormat] = useState("all");
     const [fileTypeCounts, setFileTypeCounts] = useState<Array<[string,number]>>([]);
+    const [fileTypeInventoryState, setFileTypeInventoryState] = useState<"loading"|"ready"|"unavailable"|"error">("loading");
     const [draggedFolderId, setDraggedFolderId] = useState<string | null>(null);
     const [dropTarget, setDropTarget] = useState<{id: string; placement: "before" | "after"} | null>(null);
     const [foundFilesHeight, setFoundFilesHeight] = useState(155);
@@ -158,13 +159,18 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
             await Promise.resolve();
             if (controller.signal.aborted) return;
             const physicalPaths: string[] = JSON.parse(inventoryPaths);
-            if (!physicalPaths.length) { setFileTypeCounts([]); return; }
+            if (!physicalPaths.length) { setFileTypeCounts([]); setFileTypeInventoryState("ready"); return; }
+            setFileTypeInventoryState("loading");
             try {
                 const response = await fetch(`${API_BASE_URL}/file-types/inventory`, {method: "POST", signal: controller.signal, credentials: "include", headers: {"Content-Type": "application/json"}, body: JSON.stringify({folders: physicalPaths})});
                 if (!response.ok) throw new Error("Inventory unavailable");
-                const data = await response.json() as {types?: Array<{type: string; count: number}>};
-                if (!controller.signal.aborted) setFileTypeCounts((data.types || []).map(item => [item.type, item.count]));
-            } catch { if (!controller.signal.aborted) setFileTypeCounts([]); }
+                const data = await response.json() as {status?: string; types?: Array<{type: string; count: number}>; unavailableFolders?:Array<{index:number;reasonCode:string}>};
+                if (!controller.signal.aborted) {
+                    const unavailable = data.status === "unavailable" || Boolean(data.unavailableFolders?.length);
+                    setFileTypeInventoryState(unavailable ? "unavailable" : "ready");
+                    setFileTypeCounts(unavailable ? [] : (data.types || []).map(item => [item.type, item.count]));
+                }
+            } catch { if (!controller.signal.aborted) { setFileTypeCounts([]); setFileTypeInventoryState("error"); } }
         })();
         return () => controller.abort();
     }, [inventoryPaths, filesVersion]);
@@ -646,7 +652,7 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
             <div className="folderSearch"><input value={query} onChange={event => setQuery(event.target.value)} onKeyDown={event => {if (event.key === "Enter") void search();}} placeholder={effectiveAiSearchEnabled ? "Describe a file or its contents" : openedFolders.length > 1 ? "Search open folders" : "Search this folder"} disabled={!openedFolders.length}/>{aiEnabled && <button type="button" className={effectiveAiSearchEnabled ? "folderAiSearchToggle enabled" : "folderAiSearchToggle"} onClick={() => setAiSearchEnabled(current => !current)} title={effectiveAiSearchEnabled ? "AI Search Assistant is on" : "Turn on AI Search Assistant"} aria-pressed={effectiveAiSearchEnabled}><Sparkles size={14}/></button>}<button type="button" onClick={() => void search()} disabled={!openedFolders.length || !query.trim()} title={effectiveAiSearchEnabled ? "Search with AI assistance" : "Search files"}><Search size={17}/></button><button type="button" title="Clear search" onClick={() => { setQuery(""); setResults([]); setHasSearched(false); clearFileSelection(); }}>x</button></div><div className="inspectorSelectionActions"><button type="button" disabled={!selectedPaths.length} onClick={clearFileSelection}>Deselect all</button><button type="button" disabled={!selectedPaths.length} onClick={() => void openPaths(selectedPaths)}>Open files</button><button type="button" disabled={!results.length} onClick={() => { setResults([]); clearFileSelection(); }}>Clear all</button></div>
             {hasSearched && <><section className={results.length ? "inspectorList foundFilesPanel" : "inspectorList foundFilesPanel emptyResults"} style={results.length ? {height: foundFilesHeight} : undefined}><h3>Found files</h3>{results.length ? results.map(file => renderFile(file, `result-${file.path}`)) : <p>No search results.</p>}</section><button type="button" className={results.length ? "inspectorListsResizer" : "inspectorListsResizer disabled"} onPointerDown={startFoundFilesResize} title="Drag to resize file lists" aria-label="Resize Found files and Folder files" disabled={!results.length}><GripHorizontal size={14}/></button></>}
             <section className="inspectorList folderFiles">
-                <h3>Folder files<select className="folderFilesFormatSelect" aria-label="Filter open folder files by format" value={fileFormat} onChange={event => setFileFormat(event.target.value)}><option value="all">All formats ({fileTypeCounts.reduce((sum, [, count]) => sum + count, 0)})</option>{fileTypeCounts.map(([type, count]) => <option key={type} value={type}>{type.toUpperCase()} ({count})</option>)}</select></h3>
+                <h3>Folder files<select className="folderFilesFormatSelect" aria-label="Filter open folder files by format" value={fileFormat} onChange={event => setFileFormat(event.target.value)}><option value="all">All formats ({fileTypeInventoryState==="ready"?fileTypeCounts.reduce((sum, [, count]) => sum + count, 0):fileTypeInventoryState})</option>{fileTypeCounts.map(([type, count]) => <option key={type} value={type}>{type.toUpperCase()} ({count})</option>)}</select>{fileTypeInventoryState==="loading"&&<small className="folderTypeInventoryNotice" role="status">Checking file types…</small>}{fileTypeInventoryState==="unavailable"&&<small className="folderTypeInventoryNotice" role="status">A configured folder is missing or is not a folder. Type totals are hidden until you update the folder selection.</small>}{fileTypeInventoryState==="error"&&<small className="folderTypeInventoryNotice" role="status">File type totals could not be checked. No total is being reported.</small>}</h3>
                 {openedFolders.length ? openedFolders.map(folder => {
                     const key = folderContentKey(folder);
                     const contents = folderContents[key];

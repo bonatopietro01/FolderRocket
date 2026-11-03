@@ -6,6 +6,7 @@ const {getRuntimeDataDirectory} = require("./runtimePaths");
 const VERSION = 1;
 const MAX_NODES = 8_000;
 const MAX_EDGES = 12_000;
+const MAX_REMOVED_CONVERSATIONS=500;
 const INDEXED_TYPES = new Set(["world", "folder", "file", "email-thread", "email-message", "person", "calendar-event", "note", "reminder", "alert"]);
 const SNAPSHOT_TYPES = new Set(["activity", "search", "calendar-event", "note", "reminder"]);
 const EXCLUDED_DIRECTORY_NAMES = new Set(["node_modules", ".git", "folderrocket_trash", "cargorocket"]);
@@ -61,14 +62,35 @@ function contentRevision(graph) {
 }
 
 function emptyGraph(userId, worldId) {
-    return {version:VERSION, userId:String(userId), worldId, status:"disabled", progress:{stage:"idle",processed:0,total:0,limitReached:false}, updatedAt:new Date().toISOString(), nodes:[], edges:[], sourceStatuses:[], sharedThreads:[], selectedConversations:[],conversationSelectionConfigured:true};
+    return {version:VERSION, userId:String(userId), worldId, status:"disabled", progress:{stage:"idle",processed:0,total:0,limitReached:false}, updatedAt:new Date().toISOString(), nodes:[], edges:[], sourceStatuses:[], sharedThreads:[], selectedConversations:[],removedConversations:[],conversationSelectionConfigured:true};
+}
+
+function conversationKey(item){return `${String(item?.blockId||"")}:${String(item?.threadId||"")}`;}
+function capturedConversationReference(item){
+    if(!item||typeof item.blockId!=="string"||typeof item.threadId!=="string")return null;
+    return {provider:"gmail",blockId:item.blockId,threadId:item.threadId,...(typeof item.accountEmail==="string"?{accountEmail:item.accountEmail.slice(0,240)}:{}),...(typeof item.subject==="string"?{subject:item.subject.slice(0,300)}:{}),...(typeof item.sender==="string"?{sender:item.sender.slice(0,300)}:{}),...(typeof item.selectedAt==="string"?{selectedAt:item.selectedAt.slice(0,80)}:{})};
+}
+function capturedSharedReference(item){
+    if(!item||typeof item.blockId!=="string"||typeof item.threadId!=="string")return null;
+    return {provider:"gmail",blockId:item.blockId,threadId:item.threadId,...(typeof item.accountEmail==="string"?{accountEmail:item.accountEmail.slice(0,240)}:{}),...(typeof item.subject==="string"?{subject:item.subject.slice(0,300)}:{}),...(typeof item.sourceWorldId==="string"?{sourceWorldId:item.sourceWorldId.slice(0,100)}:{}),...(typeof item.sharedAt==="string"?{sharedAt:item.sharedAt.slice(0,80)}:{})};
+}
+
+function fileOnlyGraph(graph) {
+    const nodes=(Array.isArray(graph?.nodes)?graph.nodes:[]).filter(item=>item?.type==="world"||(item?.sourceType==="filesystem"&&(item?.type==="folder"||item?.type==="file")));
+    const ids=new Set(nodes.map(item=>item.id));
+    const sourceStatuses=normalizeSourceStatuses(graph?.sourceStatuses).filter(item=>item.type==="folder");
+    const folderLimit=sourceStatuses.some(item=>["directory_limit","file_limit","depth_limit","node_limit","edge_limit"].includes(item.reasonCode));
+    const progress={...graph?.progress,limitReached:graph?.progress?.stage==="indexing"?graph.progress.limitReached===true:folderLimit};
+    const sourceWarnings=Array.isArray(graph?.warnings)?graph.warnings.filter(item=>!/(gmail|email|conversation|snapshot|calendar|reminder|alert|attachment|client.?note|daily job|file studio)/i.test(String(item))):[];
+    const status=["ready","partial"].includes(graph?.status)?statusForSources(sourceStatuses,progress):graph?.status;
+    return {...graph,nodes,edges:(Array.isArray(graph?.edges)?graph.edges:[]).filter(item=>ids.has(item?.from)&&ids.has(item?.to)),sourceStatuses,progress,warnings:sourceWarnings,status};
 }
 
 async function readGraph(userId, worldId, rootDirectory) {
     try {
         const value = JSON.parse(await fs.readFile(graphPath(userId, worldId, rootDirectory), "utf8"));
         if (value?.version !== VERSION || value.userId !== String(userId) || value.worldId !== worldId || !Array.isArray(value.nodes) || !Array.isArray(value.edges)) return emptyGraph(userId, worldId);
-        return {...emptyGraph(userId, worldId), ...value, nodes:value.nodes, edges:value.edges, sourceStatuses:normalizeSourceStatuses(value.sourceStatuses), sharedThreads:Array.isArray(value.sharedThreads) ? value.sharedThreads : [], selectedConversations:Array.isArray(value.selectedConversations)?value.selectedConversations:[],conversationSelectionConfigured:Object.hasOwn(value,"conversationSelectionConfigured")?value.conversationSelectionConfigured===true:false};
+        return fileOnlyGraph({...emptyGraph(userId, worldId), ...value, nodes:value.nodes, edges:value.edges, sourceStatuses:normalizeSourceStatuses(value.sourceStatuses), sharedThreads:Array.isArray(value.sharedThreads) ? value.sharedThreads : [], selectedConversations:Array.isArray(value.selectedConversations)?value.selectedConversations:[],removedConversations:Array.isArray(value.removedConversations)?value.removedConversations.filter(item=>item&&typeof item.blockId==="string"&&typeof item.threadId==="string"):[],conversationSelectionConfigured:Object.hasOwn(value,"conversationSelectionConfigured")?value.conversationSelectionConfigured===true:false});
     } catch (error) {
         if (error?.code === "ENOENT" || error instanceof SyntaxError) return emptyGraph(userId, worldId);
         throw error;
@@ -76,6 +98,7 @@ async function readGraph(userId, worldId, rootDirectory) {
 }
 
 async function writeGraph(graph, rootDirectory, options={}) {
+    graph=fileOnlyGraph(graph);
     const target = graphPath(graph.userId, graph.worldId, rootDirectory);
     const queueKey = target.toLocaleLowerCase();
     const previous = writes.get(queueKey) || Promise.resolve();
@@ -374,27 +397,18 @@ function addEmailThreads(nodes, edges, blockId, accountEmail, threads) {
 function replaceSourceGraph(existing, nodes, edges, progress) {
     const preservedNodes=existing.nodes.filter(item=>!INDEXED_TYPES.has(item.type)&&!SNAPSHOT_TYPES.has(item.type));
     const combined={...existing,nodes:preservedNodes,edges:existing.edges.filter(item=>preservedNodes.some(node=>node.id===item.from)&&preservedNodes.some(node=>node.id===item.to))};
-    const incomingIds=new Set(nodes.map(item=>item.id));
-    const sharedNodes=existing.sharedThreads.filter(item=>!incomingIds.has(`email-thread:${stableId("gmail",`${item.blockId}:${item.threadId}`)}`)).map(item=>node("email-thread","gmail",`${item.blockId}:${item.threadId}`,item.subject||"Shared email conversation",{kind:"gmail-thread",blockId:item.blockId,threadId:item.threadId,sourceWorldId:item.sourceWorldId},{accountEmail:item.accountEmail||"",shared:true,sourceWorldId:item.sourceWorldId}));
-    return mergeGraph(combined,[...nodes,...sharedNodes],edges,progress);
+    return mergeGraph(combined,nodes,edges,progress);
 }
 
-async function selectConversation(userId,worldId,reference,{rootDirectory,includeNode=true}={}) {
+async function selectConversation(userId,worldId,reference,{rootDirectory}={}) {
     if(!reference||reference.provider!=="gmail"||typeof reference.threadId!=="string"||!reference.threadId||reference.threadId.length>300||typeof reference.blockId!=="string"||!reference.blockId)throw new Error("Selected conversation reference is invalid.");
     return mutateGraph(userId,worldId,rootDirectory,graph=>{
         const key=`${reference.blockId}:${reference.threadId}`;
         if(!graph.selectedConversations.some(item=>`${item.blockId}:${item.threadId}`===key)&&graph.selectedConversations.length>=500)throw new Error("A planet can save at most 500 selected conversations.");
         const selectedConversations=graph.selectedConversations.filter(item=>`${item.blockId}:${item.threadId}`!==key);
         selectedConversations.push({...reference,selectedAt:new Date().toISOString()});
-        const targetId=`email-thread:${stableId("gmail",key)}`;
-        const existingNode=graph.nodes.find(item=>item.id===targetId);
-        const selectedNode=existingNode||node("email-thread","gmail",key,reference.subject||"Selected Gmail conversation",{kind:"gmail-thread",blockId:reference.blockId,threadId:reference.threadId},{accountEmail:reference.accountEmail||"",selected:true});
-        const shouldInclude=includeNode!==false;
         const selection={...graph,selectedConversations,conversationSelectionConfigured:true,updatedAt:new Date().toISOString()};
-        if(shouldInclude)return existingNode?selection:mergeAdditionalGraphItems(selection,[selectedNode],[]);
-        if(!existingNode?.details?.selected)return selection;
-        const nodes=graph.nodes.filter(item=>item.id!==targetId);const ids=new Set(nodes.map(item=>item.id));
-        return {...selection,nodes,edges:graph.edges.filter(item=>ids.has(item.from)&&ids.has(item.to))};
+        return {...selection,removedConversations:graph.removedConversations.filter(item=>conversationKey(item)!==key)};
     });
 }
 
@@ -438,8 +452,7 @@ async function addSharedThread(userId, worldId, reference, {rootDirectory} = {})
         const key=`${reference.blockId}:${reference.threadId}`;
         const sharedThreads=graph.sharedThreads.filter(item=>`${item.blockId}:${item.threadId}`!==key);
         sharedThreads.push({...reference,id:`share:${stableId(userId,worldId,key)}`,sharedAt:new Date().toISOString()});
-        const threadNode=node("email-thread","gmail",key,reference.subject || "Shared email conversation",{kind:"gmail-thread",blockId:reference.blockId,threadId:reference.threadId,sourceWorldId:reference.sourceWorldId},{accountEmail:reference.accountEmail || "",shared:true,sourceWorldId:reference.sourceWorldId});
-        return mergeAdditionalGraphItems({...graph,sharedThreads,updatedAt:new Date().toISOString(),nodes:graph.nodes.filter(item=>item.id!==threadNode.id)},[threadNode],[]);
+        return {...graph,sharedThreads,removedConversations:graph.removedConversations.filter(item=>conversationKey(item)!==key),updatedAt:new Date().toISOString()};
     });
 }
 
@@ -450,6 +463,34 @@ async function removeSharedThread(userId,worldId,blockId,threadId,{rootDirectory
         const targetId=`email-thread:${stableId("gmail",key)}`;
         const hasLocalMailboxNode=graph.nodes.some(item=>item.id===targetId && !item.details?.shared);
         return {...graph,sharedThreads,nodes:hasLocalMailboxNode?graph.nodes:graph.nodes.filter(item=>item.id!==targetId),edges:graph.edges.filter(item=>item.from!==targetId&&item.to!==targetId),updatedAt:new Date().toISOString()};
+    });
+}
+
+async function removeConversation(userId,worldId,blockId,threadId,metadata={}, {rootDirectory,selectedReference:suppliedReference}={}) {
+    return mutateGraph(userId,worldId,rootDirectory,graph=>{
+        const key=`${blockId}:${threadId}`;
+        const existing=graph.removedConversations.find(item=>conversationKey(item)===key);
+        if(!existing&&graph.removedConversations.length>=MAX_REMOVED_CONVERSATIONS){const error=new Error(`This planet has reached the ${MAX_REMOVED_CONVERSATIONS} removed-conversation limit. Restore removed conversations before removing more.`);error.code="CONVERSATION_REMOVAL_LIMIT";throw error;}
+        const selected=graph.selectedConversations.find(item=>conversationKey(item)===key);
+        const shared=graph.sharedThreads.filter(item=>conversationKey(item)===key);
+        const supplied={subject:typeof metadata.subject==="string"?metadata.subject.replace(/[\u0000-\u001f\u007f]/g,"").trim().slice(0,300):"",from:typeof metadata.from==="string"?metadata.from.replace(/[\u0000-\u001f\u007f]/g,"").trim().slice(0,300):"",date:typeof metadata.date==="string"?metadata.date.replace(/[\u0000-\u001f\u007f]/g,"").trim().slice(0,80):""};
+        const tombstone=existing||{blockId,threadId,removedAt:new Date().toISOString(),selectedReference:capturedConversationReference(selected)||capturedConversationReference(suppliedReference),sharedReferences:shared.map(capturedSharedReference).filter(Boolean)};
+        return {...graph,selectedConversations:graph.selectedConversations.filter(item=>conversationKey(item)!==key),sharedThreads:graph.sharedThreads.filter(item=>conversationKey(item)!==key),removedConversations:[...graph.removedConversations.filter(item=>conversationKey(item)!==key),{...tombstone,...(supplied.subject?{subject:supplied.subject}:{}),...(supplied.from?{from:supplied.from}:{}),...(supplied.date?{date:supplied.date}:{})}],updatedAt:new Date().toISOString()};
+    });
+}
+
+async function restoreConversation(userId,worldId,blockId,threadId,{rootDirectory}={}) {
+    return mutateGraph(userId,worldId,rootDirectory,graph=>{
+        const key=`${blockId}:${threadId}`;
+        const tombstone=graph.removedConversations.find(item=>conversationKey(item)===key);
+        if(!tombstone)return graph;
+        const selected=tombstone.selectedReference||(Array.isArray(tombstone.sharedReferences)&&tombstone.sharedReferences.length?null:{provider:"gmail",blockId,threadId});
+        const shared=Array.isArray(tombstone.sharedReferences)?tombstone.sharedReferences:[];
+        const selectedConversations=graph.selectedConversations.filter(item=>conversationKey(item)!==key);
+        if(selected&&selected.provider==="gmail")selectedConversations.push(selected);
+        const sharedThreads=graph.sharedThreads.filter(item=>conversationKey(item)!==key);
+        for(const reference of shared)if(reference&&reference.provider==="gmail"&&!sharedThreads.some(item=>conversationKey(item)===conversationKey(reference)))sharedThreads.push({...reference,id:`share:${stableId(userId,worldId,key)}`});
+        return {...graph,selectedConversations,sharedThreads,removedConversations:graph.removedConversations.filter(item=>conversationKey(item)!==key),conversationSelectionConfigured:true,updatedAt:new Date().toISOString()};
     });
 }
 
@@ -553,4 +594,4 @@ function enqueueIndex(key, fn) {
 
 function isIndexing(userId,worldId) { return jobs.has(`${userId}:${worldId}`); }
 
-module.exports={VERSION,MAX_NODES,MAX_EDGES,validId,stableId,contentRevision,emptyGraph,readGraph,writeGraph,renameGraphFileWithRetry,node,edge,sourceStatus,normalizeSourceStatuses,failIndexingSources,statusForSources,walkConfiguredFolders,snapshotGraphItems,addWorldMembershipEdges,listGmailBlocks,addEmailThreads,replaceSourceGraph,replaceIndexedSourceGraph,sourceOwnedNodeIds,upsertActivity,upsertGraphData,replaceSnapshotGraphData,addSharedThread,removeSharedThread,selectConversation,unselectConversation,removeWorldGraph,updateGraphStatus,replaceIndexedGraph,mutateGraph,enqueueIndex,isIndexing};
+module.exports={VERSION,MAX_NODES,MAX_EDGES,MAX_REMOVED_CONVERSATIONS,validId,stableId,contentRevision,emptyGraph,fileOnlyGraph,readGraph,writeGraph,renameGraphFileWithRetry,node,edge,sourceStatus,normalizeSourceStatuses,failIndexingSources,statusForSources,walkConfiguredFolders,snapshotGraphItems,addWorldMembershipEdges,listGmailBlocks,addEmailThreads,replaceSourceGraph,replaceIndexedSourceGraph,sourceOwnedNodeIds,upsertActivity,upsertGraphData,replaceSnapshotGraphData,addSharedThread,removeSharedThread,selectConversation,unselectConversation,removeConversation,restoreConversation,removeWorldGraph,updateGraphStatus,replaceIndexedGraph,mutateGraph,enqueueIndex,isIndexing};

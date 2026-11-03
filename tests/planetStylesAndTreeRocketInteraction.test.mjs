@@ -8,6 +8,7 @@ const planetStyles = readFileSync(new URL("../src/worlds.css", import.meta.url),
 const treeSource = readFileSync(new URL("../src/components/TreeRocket.tsx", import.meta.url), "utf8");
 const worldTypes = readFileSync(new URL("../src/worlds.ts", import.meta.url), "utf8");
 const visualFixture = readFileSync(new URL("./ui/followup-smoke.tsx", import.meta.url), "utf8");
+const appStyles = readFileSync(new URL("../src/App.css", import.meta.url), "utf8");
 
 test("planet artwork fixture covers all seven saved styles in compact and large shared surfaces", () => {
     for (const style of ["planet", "rocky", "ringed", "glowing", "asteroid", "black-hole", "galaxy"]) {
@@ -23,11 +24,13 @@ test("planet artwork fixture covers all seven saved styles in compact and large 
     assert.match(worldSource, /className=\{`worldPlanet \$\{world\.style\}/);
     assert.match(worldSource, /<span className="worldPlanetCore"\/>/);
     assert.match(worldSource, /className="worldPlanetRing"/);
-    assert.match(worldSource, /className="worldBlackHoleDisk"/);
-    assert.match(worldSource, /className="worldGalaxyArms"/);
+    assert.match(worldSource, /src=\{blackHoleArtwork\}/);
+    assert.match(worldSource, /src=\{galaxyArtwork\}/);
+    assert.match(worldSource, /className="worldPlanetArtwork blackHoleArtwork"/);
+    assert.match(worldSource, /className="worldPlanetArtwork galaxyArtwork"/);
     assert.match(worldSource, /className="worldAiSatelliteOrbit"/);
     assert.match(planetStyles, /\.worldPlanet\.black-hole \.worldPlanetCore/);
-    assert.match(planetStyles, /\.worldBlackHoleDisk/);
+    assert.match(planetStyles, /\.worldPlanetArtwork \{[^}]*object-fit:contain/);
     assert.match(planetStyles, /\.worldPlanet\.rocky \.worldPlanetCore/);
     assert.match(planetStyles, /\.worldPlanet\.asteroid \.worldPlanetCore/);
 });
@@ -57,6 +60,16 @@ test("Tree Rocket anchor loss restores focus only when the floating preview held
     assert.match(treeSource,/document\.activeElement === document\.body[\s\S]*foldersTabRef\.current\?\.focus\(\)/);
     assert.match(treeSource,/rect\.bottom <= 0 \|\| rect\.top >= viewportHeight\) \{ closeFilesPanelForAnchorLoss\(\); return; \}/);
     assert.match(treeSource,/ref=\{foldersTabRef\} type="button" role="tab"/);
+});
+
+test("Tree Rocket child folders keep uniform cards, anchored add action, readable counts and contained tabs",()=>{
+    assert.match(appStyles,/\.treeRocketChildren\.hasParent:not\(\.emptyChildren\) \{ grid-template-columns:repeat\(auto-fit,minmax\(min\(150px,100%\),184px\)\)/);
+    assert.match(appStyles,/\.treeRocketChildren\.hasParent \{ overflow-x:auto; overflow-y:auto; scrollbar-gutter:stable; \}/);
+    assert.match(appStyles,/\.treeRocketNodeActions \.treeRocketAddFolderButton,\.treeRocketNodeActions \.treeRocketAddedButton \{ align-self:end; margin-left:auto; \}/);
+    assert.match(appStyles,/\.treeRocketNodeMeta \{ color:#46341e; \}/);
+    assert.match(appStyles,/\.treeRocketToolbar \.treeRocketTabs \{ min-width:0; max-width:100%; box-sizing:border-box; \}/);
+    assert.match(treeSource,/folder\.directFileCount !== 0 &&/);
+    assert.match(treeSource,/<button type="button" className=\{managed \? "treeRocketAddedButton" : "treeRocketAddFolderButton"\}/);
 });
 
 test("Planet Graph opens for current partial evidence and exposes its gaps and managed-note revision", () => {

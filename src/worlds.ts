@@ -39,6 +39,8 @@ export interface WorldObsidianSettings {
     vaultPath: string;
     sourceSelection?: WorldObsidianSourceSelection;
     lastSyncAt?: string;
+    lastAttemptAt?: string;
+    lastAttemptStatus?: string;
     status?: string;
     lastResult?: {total?: number; written?: number; unchanged?: number; conflicts?: number; warnings?: string[] } | null;
 }
@@ -159,7 +161,7 @@ function normalizeWorlds(value: unknown): WorkspaceWorld[] | null {
                 : undefined,
             treeRootMode: world.treeRootMode === "desktop" ? "desktop" : "computer",
             obsidian: world.obsidian && typeof world.obsidian === "object"
-                ? {enabled: world.obsidian.enabled === true, autoSync: world.obsidian.autoSync === true, vaultPath: typeof world.obsidian.vaultPath === "string" ? world.obsidian.vaultPath.slice(0, 1024) : "", sourceSelection: normalizeObsidianSourceSelection(world.obsidian.sourceSelection), ...(typeof world.obsidian.lastSyncAt === "string" ? {lastSyncAt: world.obsidian.lastSyncAt.slice(0, 40)} : {}), ...(typeof world.obsidian.status === "string" ? {status: world.obsidian.status.slice(0, 200)} : {}), ...(world.obsidian.lastResult && typeof world.obsidian.lastResult === "object" ? {lastResult: {total: finiteCount(world.obsidian.lastResult.total), written: finiteCount(world.obsidian.lastResult.written), unchanged: finiteCount(world.obsidian.lastResult.unchanged), conflicts: finiteCount(world.obsidian.lastResult.conflicts), warnings: Array.isArray(world.obsidian.lastResult.warnings) ? world.obsidian.lastResult.warnings.filter((item): item is string => typeof item === "string").slice(0, 20) : []}} : {})}
+                ? {enabled: world.obsidian.enabled === true, autoSync: world.obsidian.autoSync === true, vaultPath: typeof world.obsidian.vaultPath === "string" ? world.obsidian.vaultPath.slice(0, 1024) : "", sourceSelection: normalizeObsidianSourceSelection(world.obsidian.sourceSelection), ...(typeof world.obsidian.lastSyncAt === "string" ? {lastSyncAt: world.obsidian.lastSyncAt.slice(0, 40)} : {}), ...(typeof world.obsidian.lastAttemptAt === "string" ? {lastAttemptAt: world.obsidian.lastAttemptAt.slice(0, 40)} : {}), ...(typeof world.obsidian.lastAttemptStatus === "string" ? {lastAttemptStatus: world.obsidian.lastAttemptStatus.slice(0, 40)} : {}), ...(typeof world.obsidian.status === "string" ? {status: world.obsidian.status.slice(0, 200)} : {}), ...(world.obsidian.lastResult && typeof world.obsidian.lastResult === "object" ? {lastResult: {total: finiteCount(world.obsidian.lastResult.total), written: finiteCount(world.obsidian.lastResult.written), unchanged: finiteCount(world.obsidian.lastResult.unchanged), conflicts: finiteCount(world.obsidian.lastResult.conflicts), warnings: Array.isArray(world.obsidian.lastResult.warnings) ? world.obsidian.lastResult.warnings.filter((item): item is string => typeof item === "string").slice(0, 20) : []}} : {})}
                 : {enabled: false, vaultPath: "", sourceSelection: {...DEFAULT_OBSIDIAN_SOURCE_SELECTION}},
             agents: Array.isArray(world.agents) ? world.agents.filter(agent => agent && typeof agent.id === "string" && typeof agent.name === "string").map(agent => ({
                 id: agent.id,

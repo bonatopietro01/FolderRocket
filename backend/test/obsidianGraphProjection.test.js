@@ -168,16 +168,15 @@ test("Obsidian pruning follows client source category selection and protects man
     assert.equal(await fs.readFile(escapePath,"utf8"),"outside vault");
 });
 
-test("Obsidian route derives source scopes from current graph configuration and honors disabled email", async () => {
+test("Obsidian route uses file-only scope, ignores excluded client sources, and never prunes existing notes", async () => {
     const server=await fs.readFile(path.join(__dirname,"..","server.js"),"utf8");
     const route=server.slice(server.indexOf('app.post("/worlds/:worldId/obsidian/sync"'),server.indexOf('app.get("/worlds/:worldId/graph"'));
-    assert.match(route,/selectedSourceScopeIds\.add\(`filesystem:folder:\$\{root\.id\}`\)/,"filesystem scope IDs must match graphSourceId values prefixed with folder:");
-    assert.match(route,/selectedSourceScopeIds\.add\(`gmail:\$\{emailSelection\.blockId\}`\)/);
-    assert.match(route,/queueKnowledgeSyncJob\(req\.user,worldId,currentScope\);await job\.done/);
+    assert.match(route,/fileOnlySourceSelection\(state\.config\.sourceSelection\)/);
+    assert.doesNotMatch(route,/queueKnowledgeSyncJob|scheduleBackendHeavy/,"Obsidian sync must not trigger wiki ingestion implicitly");
     assert.match(route,/if\(!currentKnowledgeMatches\|\|currentKnowledge\.status!=="ready"\)/);
     assert.match(route,/selectedKnowledgeBlockers\(latestGraph,currentScope\)/);
-    assert.match(route,/else if\(selection\?\.provider==="outlook"&&sourceSelection\.email\)/,"unsupported Outlook should block pruning only while email is selected");
-    assert.match(route,/filterGraphBySources\(graph,sourceSelection,\{emailBlockIds:selectedEmailBlocks,folderRoots:syncFolderRoots\}\)/);
+    assert.doesNotMatch(route,/listGmail|Email conversation selection|No email account is selected|records\)\?\.records|attachments\)\?\.attachments/);
+    assert.match(route,/syncVault\(\{vaultPath,worldId,ownerId:req\.user\.id,worldName,records,completeSelection:false\}\)/,"the file-only scope transition preserves every note created by older categories");
     assert.doesNotMatch(route,/completeSelection\s*=\s*req\.body\?\.completeSelection/,"the client cannot claim that a sync is complete");
 });
 
