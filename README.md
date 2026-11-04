@@ -1,89 +1,125 @@
-# FolderRocket
+<p align="center">
+  <img src="src/assets/folderrocket-mark.png" alt="FolderRocket logo" width="150">
+</p>
 
-FolderRocket is a Windows-first visual workspace for organising local files, email attachments, conversion workflows, document archives and deadline monitoring.
+<h1 align="center">FolderRocket</h1>
 
-The current version is a local prototype built with React, TypeScript, Vite, Node.js and Express. Its next major stage is a downloadable desktop application that keeps users' files on their own computers.
+<p align="center">
+  A local-first workspace for files, projects, and the work around them.
+</p>
 
-## Local development
+FolderRocket brings file browsing, file workflows, project workspaces, and optional connected services into one Windows desktop app. Organize local folders, move work through CargoRocket, and keep related files and knowledge together in separate **planets**.
 
-Install dependencies once:
+> **Project status:** FolderRocket is an actively developed alpha (`0.2.0-alpha.13`). This repository builds a Windows x64 desktop installer for local use; it is not a public release or an automatic-update channel.
+
+## What you can do
+
+- **Browse and organize files.** Use Folder Management to work with linked folders and files, and Tree Rocket to explore local folder trees and installed applications.
+- **Move work through CargoRocket.** Stage files and attachments, then route them into FolderRocket workflows such as folder transfers, notes, reminders, and document tools.
+- **Work with documents.** File Studio provides document conversion and related file operations from the workspace.
+- **Keep projects separate.** Create planets for different areas of work. Folder selections, integration associations, knowledge, and vault settings are scoped to the selected planet.
+- **Build a local planet wiki.** Generate a read-only wiki from the planet’s selected file and folder scope, inspect its source evidence, and view the related graph. Rebuilds are started manually; Obsidian sync uses the last complete wiki revision.
+- **Bring in connected services when useful.** Optional Gmail, Outlook, Teams, calendar, and other source panels can be configured for the workflows that need them.
+- **Track daily work.** Use Daily Job, reminders, and calendar views to keep deadlines and follow-up work close to the project.
+
+FolderRocket’s desktop app and backend run on your computer. Provider features need their own configuration and an internet connection. Some scheduled workflows can run after you enable them. The app does not bundle personal provider credentials.
+
+## Install or run FolderRocket
+
+### Build the Windows installer
+
+From a Windows checkout with Node.js and npm installed:
 
 ```powershell
 npm install
 Set-Location backend
 npm install
+Set-Location ..
+npm run desktop:package
 ```
 
-Start the backend in one terminal:
+The x64 NSIS installer is written to `%LOCALAPPDATA%\FolderRocket\releases` by default. To choose another output directory for the current PowerShell session:
+
+```powershell
+$env:FOLDERROCKET_RELEASE_DIR = 'D:\FolderRocket-Releases'
+npm run desktop:package
+```
+
+The installer is for local testing and personal use. FolderRocket does not currently publish a public download from this repository.
+
+### Launch from source
+
+To build and open the Electron desktop app with its local backend:
+
+```powershell
+npm run desktop
+```
+
+For browser development, use two PowerShell terminals. Start the backend from the `backend` directory:
 
 ```powershell
 Set-Location backend
 node server.js
 ```
 
-Start the frontend in a second terminal:
+Then start the Vite frontend from the repository root:
 
 ```powershell
 npm run dev
 ```
 
-## Desktop local preview
+## Optional integrations
 
-The desktop launcher starts the local backend automatically and opens FolderRocket as a Windows application:
+FolderRocket can run its local file workflows without configuring an AI or mail provider. Connected features need provider credentials and may communicate with those providers when you use them; scheduled workflows can continue while enabled.
 
-```powershell
-npm run desktop
-```
+- **Browser development:** copy `backend/.env.example` to `backend/.env` and fill in only the providers you intend to configure.
+- **Installed desktop app:** provider configuration belongs in `%APPDATA%\FolderRocket\config.env`. See [`desktop/config.env.example`](desktop/config.env.example) for the supported keys.
+- **Gmail attachment bridge:** the optional Chrome/Edge extension lets you drag a Gmail attachment into FolderRocket on the same computer. Read the [Gmail Bridge guide](browser-extension/folderrocket-gmail-bridge/README.md).
+- **Obsidian Companion:** the optional plugin recognizes a FolderRocket-managed vault and can open its overview, focus the associated planet, or request a sync from the desktop app. See the [Obsidian plugin guide](obsidian-plugin/README.md).
 
-It is intentionally local-only at this stage. The first installer will be generated later with:
+Never commit `.env` files, provider tokens, API keys, personal files, generated work data, or signing keys. Keep real configuration in the local files above; the repository includes only templates.
 
-```powershell
-npm run desktop:package
-```
+## Development checks
 
-## Configuration and privacy
-
-For browser development, copy `backend/.env.example` to `backend/.env` and complete only the integrations you choose to activate.
-
-For the installed Windows app, credentials are deliberately not bundled. The administrator can open the **AI** button in FolderRocket and save only the services they choose to activate. The app stores them in `%APPDATA%\\FolderRocket\\config.env`, which remains on the PC across updates and is ignored by Git. `desktop/config.env.example` is available as an offline fallback template.
-
-Never commit `backend/.env`, mail tokens, user data, generated files or update-signing keys. The repository `.gitignore` protects these local files.
-
-FolderRocket is being designed local-first:
-
-- file operations and application data remain on the user's PC;
-- AI and mail integrations are optional connected features;
-- when AI is disabled or the computer is offline, the app must clearly show that connected features are unavailable rather than sending anything automatically.
-
-The planned migration from email accounts to password-optional local profiles is documented in [docs/LOCAL_PROFILES_ROADMAP.md](docs/LOCAL_PROFILES_ROADMAP.md).
-
-## Source control and releases
-
-Development and release rules are documented in [docs/DEVELOPMENT_AND_RELEASES.md](docs/DEVELOPMENT_AND_RELEASES.md). The practical flow is:
-
-```text
-feature branch → tested commit → main → version tag → Windows installer
-```
-
-The first desktop releases will be private Windows installers for personal use. Automatic signed updates and public distribution come only after the local version is stable.
-
-## Verification
-
-Before committing a change, run:
+From the repository root:
 
 ```powershell
+npm run lint
+npm test
 npm run build
+```
+
+To check backend JavaScript syntax:
+
+```powershell
 Set-Location backend
 node --check server.js
+Set-Location ..
 ```
 
-## Code graph (optional)
+The documented workspace helper tests require Node.js 24 or newer:
 
-To map source-code relationships locally with Graphify, see
-[docs/GRAPHIFY.md](docs/GRAPHIFY.md). After installing the external CLI, run
-`npm run graph:build`. This is a code-only development tool and is not included
-in the FolderRocket desktop app.
+```powershell
+node --test tests/folderDragHover.test.mjs tests/applicationFiles.test.mjs
+```
 
-## Project context
+The UI fixtures under `tests/ui/` use synthetic data and mocked network responses. They do not scan or move real files. See [`tests/README.md`](tests/README.md) for how to run them.
 
-Read [CODEX.md](CODEX.md) before changing the application architecture or file-management behavior.
+## Repository map
+
+| Path | Purpose |
+| --- | --- |
+| `src/` | React, TypeScript, and Vite frontend |
+| `backend/` | Local Node.js and Express API, integrations, and file services |
+| `desktop/` | Electron desktop launcher, preload, and configuration templates |
+| `browser-extension/` | Optional Gmail attachment bridge |
+| `obsidian-plugin/` | Optional FolderRocket Companion for Obsidian |
+| `tests/`, `backend/test/` | UI fixtures, helper tests, and backend tests |
+
+## More information
+
+- [Development and release workflow](docs/DEVELOPMENT_AND_RELEASES.md)
+- [Graphify source-code map](docs/GRAPHIFY.md)
+- [Gmail Bridge setup](browser-extension/folderrocket-gmail-bridge/README.md)
+- [Obsidian Companion setup](obsidian-plugin/README.md)
+- [Project architecture notes](CODEX.md)
