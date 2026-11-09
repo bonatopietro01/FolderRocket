@@ -2,11 +2,11 @@
 
 La fonte operativa delle procedure e questa cartella `.agents/skills`; gli agenti sono configurati separatamente in `.codex/agents/*.toml`. La [mappa canonica dei percorsi](../../AGENTS.md#canonical-paths-for-agents-and-skills) distingue ruoli, procedure e rimando legacy. Il pack upstream e una fonte di importazione/provenienza, non viene riletto a ogni incarico.
 
-Questo progetto espone 14 skill locali. Codex le rileva da `.agents/skills`; sono selezionabili in base a nome e descrizione e richiamabili esplicitamente, per esempio con `$handoff` o «usa la skill handoff». La scoperta rende le procedure disponibili, ma non avvia gli agenti: il coordinatore applica il [flusso degli agenti](../../.codex/agents/README.md) e avvia i ruoli pertinenti.
+Questo progetto espone 15 skill locali. Codex le rileva da `.agents/skills`; sono selezionabili in base a nome e descrizione e richiamabili esplicitamente, per esempio con `$handoff` o «usa la skill handoff». La scoperta rende le procedure disponibili, ma non avvia gli agenti: il coordinatore applica il [flusso degli agenti](../../.codex/agents/README.md) e avvia i ruoli pertinenti.
 
 ## Accesso e attivazione
 
-Ogni agente può leggere e applicare tutte le 14 skill compatibili con il proprio incarico. La tabella indica gli owner tipici, non una lista di accesso esclusiva. Architect, Reviewer e Prompt Agent restano in sola lettura: per una procedura che richiede scrittura consegnano testo, rilievi o proposta al coordinatore/owner autorizzato. AppStarter in modalità RUNNING mantiene l'analisi in sola lettura.
+Ogni agente può leggere e applicare tutte le 15 skill compatibili con il proprio incarico. La tabella indica gli owner tipici, non una lista di accesso esclusiva. Architect, Reviewer e Prompt Agent restano in sola lettura: per una procedura che richiede scrittura consegnano testo, rilievi o proposta al coordinatore/owner autorizzato. AppStarter in modalità RUNNING mantiene l'analisi in sola lettura.
 
 Quando l'utente nomina una skill, individua il relativo SKILL.md e leggilo prima di applicarla. Se il nome non compare nel catalogo del runtime, usa il percorso locale della tabella; se manca anche il file, segnala la dipendenza. Per la selezione implicita scegli solo le skill i cui trigger cambiano utilmente il lavoro corrente. Leggi il corpo e le risorse pertinenti con gli strumenti di file disponibili: non presupporre uno strumento chiamato Skill.
 
@@ -17,7 +17,7 @@ Nei task con più requisiti registra in TaskState `skill_usage` con nome, percor
 Ogni ruolo invocato, prima di analisi, piano o implementazione, esegue questo protocollo senza aspettare che l'utente nomini le skill:
 
 1. Legge questo catalogo e confronta l'incarico, i trigger e le istruzioni del ruolo.
-2. Seleziona le procedure pertinenti; gli elenchi dei TOML sono esempi e tutte le 14 skill restano accessibili entro i permessi. Non carica l'intero catalogo di procedure.
+2. Seleziona le procedure pertinenti; gli elenchi dei TOML sono esempi e tutte le 15 skill restano accessibili entro i permessi. Non carica l'intero catalogo di procedure.
 3. Legge il `SKILL.md` locale di ogni skill selezionata e le risorse necessarie, quindi la applica nel proprio scope. Una lettura del solo catalogo o un nome nell'elenco non conta come attivazione della procedura.
 4. Nel checkpoint/handoff restituisce `skill_usage` con nome, percorso effettivamente letto, trigger e stato `READ` o `APPLIED`. Una skill soltanto letta non viene dichiarata applicata. Se nessuna procedura e pertinente, esplicita il motivo; se una dipendenza necessaria manca, segnala il limite prima del lavoro dipendente.
 
@@ -33,6 +33,7 @@ Il coordinatore include il protocollo in ogni delega e verifica `skill_usage` pr
 | [requirement-traceability](requirement-traceability/SKILL.md) | Conservare ID, criteri, ownership, dipendenze ed evidenze nei task articolati. | Tutti i ruoli coinvolti. |
 | [project-graph-context](project-graph-context/SKILL.md) | Ricostruire relazioni rilevanti e verificarle nelle fonti correnti. | Ruoli che necessitano di contesto tra moduli. |
 | [pipeline-benchmark](pipeline-benchmark/SKILL.md) | Definire casi, rubriche e confronti ripetibili per una pipeline. | Coordinatore o owner assegnato; non c'è un Evaluation Agent configurato. |
+| [folder-structure](folder-structure/SKILL.md) | Mostrare l’albero attuale, trovare percorsi precisi o rileggere una struttura già esaminata. | AppStarter, Architect e ruoli che devono orientarsi nei file. |
 | [grilling](grilling/SKILL.md) | Richiesta di grilling o decisione sostanziale aperta che non emerge dai file. | Coordinatore, Prompt Agent o specialista; le domande agli utenti sono raccolte dal coordinatore. |
 | [handoff](Handoff/SKILL.md) | Richiesta di passaggio a una nuova chat/agente o riepilogo per continuare. | Ogni ruolo prepara il contenuto; il coordinatore salva il documento se il mittente è read-only. |
 | [writing-for-agents](writing-for-agents/SKILL.md) | Scrivere o aggiornare prompt, istruzioni di agenti e skill. | Ogni ruolo nel proprio incarico; i ruoli read-only restituiscono testo o review. |
@@ -59,5 +60,7 @@ Handoff mantiene il percorso con maiuscola già presente nel progetto. Ogni skil
 ## Provenienza
 
 Il Full_stack_pack è un'esportazione; la fonte canonica resta il repository PROMPT_AGENTI e le copie non si aggiornano automaticamente. Le copie locali mantengono le personalizzazioni FolderRocket. L'audit del 12 ottobre 2026 adatta invocazione, routing, handoff read-only e verifiche; i relativi dettagli sono nel [piano dell'audit](../../docs/plans/agent-skill-workflow-2026-10-12.md). Gli SHA-256 in [agents/README.md](../../.codex/agents/README.md) identificano le fonti fornite, non le copie locali successivamente adattate.
+
+La skill `folder-structure` proviene dal Full_stack_pack ed è stata aggiunta alle skills locali. `.claude/skills` contiene copie con gli stessi byte per ogni file; la directory `Handoff` è chiamata `handoff` nella copia per corrispondere all’ID della skill. Cursor può scoprire le skill in `.agents/skills` e `.claude/skills`; questa installazione non ne ha verificato il riconoscimento nel runtime. Mantieni entrambe le copie equivalenti.
 
 Le skills di origine esterna mantengono i riferimenti forniti dal pack a Matt Pocock e Caveman. Le risorse incluse comprendono DEEPENING.md e DESIGN-IT-TWICE.md per codebase-design, SKILL-MECHANICS.md per writing-for-agents e lo script Bash di diagnosing-bugs.

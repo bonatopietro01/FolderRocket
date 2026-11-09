@@ -2,7 +2,7 @@
 
 The runtime reads role configurations from `.codex/agents/*.toml` and procedures from `.agents/skills/<skill>/SKILL.md`. See the [canonical path map](../../AGENTS.md#canonical-paths-for-agents-and-skills). `.codex/skills/` is only a compatibility pointer, not a second skills installation.
 
-The six development TOMLs are project-level Codex agent configurations: AppStarter is adapted from an earlier source, while Architect, Backend, Frontend, AIEngineer, and Reviewer adapt the corresponding Full_stack_pack specifications. The separate prompt_agent.toml adapts PromptAgent_General.md from that pack. They follow the existing .codex/agents/*.toml format. All 14 project skills are accessible to every role within its permissions. See [the skill catalog](../../.agents/skills/README.md) for activation and applicability. Source specifications remain upstream; TOMLs and skills are project adaptations.
+The six development TOMLs are project-level Codex agent configurations: AppStarter is adapted from an earlier source, while Architect, Backend, Frontend, AIEngineer, and Reviewer adapt the corresponding Full_stack_pack specifications. The separate prompt_agent.toml adapts PromptAgent_General.md from that pack. They follow the existing .codex/agents/*.toml format. All 15 project skills are accessible to every role within its permissions. See [the skill catalog](../../.agents/skills/README.md) for activation and applicability. Source specifications remain upstream; TOMLs and skills are project adaptations.
 
 ## Configured roles
 

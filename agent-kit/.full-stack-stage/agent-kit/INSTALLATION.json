@@ -1,0 +1,1490 @@
+{
+  "files": {
+    ".agents/skills/agent-configuration/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "37b28df006f479ed4b1921aed156938b95af354423bccabb30e46eba23dd4386",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/SKILL.md",
+          "sha256": "37b28df006f479ed4b1921aed156938b95af354423bccabb30e46eba23dd4386"
+        }
+      ]
+    },
+    ".agents/skills/agent-configuration/references/claude-code.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "bc93ec62886e82c71c12b0672da88651aa11bb30488a9b8c7718d0e4b5ab6a5f",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/claude-code.md",
+          "sha256": "bc93ec62886e82c71c12b0672da88651aa11bb30488a9b8c7718d0e4b5ab6a5f"
+        }
+      ]
+    },
+    ".agents/skills/agent-configuration/references/codex.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "1ca554957b4f1c96a34e32a4ade2f47d30ecc70832deda5a3195ac91bd8be532",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/codex.md",
+          "sha256": "1ca554957b4f1c96a34e32a4ade2f47d30ecc70832deda5a3195ac91bd8be532"
+        }
+      ]
+    },
+    ".agents/skills/agent-configuration/references/cursor.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "0703fe4074da995f2e9ae7aeb93ecb25fb2bccfcc782303f96132a1502069a91",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/cursor.md",
+          "sha256": "0703fe4074da995f2e9ae7aeb93ecb25fb2bccfcc782303f96132a1502069a91"
+        }
+      ]
+    },
+    ".agents/skills/agent-configuration/references/installation.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "aa89c618378d3cc61de4ae8d6080afb70162e056c8e1f9c56d5adbca2131c00d",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/installation.md",
+          "sha256": "aa89c618378d3cc61de4ae8d6080afb70162e056c8e1f9c56d5adbca2131c00d"
+        }
+      ]
+    },
+    ".agents/skills/agent-configuration/references/roles.json": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        }
+      ]
+    },
+    ".agents/skills/agent-configuration/references/runtime-check.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "83e1aba1eb4789891e4f68982ca90babd4a8e75dda2eb2d1ab85a0b42a3dc448",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/runtime-check.md",
+          "sha256": "83e1aba1eb4789891e4f68982ca90babd4a8e75dda2eb2d1ab85a0b42a3dc448"
+        }
+      ]
+    },
+    ".agents/skills/agent-configuration/scripts/install_agent_pack.py": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    ".agents/skills/agent-configuration/scripts/test_install_agent_pack.py": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "3955f7d24a8db9c96c4356de5d310fa3067a47cdbe5e36fd58f08e3b159a38d0",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/test_install_agent_pack.py",
+          "sha256": "3955f7d24a8db9c96c4356de5d310fa3067a47cdbe5e36fd58f08e3b159a38d0"
+        }
+      ]
+    },
+    ".agents/skills/codebase-design/DEEPENING.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "203cd4a0d4930a9c535e32bf268b3b884cbd78131512c7c9b3017ff8fb3e0f26",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/codebase-design/DEEPENING.md",
+          "sha256": "203cd4a0d4930a9c535e32bf268b3b884cbd78131512c7c9b3017ff8fb3e0f26"
+        }
+      ]
+    },
+    ".agents/skills/codebase-design/DESIGN-IT-TWICE.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "f8c9665f9983c9b1d941191617deb2d8c3c5779418d4c3b4f752a747a574baef",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/codebase-design/DESIGN-IT-TWICE.md",
+          "sha256": "f8c9665f9983c9b1d941191617deb2d8c3c5779418d4c3b4f752a747a574baef"
+        }
+      ]
+    },
+    ".agents/skills/codebase-design/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "6a02df08270af30415d2d51542afcbf9fb3fe45fbb8c68d4d625f7bad3d38866",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/codebase-design/SKILL.md",
+          "sha256": "6a02df08270af30415d2d51542afcbf9fb3fe45fbb8c68d4d625f7bad3d38866"
+        }
+      ]
+    },
+    ".agents/skills/codebase-design/agents/openai.yaml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "edebc9e4fcfe102114012575eaa9600b9b5fd08c311664f389c36e7bc717740f",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/codebase-design/agents/openai.yaml",
+          "sha256": "edebc9e4fcfe102114012575eaa9600b9b5fd08c311664f389c36e7bc717740f"
+        }
+      ]
+    },
+    ".agents/skills/folder-structure/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "638c17ba2ea3c24467397a5c85e81633cc05405607aed621dcbb819035c74cb8",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/folder-structure/SKILL.md",
+          "sha256": "638c17ba2ea3c24467397a5c85e81633cc05405607aed621dcbb819035c74cb8"
+        }
+      ]
+    },
+    ".agents/skills/grilling/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "9471ec199e123d039c55f7068776075b42ad0d9db0e13b2e23403f6c54717462",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/grilling/SKILL.md",
+          "sha256": "9471ec199e123d039c55f7068776075b42ad0d9db0e13b2e23403f6c54717462"
+        }
+      ]
+    },
+    ".agents/skills/grilling/agents/openai.yaml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "1411d7df7d99b7e621a1ff8283c8133cc2464be63d064e52d8ce169c6800ee9b",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/grilling/agents/openai.yaml",
+          "sha256": "1411d7df7d99b7e621a1ff8283c8133cc2464be63d064e52d8ce169c6800ee9b"
+        }
+      ]
+    },
+    ".agents/skills/handoff/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "d4d303eda0628931fd497caf2eeb258dbb559d9752e2f948c38965cdca46cb1d",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/handoff/SKILL.md",
+          "sha256": "d4d303eda0628931fd497caf2eeb258dbb559d9752e2f948c38965cdca46cb1d"
+        }
+      ]
+    },
+    ".agents/skills/handoff/agents/openai.yaml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "5c479fd562c691851690e8b18c8501045bef0943c10743d636b2fae26add1d28",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/handoff/agents/openai.yaml",
+          "sha256": "5c479fd562c691851690e8b18c8501045bef0943c10743d636b2fae26add1d28"
+        }
+      ]
+    },
+    ".agents/skills/investigate-first/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "7cc19dd2fc457eb20d65c44dee4d1b72dcdfcd1617182f5bff666700f2a055d8",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/investigate-first/SKILL.md",
+          "sha256": "7cc19dd2fc457eb20d65c44dee4d1b72dcdfcd1617182f5bff666700f2a055d8"
+        }
+      ]
+    },
+    ".agents/skills/investigate-first/agents/openai.yaml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "9836c3e7e71564810abb1eeb66341e8ef180c457d4e121fe772cbf53e41a9268",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/investigate-first/agents/openai.yaml",
+          "sha256": "9836c3e7e71564810abb1eeb66341e8ef180c457d4e121fe772cbf53e41a9268"
+        }
+      ]
+    },
+    ".agents/skills/pipeline-benchmark/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "bab92c51cdf7c8fa7e2b8b919632da131cb2f7b3da75065a01a455afa176f5a3",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/pipeline-benchmark/SKILL.md",
+          "sha256": "bab92c51cdf7c8fa7e2b8b919632da131cb2f7b3da75065a01a455afa176f5a3"
+        }
+      ]
+    },
+    ".agents/skills/project-graph-context/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "dc489a1aecc841740b0076856aadf0e7a4907888b04ba279b13405617206586e",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/project-graph-context/SKILL.md",
+          "sha256": "dc489a1aecc841740b0076856aadf0e7a4907888b04ba279b13405617206586e"
+        }
+      ]
+    },
+    ".agents/skills/project-graph-context/references/obsidian-workflow.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "67c440380b11f7ab668ddb083cdeab507b6a53fea4c9693e22f55e41bc1c06c1",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/project-graph-context/references/obsidian-workflow.md",
+          "sha256": "67c440380b11f7ab668ddb083cdeab507b6a53fea4c9693e22f55e41bc1c06c1"
+        }
+      ]
+    },
+    ".agents/skills/requirement-traceability/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "6581f60689163da78af7dd54fe1d639523fecf4c682e1066941d6835541271e5",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/requirement-traceability/SKILL.md",
+          "sha256": "6581f60689163da78af7dd54fe1d639523fecf4c682e1066941d6835541271e5"
+        }
+      ]
+    },
+    ".agents/skills/retro/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "3032f81289c68ae3ba467cadb2ba28e76a5132309c325ea747ceaf6bf543fe56",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/retro/SKILL.md",
+          "sha256": "3032f81289c68ae3ba467cadb2ba28e76a5132309c325ea747ceaf6bf543fe56"
+        }
+      ]
+    },
+    ".agents/skills/retro/agents/openai.yaml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "cb6fb9d7e6b4be5975f41f6def1dd00a1255bad5d9b02696b124c924a8b8745c",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/retro/agents/openai.yaml",
+          "sha256": "cb6fb9d7e6b4be5975f41f6def1dd00a1255bad5d9b02696b124c924a8b8745c"
+        }
+      ]
+    },
+    ".agents/skills/safe-refactor/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "f4394a12f256ef32e8caa89b614cb6897195b8522cc284ca631da3b291161e96",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/safe-refactor/SKILL.md",
+          "sha256": "f4394a12f256ef32e8caa89b614cb6897195b8522cc284ca631da3b291161e96"
+        }
+      ]
+    },
+    ".agents/skills/safe-refactor/agents/openai.yaml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "df608465dc32de1926bfc91ea0beabe9bc61198c121ff1eef0d2e6d74dd67ac1",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/safe-refactor/agents/openai.yaml",
+          "sha256": "df608465dc32de1926bfc91ea0beabe9bc61198c121ff1eef0d2e6d74dd67ac1"
+        }
+      ]
+    },
+    ".agents/skills/writing-for-agents/SKILL-MECHANICS.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "a9f6b13de985d72e92ba4acf7ddec96cbac708b4696a8ff1a687de8225076a96",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/writing-for-agents/SKILL-MECHANICS.md",
+          "sha256": "a9f6b13de985d72e92ba4acf7ddec96cbac708b4696a8ff1a687de8225076a96"
+        }
+      ]
+    },
+    ".agents/skills/writing-for-agents/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "551adca942227b44192edba88acd4e8db911f0121ce58ad16944ccf6a896a74a",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/writing-for-agents/SKILL.md",
+          "sha256": "551adca942227b44192edba88acd4e8db911f0121ce58ad16944ccf6a896a74a"
+        }
+      ]
+    },
+    ".agents/skills/writing-for-agents/agents/openai.yaml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "eacb24b2a618cfb81dacb0416f4fdd75ddf3a8060f8ddb99aae1b1e301907e4b",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/writing-for-agents/agents/openai.yaml",
+          "sha256": "eacb24b2a618cfb81dacb0416f4fdd75ddf3a8060f8ddb99aae1b1e301907e4b"
+        }
+      ]
+    },
+    ".claude/agents/ai-engineer.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "863807c8736dc203ab8a62819b8d3a743288784d2f265a3689c820f5a81dd079",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Agents/AIEngineerAgent_General.md",
+          "sha256": "ad4d93fcaf3779514b7f7796e0a427cec7f4e2a3c03b081ab49810098e86a079"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    ".claude/agents/architect.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "5d08d6cc98f34492b54b0feb983355f8b5611c156c50221d93c7ca9dadac6af1",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Agents/ArchitectAgent_General.md",
+          "sha256": "4130a15483841db3bd3338b294b57ae22538ae00445f644c1c91483363f9b8d9"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    ".claude/agents/backend.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "f4b1f0dcc076bd8cc49839973d3d62257e165ad5bbd41de84e9f27dd92fa6844",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Agents/BackendAgent_General.md",
+          "sha256": "4cf4641cbef8ab00cfe805bff414d2cf80279b82d1d979fd472ec220dca86ee8"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    ".claude/agents/frontend.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "6516b65282cbbbb2be59723f05611c2ee28a0147673411ec561c9bfc6331c3bf",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Agents/FrontendAgent_General.md",
+          "sha256": "be41e7a1c5087dfaf56140d27856a6628938ab4e19553a42a195f9941866ffd8"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    ".claude/agents/prompt-agent.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "6198675ff80d7abc41fedfa054508bb23d5217a9a4a414b8e1a5bcca3a11db58",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Agents/PromptAgent_General.md",
+          "sha256": "228ae7cf1b741f403e1e135eceaad75862029b147c7e178e5256768ed753429f"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    ".claude/agents/reviewer.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "a59d4fc3869ebb3a57bd429e7a9d49f49324f96ba65e97a75c3c99995495d401",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Agents/ReviewerAgent_General.md",
+          "sha256": "35ad3eb11f1b375e0a94673b29b301112d08b349b86d47308a18f3339d70e343"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    ".claude/skills/agent-configuration/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "37b28df006f479ed4b1921aed156938b95af354423bccabb30e46eba23dd4386",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/SKILL.md",
+          "sha256": "37b28df006f479ed4b1921aed156938b95af354423bccabb30e46eba23dd4386"
+        }
+      ]
+    },
+    ".claude/skills/agent-configuration/references/claude-code.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "bc93ec62886e82c71c12b0672da88651aa11bb30488a9b8c7718d0e4b5ab6a5f",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/claude-code.md",
+          "sha256": "bc93ec62886e82c71c12b0672da88651aa11bb30488a9b8c7718d0e4b5ab6a5f"
+        }
+      ]
+    },
+    ".claude/skills/agent-configuration/references/codex.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "1ca554957b4f1c96a34e32a4ade2f47d30ecc70832deda5a3195ac91bd8be532",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/codex.md",
+          "sha256": "1ca554957b4f1c96a34e32a4ade2f47d30ecc70832deda5a3195ac91bd8be532"
+        }
+      ]
+    },
+    ".claude/skills/agent-configuration/references/cursor.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "0703fe4074da995f2e9ae7aeb93ecb25fb2bccfcc782303f96132a1502069a91",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/cursor.md",
+          "sha256": "0703fe4074da995f2e9ae7aeb93ecb25fb2bccfcc782303f96132a1502069a91"
+        }
+      ]
+    },
+    ".claude/skills/agent-configuration/references/installation.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "aa89c618378d3cc61de4ae8d6080afb70162e056c8e1f9c56d5adbca2131c00d",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/installation.md",
+          "sha256": "aa89c618378d3cc61de4ae8d6080afb70162e056c8e1f9c56d5adbca2131c00d"
+        }
+      ]
+    },
+    ".claude/skills/agent-configuration/references/roles.json": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        }
+      ]
+    },
+    ".claude/skills/agent-configuration/references/runtime-check.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "83e1aba1eb4789891e4f68982ca90babd4a8e75dda2eb2d1ab85a0b42a3dc448",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/runtime-check.md",
+          "sha256": "83e1aba1eb4789891e4f68982ca90babd4a8e75dda2eb2d1ab85a0b42a3dc448"
+        }
+      ]
+    },
+    ".claude/skills/agent-configuration/scripts/install_agent_pack.py": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    ".claude/skills/agent-configuration/scripts/test_install_agent_pack.py": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "3955f7d24a8db9c96c4356de5d310fa3067a47cdbe5e36fd58f08e3b159a38d0",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/test_install_agent_pack.py",
+          "sha256": "3955f7d24a8db9c96c4356de5d310fa3067a47cdbe5e36fd58f08e3b159a38d0"
+        }
+      ]
+    },
+    ".claude/skills/codebase-design/DEEPENING.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "203cd4a0d4930a9c535e32bf268b3b884cbd78131512c7c9b3017ff8fb3e0f26",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/codebase-design/DEEPENING.md",
+          "sha256": "203cd4a0d4930a9c535e32bf268b3b884cbd78131512c7c9b3017ff8fb3e0f26"
+        }
+      ]
+    },
+    ".claude/skills/codebase-design/DESIGN-IT-TWICE.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "f8c9665f9983c9b1d941191617deb2d8c3c5779418d4c3b4f752a747a574baef",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/codebase-design/DESIGN-IT-TWICE.md",
+          "sha256": "f8c9665f9983c9b1d941191617deb2d8c3c5779418d4c3b4f752a747a574baef"
+        }
+      ]
+    },
+    ".claude/skills/codebase-design/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "6a02df08270af30415d2d51542afcbf9fb3fe45fbb8c68d4d625f7bad3d38866",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/codebase-design/SKILL.md",
+          "sha256": "6a02df08270af30415d2d51542afcbf9fb3fe45fbb8c68d4d625f7bad3d38866"
+        }
+      ]
+    },
+    ".claude/skills/codebase-design/agents/openai.yaml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "edebc9e4fcfe102114012575eaa9600b9b5fd08c311664f389c36e7bc717740f",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/codebase-design/agents/openai.yaml",
+          "sha256": "edebc9e4fcfe102114012575eaa9600b9b5fd08c311664f389c36e7bc717740f"
+        }
+      ]
+    },
+    ".claude/skills/folder-structure/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "638c17ba2ea3c24467397a5c85e81633cc05405607aed621dcbb819035c74cb8",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/folder-structure/SKILL.md",
+          "sha256": "638c17ba2ea3c24467397a5c85e81633cc05405607aed621dcbb819035c74cb8"
+        }
+      ]
+    },
+    ".claude/skills/grilling/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "9471ec199e123d039c55f7068776075b42ad0d9db0e13b2e23403f6c54717462",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/grilling/SKILL.md",
+          "sha256": "9471ec199e123d039c55f7068776075b42ad0d9db0e13b2e23403f6c54717462"
+        }
+      ]
+    },
+    ".claude/skills/grilling/agents/openai.yaml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "1411d7df7d99b7e621a1ff8283c8133cc2464be63d064e52d8ce169c6800ee9b",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/grilling/agents/openai.yaml",
+          "sha256": "1411d7df7d99b7e621a1ff8283c8133cc2464be63d064e52d8ce169c6800ee9b"
+        }
+      ]
+    },
+    ".claude/skills/handoff/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "d4d303eda0628931fd497caf2eeb258dbb559d9752e2f948c38965cdca46cb1d",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/handoff/SKILL.md",
+          "sha256": "d4d303eda0628931fd497caf2eeb258dbb559d9752e2f948c38965cdca46cb1d"
+        }
+      ]
+    },
+    ".claude/skills/handoff/agents/openai.yaml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "5c479fd562c691851690e8b18c8501045bef0943c10743d636b2fae26add1d28",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/handoff/agents/openai.yaml",
+          "sha256": "5c479fd562c691851690e8b18c8501045bef0943c10743d636b2fae26add1d28"
+        }
+      ]
+    },
+    ".claude/skills/investigate-first/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "7cc19dd2fc457eb20d65c44dee4d1b72dcdfcd1617182f5bff666700f2a055d8",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/investigate-first/SKILL.md",
+          "sha256": "7cc19dd2fc457eb20d65c44dee4d1b72dcdfcd1617182f5bff666700f2a055d8"
+        }
+      ]
+    },
+    ".claude/skills/investigate-first/agents/openai.yaml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "9836c3e7e71564810abb1eeb66341e8ef180c457d4e121fe772cbf53e41a9268",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/investigate-first/agents/openai.yaml",
+          "sha256": "9836c3e7e71564810abb1eeb66341e8ef180c457d4e121fe772cbf53e41a9268"
+        }
+      ]
+    },
+    ".claude/skills/pipeline-benchmark/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "bab92c51cdf7c8fa7e2b8b919632da131cb2f7b3da75065a01a455afa176f5a3",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/pipeline-benchmark/SKILL.md",
+          "sha256": "bab92c51cdf7c8fa7e2b8b919632da131cb2f7b3da75065a01a455afa176f5a3"
+        }
+      ]
+    },
+    ".claude/skills/project-graph-context/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "dc489a1aecc841740b0076856aadf0e7a4907888b04ba279b13405617206586e",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/project-graph-context/SKILL.md",
+          "sha256": "dc489a1aecc841740b0076856aadf0e7a4907888b04ba279b13405617206586e"
+        }
+      ]
+    },
+    ".claude/skills/project-graph-context/references/obsidian-workflow.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "67c440380b11f7ab668ddb083cdeab507b6a53fea4c9693e22f55e41bc1c06c1",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/project-graph-context/references/obsidian-workflow.md",
+          "sha256": "67c440380b11f7ab668ddb083cdeab507b6a53fea4c9693e22f55e41bc1c06c1"
+        }
+      ]
+    },
+    ".claude/skills/requirement-traceability/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "6581f60689163da78af7dd54fe1d639523fecf4c682e1066941d6835541271e5",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/requirement-traceability/SKILL.md",
+          "sha256": "6581f60689163da78af7dd54fe1d639523fecf4c682e1066941d6835541271e5"
+        }
+      ]
+    },
+    ".claude/skills/retro/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "3032f81289c68ae3ba467cadb2ba28e76a5132309c325ea747ceaf6bf543fe56",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/retro/SKILL.md",
+          "sha256": "3032f81289c68ae3ba467cadb2ba28e76a5132309c325ea747ceaf6bf543fe56"
+        }
+      ]
+    },
+    ".claude/skills/retro/agents/openai.yaml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "cb6fb9d7e6b4be5975f41f6def1dd00a1255bad5d9b02696b124c924a8b8745c",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/retro/agents/openai.yaml",
+          "sha256": "cb6fb9d7e6b4be5975f41f6def1dd00a1255bad5d9b02696b124c924a8b8745c"
+        }
+      ]
+    },
+    ".claude/skills/safe-refactor/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "f4394a12f256ef32e8caa89b614cb6897195b8522cc284ca631da3b291161e96",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/safe-refactor/SKILL.md",
+          "sha256": "f4394a12f256ef32e8caa89b614cb6897195b8522cc284ca631da3b291161e96"
+        }
+      ]
+    },
+    ".claude/skills/safe-refactor/agents/openai.yaml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "df608465dc32de1926bfc91ea0beabe9bc61198c121ff1eef0d2e6d74dd67ac1",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/safe-refactor/agents/openai.yaml",
+          "sha256": "df608465dc32de1926bfc91ea0beabe9bc61198c121ff1eef0d2e6d74dd67ac1"
+        }
+      ]
+    },
+    ".claude/skills/writing-for-agents/SKILL-MECHANICS.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "a9f6b13de985d72e92ba4acf7ddec96cbac708b4696a8ff1a687de8225076a96",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/writing-for-agents/SKILL-MECHANICS.md",
+          "sha256": "a9f6b13de985d72e92ba4acf7ddec96cbac708b4696a8ff1a687de8225076a96"
+        }
+      ]
+    },
+    ".claude/skills/writing-for-agents/SKILL.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "551adca942227b44192edba88acd4e8db911f0121ce58ad16944ccf6a896a74a",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/writing-for-agents/SKILL.md",
+          "sha256": "551adca942227b44192edba88acd4e8db911f0121ce58ad16944ccf6a896a74a"
+        }
+      ]
+    },
+    ".claude/skills/writing-for-agents/agents/openai.yaml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "eacb24b2a618cfb81dacb0416f4fdd75ddf3a8060f8ddb99aae1b1e301907e4b",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/writing-for-agents/agents/openai.yaml",
+          "sha256": "eacb24b2a618cfb81dacb0416f4fdd75ddf3a8060f8ddb99aae1b1e301907e4b"
+        }
+      ]
+    },
+    ".codex/agents/ai-engineer.toml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "888767c087b8e8a9e634e3d54034dc8eae30d4b51a7bd5ee5a95565499fb8d2f",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Agents/AIEngineerAgent_General.md",
+          "sha256": "ad4d93fcaf3779514b7f7796e0a427cec7f4e2a3c03b081ab49810098e86a079"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    ".codex/agents/architect.toml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "2caf39d1d0e34a7b80edb4d800e3db21434c5fecb9853c87481f104280b90b53",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Agents/ArchitectAgent_General.md",
+          "sha256": "4130a15483841db3bd3338b294b57ae22538ae00445f644c1c91483363f9b8d9"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    ".codex/agents/backend.toml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "4ee4839564ccc94057cd0f037be263f521719bc8cdc95a3405bbc8f63ceb0031",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Agents/BackendAgent_General.md",
+          "sha256": "4cf4641cbef8ab00cfe805bff414d2cf80279b82d1d979fd472ec220dca86ee8"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    ".codex/agents/frontend.toml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "0d825ff6b184c87ee202ac7378b5c4cae400bba706357b763906b277e2d7c95f",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Agents/FrontendAgent_General.md",
+          "sha256": "be41e7a1c5087dfaf56140d27856a6628938ab4e19553a42a195f9941866ffd8"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    ".codex/agents/prompt-agent.toml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "ce7f87541fee7cac678dd4dc42200c8510b29c32e23ea03bdb9aad7b79b19a6c",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Agents/PromptAgent_General.md",
+          "sha256": "228ae7cf1b741f403e1e135eceaad75862029b147c7e178e5256768ed753429f"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    ".codex/agents/reviewer.toml": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "276994a16949ea63c94cc61174942004ed5ce9690ce29ba8ff824a344e6d4924",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Agents/ReviewerAgent_General.md",
+          "sha256": "35ad3eb11f1b375e0a94673b29b301112d08b349b86d47308a18f3339d70e343"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    ".cursor/agents/ai-engineer.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "a7d86b288514b3d90090216e2f50a86fdc9c627e84df00464d9be27ba407cd70",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Agents/AIEngineerAgent_General.md",
+          "sha256": "ad4d93fcaf3779514b7f7796e0a427cec7f4e2a3c03b081ab49810098e86a079"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    ".cursor/agents/architect.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "146de1a278b53bb1c7f7eaa9ab8e46944babe49d8abdf1dfd7975f9cb069aca6",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Agents/ArchitectAgent_General.md",
+          "sha256": "4130a15483841db3bd3338b294b57ae22538ae00445f644c1c91483363f9b8d9"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    ".cursor/agents/backend.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "811171fa5bf4eec80627ebd1d2a2a51fb2e85fcddb7fe9a0abb9c2ea920ee777",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Agents/BackendAgent_General.md",
+          "sha256": "4cf4641cbef8ab00cfe805bff414d2cf80279b82d1d979fd472ec220dca86ee8"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    ".cursor/agents/frontend.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "28505f5db01904ef9b14a13f7bb9882422a9cb5b94a0c6f7c2162690fbb686ab",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Agents/FrontendAgent_General.md",
+          "sha256": "be41e7a1c5087dfaf56140d27856a6628938ab4e19553a42a195f9941866ffd8"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    ".cursor/agents/prompt-agent.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "05ab1c795cd884c78558b118d102808e741605d624c17bce484eb2809ca52113",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Agents/PromptAgent_General.md",
+          "sha256": "228ae7cf1b741f403e1e135eceaad75862029b147c7e178e5256768ed753429f"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    ".cursor/agents/reviewer.md": {
+      "kind": "file",
+      "managed": true,
+      "owners": [
+        "full-stack-pack:project"
+      ],
+      "sha256": "ecaa2fb80a1d40647db9ac3e32bd78617a0cdd2397a042339d1a7b7f8824f5a1",
+      "sources": [
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Agents/ReviewerAgent_General.md",
+          "sha256": "35ad3eb11f1b375e0a94673b29b301112d08b349b86d47308a18f3339d70e343"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/references/roles.json",
+          "sha256": "d74029afd2c9ed7b5fc9e8d473acd9e015525da1c6261d9a0b1bc04bbb8de5d6"
+        },
+        {
+          "pack": "full-stack-pack:project",
+          "path": "Skills/agent-configuration/scripts/install_agent_pack.py",
+          "sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974"
+        }
+      ]
+    },
+    "AGENTS.md": {
+      "kind": "section",
+      "managed": true,
+      "owners": [],
+      "sha256": "34be9693f9b2c1bcbbe553ea2a7d4a578d2e7b4dcde8f74e61ba699730849d25",
+      "sources": []
+    },
+    "CLAUDE.md": {
+      "kind": "section",
+      "managed": true,
+      "owners": [],
+      "sha256": "34be9693f9b2c1bcbbe553ea2a7d4a578d2e7b4dcde8f74e61ba699730849d25",
+      "sources": []
+    },
+    "agent-kit/WORKFLOW.md": {
+      "kind": "shared",
+      "managed": true,
+      "owners": [],
+      "sha256": "32b94256cca4d6d9b0fd6e1bff73aebff82022a86878ddb5356aa20d36266e77",
+      "sources": []
+    }
+  },
+  "generator_sha256": "5de4997122abe2722d5f2264761cb987b7066aab3655ee3eb67e38196ce68974",
+  "generator_version": "1.0.0",
+  "packs": {
+    "full-stack-pack:project": {
+      "descriptor_sha256": "d8acd7d51054cb5f7189a378e5d2a8c8d5da77c199186cfc3b0f9e27cdf1bc97",
+      "roles": [
+        "ai-engineer",
+        "architect",
+        "backend",
+        "frontend",
+        "prompt-agent",
+        "reviewer"
+      ],
+      "skills": [
+        "agent-configuration",
+        "requirement-traceability",
+        "project-graph-context",
+        "pipeline-benchmark",
+        "grilling",
+        "handoff",
+        "writing-for-agents",
+        "codebase-design",
+        "retro",
+        "investigate-first",
+        "safe-refactor",
+        "folder-structure"
+      ]
+    }
+  },
+  "roles": {
+    "ai-engineer": {
+      "canonical": "AIEngineerAgent_General.md",
+      "paths": {
+        "claude": ".claude/agents/ai-engineer.md",
+        "codex": ".codex/agents/ai-engineer.toml",
+        "cursor": ".cursor/agents/ai-engineer.md"
+      }
+    },
+    "architect": {
+      "canonical": "ArchitectAgent_General.md",
+      "paths": {
+        "claude": ".claude/agents/architect.md",
+        "codex": ".codex/agents/architect.toml",
+        "cursor": ".cursor/agents/architect.md"
+      }
+    },
+    "backend": {
+      "canonical": "BackendAgent_General.md",
+      "paths": {
+        "claude": ".claude/agents/backend.md",
+        "codex": ".codex/agents/backend.toml",
+        "cursor": ".cursor/agents/backend.md"
+      }
+    },
+    "frontend": {
+      "canonical": "FrontendAgent_General.md",
+      "paths": {
+        "claude": ".claude/agents/frontend.md",
+        "codex": ".codex/agents/frontend.toml",
+        "cursor": ".cursor/agents/frontend.md"
+      }
+    },
+    "prompt-agent": {
+      "canonical": "PromptAgent_General.md",
+      "paths": {
+        "claude": ".claude/agents/prompt-agent.md",
+        "codex": ".codex/agents/prompt-agent.toml",
+        "cursor": ".cursor/agents/prompt-agent.md"
+      }
+    },
+    "reviewer": {
+      "canonical": "ReviewerAgent_General.md",
+      "paths": {
+        "claude": ".claude/agents/reviewer.md",
+        "codex": ".codex/agents/reviewer.toml",
+        "cursor": ".cursor/agents/reviewer.md"
+      }
+    }
+  },
+  "runtime_status": {
+    "claude": "NOT_VERIFIED",
+    "codex": "NOT_VERIFIED",
+    "cursor": "NOT_VERIFIED"
+  },
+  "schema": 1
+}
