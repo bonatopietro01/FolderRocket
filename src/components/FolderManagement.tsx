@@ -497,6 +497,17 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
 
     function requestDelete(id: string) { if (pendingDeleteId === id) { onDelete(id); setPendingDeleteId(null); } else setPendingDeleteId(id); }
 
+    async function chooseFolderForPath(folderId: string) {
+        const picker = window.folderRocketDesktop?.selectFolder;
+        if (!picker) { setMessage("Choose folder is available in the FolderRocket desktop app."); return; }
+        try {
+            const result = await picker();
+            if (result.canceled || !result.path) return;
+            setPathDraft(result.path);
+            setPathEditorId(folderId);
+        } catch (error) { setMessage(error instanceof Error ? error.message : "Folder picker failed."); }
+    }
+
     async function choosePath(folder: ManagedFolder, option: string) {
         if (option === "imaginary") { onUpdate(folder.id, {path: "", storage: "imaginary"}); return; }
         if (option === "insert") { onUpdate(folder.id, {storage: "physical"}); return; }
@@ -633,7 +644,7 @@ export default function FolderManagement({folders, onAdd, onUpdate, onDelete, on
                         {pathEditorId === folder.id && <form className="pathEditorPopover" onSubmit={event => { event.preventDefault(); onUpdate(folder.id, {path: pathDraft.trim().replace(/^"|"$/g, ""), storage: "physical"}); setPathEditorId(null); }}>
                             <label htmlFor={`folder-path-${folder.id}`}>Complete path</label>
                             <textarea id={`folder-path-${folder.id}`} autoFocus rows={2} spellCheck={false} value={pathDraft} placeholder="C:\\Folder\\Subfolder" onFocus={event => event.currentTarget.select()} onChange={event => setPathDraft(event.target.value)}/>
-                            <footer><button type="button" onClick={() => setPathEditorId(null)}>Cancel</button><button type="submit">Save path</button></footer>
+                            <footer><button type="button" onClick={() => void chooseFolderForPath(folder.id)}><FolderOpen size={13}/>Choose folder</button><button type="button" onClick={() => setPathEditorId(null)}>Cancel</button><button type="submit">Save path</button></footer>
                         </form>}
                         {pathMenuId === folder.id && <div className="pathOptionsMenu" role="menu" aria-label={`Path options for ${folder.name}`}>
                             <button type="button" role="menuitem" onClick={() => { setPathDraft(folder.path); setPathMenuId(null); setPathEditorId(folder.id); }}>Insert path</button>

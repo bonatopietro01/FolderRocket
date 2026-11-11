@@ -135,8 +135,9 @@ test("backend starts with isolated data and shuts down cleanly through stdin", {
         assert.equal(incompleteKnowledgeSyncData.code,"KNOWLEDGE_INCOMPLETE");
         assert.ok(incompleteKnowledgeSyncData.reasonSummary.reasonCodes.includes("source_selection_changed"),"a graph revision change requires the wiki to be rebuilt before the next sync");
         assert.deepEqual(await directoryContents(knowledgeVault),completeCustomVault,"an incomplete knowledge generation preserves the last complete custom vault revision");
-        const unselectedMailbox=await fetch(`http://127.0.0.1:${port}/worlds/work/email/conversations?blockId=account-not-selected`,requestOptions);
-        assert.equal(unselectedMailbox.status,403);
+        const unselectedMailbox=await fetch(`http://127.0.0.1:${port}/worlds/work/email/conversations?provider=gmail&blockId=account-not-selected`,requestOptions);
+        assert.equal(unselectedMailbox.status,409);
+        assert.match((await unselectedMailbox.json()).message,/No gmail account is selected for Conversations on this planet/);
         const unauthorizedPlanet=await fetch(`http://127.0.0.1:${port}/worlds/not-this-user-world/graph`,requestOptions);
         assert.equal(unauthorizedPlanet.status,404);
         const mismatchedActivity=await fetch(`http://127.0.0.1:${port}/worlds/work/graph/activity`,{...requestOptions,method:"POST",headers:{...requestOptions.headers,"Content-Type":"application/json"},body:JSON.stringify({activity:{worldId:"personal",operationId:"wrong-world",summary:"should be rejected"}})});

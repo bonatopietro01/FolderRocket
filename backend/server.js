@@ -70,6 +70,7 @@ const {analyzeDomainPage, analyzeProjection, downloadDomainFile, listDomainDownl
 const {createStickyNote, invokeWorldAssistant} = require("./services/stickyNoteAiService");
 const {recordDiagnostic, listDiagnostics, clearDiagnostics, flushDiagnostics, hasStorageWarning, safeText: safeDiagnosticText} = require("./services/diagnosticsService");
 const {integrationStatus, saveIntegrationConfiguration} = require("./services/desktopIntegrationConfigService");
+const {evaluateTeamsSourceRules} = require("./services/teamsWarningService");
 const {createBrowserBridgeToken, resolveBrowserDrop, stageBrowserDrop} = require("./services/browserBridgeService");
 const {
     createEvent: createGoogleCalendarEvent,
@@ -135,13 +136,16 @@ const {
     listAttachments: listOutlookAttachments,
     listConnectedAccounts: listOutlookConnectedAccounts,
     listInboxMessages: listOutlookInboxMessages,
+    listOutlookConversationSummaries,
+    getOutlookConversation,
     listTeamsChats,
     listJoinedTeams,
     listTeamChannels,
     listTeamsDirectoryNextPage,
     listTeamsChatMessages,
     listTeamsChannelMessages,
-    listTeamsNextPage
+    listTeamsNextPage,
+    downloadTeamsMessageFile
 } = require("./services/outlookService");
 
 const app = express();
@@ -648,6 +652,24 @@ app.put("/settings/worlds/:worldId", requireAuthenticated, async (req, res) => {
                 nextWorld.emailAccount = {...selection,email:typeof account.email === "string" ? account.email : ""};
             } else nextWorld.emailAccount = null;
         }
+        if (Object.hasOwn(req.body || {}, "conversations")) {
+            const accounts = req.body.conversations?.accounts;
+            if (!accounts || typeof accounts !== "object" || Array.isArray(accounts)) throw new Error("Conversations account selections are invalid.");
+            const normalized = {};
+            for (const provider of ["gmail", "outlook", "teams"]) {
+                if (!Object.hasOwn(accounts, provider)) {
+                    normalized[provider] = {blockId:currentWorld.conversations?.accounts?.[provider]?.blockId || null};
+                    continue;
+                }
+                const rawBlockId = accounts[provider]?.blockId;
+                if (rawBlockId === null || rawBlockId === "") { normalized[provider] = {blockId:null}; continue; }
+                if (typeof rawBlockId !== "string" || !/^[a-zA-Z0-9_-]{1,120}$/.test(rawBlockId)) throw new Error(`The ${provider} Conversations account selection is invalid.`);
+                const catalog = provider === "gmail" ? await listGmailConnectedAccounts(req.user.id) : await listOutlookConnectedAccounts(req.user.id);
+                if (!catalog.some(item => item.blockId === rawBlockId)) throw new Error(`The selected ${provider === "teams" ? "Microsoft Teams" : provider} account is not connected to FolderRocket.`);
+                normalized[provider] = {blockId:rawBlockId};
+            }
+            nextWorld.conversations = {...(currentWorld.conversations || {}), accounts:normalized};
+        }
         if (req.body.name !== undefined) {
             if (typeof req.body.name !== "string" || !req.body.name.trim() || req.body.name.length > 40) throw new Error("Nome del pianeta non valido.");
             nextWorld.name = req.body.name.trim();
@@ -702,6 +724,7 @@ app.get("/settings/worlds/:worldId", requireAuthenticated, async (req, res) => {
         const currentWorld=currentSettings.worlds?.[worldId]||found.world;
         const style=currentWorld.style;
         const world=selection?{...currentWorld,style,emailAccount:{...selection,email:selection.email||((selection.provider==="gmail"?gmailAccountsRaw:outlookAccountsRaw).find(item=>item.blockId===selection.blockId)?.email||"")}}:{...currentWorld,style,emailAccount:null};
+        world.conversations = { ...(world.conversations || {}), accounts: Object.fromEntries(["gmail","outlook","teams"].map(provider => [provider,{blockId:world.conversations?.accounts?.[provider]?.blockId || null}])) };
         const storedConflict=!Object.hasOwn(currentWorld,"emailAccount")&&resolved.conflict;
         res.json({world,emailAccountConflict:storedConflict,emailAccountCandidates:resolved.candidates,emailAccounts,emailAccountMigrated:migrated});
     } catch(error) {res.status(500).json({message:error instanceof Error?error.message:"Unable to read planet settings."});}
@@ -718,6 +741,38 @@ function readWorldRecord(userId,worldId) {
     const worlds=settings.worlds&&typeof settings.worlds==="object"&&!Array.isArray(settings.worlds)?settings.worlds:{};
     const world=worlds[worldId]||((worldId==="work"||worldId==="personal")?{}:null);
     return {settings,world,worlds};
+}
+function resolveConversationAccount(request,response,found,worldId) {
+    const provider=typeof request.query?.provider==="string"?request.query.provider:"";
+    const blockId=typeof request.query?.blockId==="string"?request.query.blockId.trim():"";
+    const hasProvider=Boolean(provider),hasBlockId=Boolean(blockId);
+    if(hasProvider!==hasBlockId) { response.status(400).json({message:"Choose both a Conversations provider and account."}); return null; }
+    if(!hasProvider) return worldEmailAccountService.resolveWorldEmailAccount(found.world,found.settings,worldId).selection || {provider:"",blockId:""};
+    if(!["gmail","outlook"].includes(provider)) { response.status(400).json({message:"Use the Teams conversation endpoints for Teams conversations."}); return null; }
+    const savedBlockId=found.world.conversations?.accounts?.[provider]?.blockId;
+    if(!savedBlockId) { response.status(409).json({provider,message:`No ${provider} account is selected for Conversations on this planet.`}); return null; }
+    if(savedBlockId!==blockId) { response.status(403).json({provider,message:`Choose the ${provider} account selected for Conversations on this planet.`}); return null; }
+    return {provider,blockId};
+}
+function resolveConversationGmailAccount(request,response,found,worldId,{provider,blockId}={}) {
+    const explicitProvider=typeof provider==="string"&&provider.trim()?provider.trim():"";
+    const requestedBlockId=typeof blockId==="string"?blockId.trim():"";
+    if(explicitProvider) {
+        if(explicitProvider!=="gmail") {response.status(409).json({provider:explicitProvider,providerUnsupported:true,message:"This Conversations action is currently available for Gmail only."});return null;}
+        if(!requestedBlockId) {response.status(400).json({message:"Choose the Gmail account for this Conversations action."});return null;}
+        const conversationsBlockId=found.world.conversations?.accounts?.gmail?.blockId||"";
+        if(!conversationsBlockId) {response.status(409).json({provider:"gmail",message:"No Gmail account is selected for Conversations on this planet."});return null;}
+        if(requestedBlockId!==conversationsBlockId) {response.status(403).json({provider:"gmail",message:"Choose the Gmail account selected for Conversations on this planet."});return null;}
+        return {provider:"gmail",blockId:conversationsBlockId,selectionSource:"conversations"};
+    }
+    const conversationsBlockId=found.world.conversations?.accounts?.gmail?.blockId||"";
+    if(requestedBlockId&&requestedBlockId===conversationsBlockId)return {provider:"gmail",blockId:conversationsBlockId,selectionSource:"conversations"};
+    const legacy=worldEmailAccountService.resolveWorldEmailAccount(found.world,found.settings,worldId).selection;
+    if(legacy?.provider==="outlook") {response.status(501).json({provider:"outlook",providerUnsupported:true,message:"This Conversations action is currently available for Gmail only."});return null;}
+    if(legacy?.provider==="gmail"&&(!requestedBlockId||requestedBlockId===legacy.blockId))return {provider:"gmail",blockId:legacy.blockId,selectionSource:"dashboard"};
+    if(requestedBlockId) {response.status(403).json({provider:"gmail",message:"Choose a Gmail account selected for this planet."});return null;}
+    response.status(409).json({provider:"gmail",message:"Select a connected Gmail account for this planet before continuing."});
+    return null;
 }
 function readWorldDashboard(settings,worldId) {
     return settings.worlds?.[worldId]?.dashboard || (worldId==="work"?legacyWorkspaceDashboard(settings):{});
@@ -1583,9 +1638,7 @@ app.get("/worlds/:worldId/graph",requireAuthenticated,async(req,res)=>{
 
 app.get("/worlds/:worldId/graph/chats",requireAuthenticated,async(req,res)=>{
     const worldId=String(req.params.worldId||"");const found=graphWorld(req,res,worldId);if(!found)return;
-    const selectedAccount=worldEmailAccountService.resolveWorldEmailAccount(found.world,found.settings,worldId).selection;
-    if(selectedAccount?.provider==="outlook")return res.status(501).json({provider:"outlook",providerUnsupported:true,message:"Outlook conversation selection is not supported yet."});
-    if(!selectedAccount||selectedAccount.provider!=="gmail")return res.status(409).json({message:"Select a connected Gmail account for this planet before adding conversations to its graph."});
+    const selectedAccount=resolveConversationGmailAccount(req,res,found,worldId,{provider:req.query.provider,blockId:req.query.blockId});if(!selectedAccount)return;
     try {
         const accounts=await listGmailConnectedAccounts(req.user.id);
         const account=accounts.find(item=>item.blockId===selectedAccount.blockId);
@@ -1600,11 +1653,9 @@ app.get("/worlds/:worldId/graph/chats",requireAuthenticated,async(req,res)=>{
 
 app.post("/worlds/:worldId/graph/chats",requireAuthenticated,async(req,res)=>{
     const worldId=String(req.params.worldId||"");const found=graphWorld(req,res,worldId);if(!found)return;
-    const selectedAccount=worldEmailAccountService.resolveWorldEmailAccount(found.world,found.settings,worldId).selection;
-    if(selectedAccount?.provider==="outlook")return res.status(501).json({provider:"outlook",providerUnsupported:true,message:"Outlook conversation selection is not supported yet."});
     const blockId=typeof req.body?.blockId==="string"?req.body.blockId:"";
     const threadId=typeof req.body?.threadId==="string"?req.body.threadId:"";
-    if(!selectedAccount||selectedAccount.provider!=="gmail"||selectedAccount.blockId!==blockId)return res.status(403).json({message:"Choose a real inbox conversation from the Gmail account selected for this planet."});
+    const selectedAccount=resolveConversationGmailAccount(req,res,found,worldId,{provider:req.body?.provider,blockId});if(!selectedAccount)return;
     if(!threadId||threadId.length>300||req.body?.selected!==undefined&&typeof req.body.selected!=="boolean"||req.body?.pageToken!==undefined&&(typeof req.body.pageToken!=="string"||req.body.pageToken.length>5000)||req.body?.query!==undefined&&(typeof req.body.query!=="string"||req.body.query.length>200))return res.status(400).json({message:"Conversation selection is invalid."});
     try {
         const graph=await planetGraph.readGraph(req.user.id,worldId);
@@ -1762,8 +1813,17 @@ app.get("/worlds/:worldId/email/conversations",requireAuthenticated,async(req,re
     try {
         const graph=await planetGraph.readGraph(req.user.id,worldId);
         const requested=typeof req.query.blockId==="string"?req.query.blockId:"";
-        const activeAccount=worldEmailAccountService.resolveWorldEmailAccount(found.world,found.settings,worldId).selection;
-        if(activeAccount?.provider==="outlook")return res.status(501).json({provider:"outlook",providerUnsupported:true,message:"Outlook messages are connected, but this FolderRocket build does not yet provide real Outlook conversation threads."});
+        const activeAccount=resolveConversationAccount(req,res,found,worldId);if(!activeAccount)return;
+        if(activeAccount?.provider==="outlook") {
+            if(requested&&requested!==activeAccount.blockId)return res.status(403).json({message:"Choose the Outlook account selected for this planet."});
+            if(!getOutlookStatus(req.user.id,activeAccount.blockId).connected)return res.status(409).json({provider:"outlook",needsConsent:true,message:"Connect or reconnect the Outlook account selected for this planet."});
+            const accounts=await listOutlookConnectedAccounts(req.user.id);
+            const account=accounts.find(item=>item.blockId===activeAccount.blockId);
+            if(!account)return res.status(409).json({provider:"outlook",needsConsent:true,message:"Reconnect the Outlook account selected for this planet."});
+            const page=await listOutlookConversationSummaries({from:req.query.from,to:req.query.to,sender:req.query.sender,cursor:req.query.pageToken},req.user.id,activeAccount.blockId);
+            const threads=page.threads.map(thread=>({...thread,accountEmail:account.email||""}));
+            return res.json({provider:"outlook",threads,removedThreads:[],nextPageToken:page.nextPageToken,selectedBlockId:activeAccount.blockId});
+        }
         const selected=activeAccount?.provider==="gmail"?[{blockId:activeAccount.blockId}]:[];
         const requestedSource=requested?selected.find(item=>item.blockId===requested):null;
         if(requested&&!requestedSource)return res.status(403).json({message:"Choose a Gmail account selected for this planet."});
@@ -1777,18 +1837,18 @@ app.get("/worlds/:worldId/email/conversations",requireAuthenticated,async(req,re
         for(const source of requestedSource?[requestedSource]:selected) {
             if(!accounts.some(item=>item.blockId===source.blockId))continue;
             const listing=await listGmailInboxThreads({maxResults:sender?20:40,pageToken:requestedSource?String(req.query.pageToken||""):"",query:sender?senderQuery:"newer_than:30d"},req.user.id,source.blockId);
-            const inboxItems=listing.threads.map(item=>({...item,blockId:source.blockId,accountEmail:accounts.find(account=>account.blockId===source.blockId)?.email||"",shared:false}));
+            const inboxItems=listing.threads.map(item=>({...item,blockId:source.blockId,accountEmail:accounts.find(account=>account.blockId===source.blockId)?.email||"",provider:"gmail",shared:false}));
             const saved=graph.selectedConversations.filter(item=>item.blockId===source.blockId);
             const senderScopedItems=sender?inboxItems.filter(item=>conversationContactIdentity(item.messages,item.accountEmail)===sender):inboxItems.filter(item=>matchesSavedConversationScope(item,source.blockId,saved));
             const byThread=new Map(senderScopedItems.filter(item=>!removedKeys.has(`${source.blockId}:${item.id}`)).map(item=>[item.id,item]));
-            for(const reference of saved)if(!removedKeys.has(`${source.blockId}:${reference.threadId}`)&&!byThread.has(reference.threadId))byThread.set(reference.threadId,{id:reference.threadId,threadId:reference.threadId,blockId:source.blockId,subject:reference.subject||"(no subject)",snippet:"",updatedAt:reference.selectedAt||"",messageCount:0,messages:reference.sender?[{sender:reference.sender}]:[],accountEmail:accounts.find(account=>account.blockId===source.blockId)?.email||"",shared:false});
+            for(const reference of saved)if(!removedKeys.has(`${source.blockId}:${reference.threadId}`)&&!byThread.has(reference.threadId))byThread.set(reference.threadId,{id:reference.threadId,threadId:reference.threadId,blockId:source.blockId,subject:reference.subject||"(no subject)",snippet:"",updatedAt:reference.selectedAt||"",messageCount:0,messages:reference.sender?[{sender:reference.sender}]:[],accountEmail:accounts.find(account=>account.blockId===source.blockId)?.email||"",provider:"gmail",shared:false});
             threads.push(...byThread.values());
             if(requestedSource)nextPageToken=listing.nextPageToken||"";
         }
         const localKeys=new Set(threads.map(item=>`${item.blockId}:${item.id}`));
-        const shared=sender?[]:graph.sharedThreads.filter(item=>!removedKeys.has(`${item.blockId}:${item.threadId}`)&&!localKeys.has(`${item.blockId}:${item.threadId}`)).map(item=>({id:item.threadId,threadId:item.threadId,blockId:item.blockId,subject:item.subject||"Shared email conversation",snippet:"",updatedAt:item.sharedAt,messageCount:0,messages:[],accountEmail:item.accountEmail||"",shared:true,sourceWorldId:item.sourceWorldId,sourceWorldName:found.settings.worlds?.[item.sourceWorldId]?.name||item.sourceWorldId,available:accountsHasConnection(req.user.id,item.blockId)}));
+        const shared=sender?[]:graph.sharedThreads.filter(item=>!removedKeys.has(`${item.blockId}:${item.threadId}`)&&!localKeys.has(`${item.blockId}:${item.threadId}`)).map(item=>({id:item.threadId,threadId:item.threadId,blockId:item.blockId,subject:item.subject||"Shared email conversation",snippet:"",updatedAt:item.sharedAt,messageCount:0,messages:[],accountEmail:item.accountEmail||"",provider:"gmail",shared:true,sourceWorldId:item.sourceWorldId,sourceWorldName:found.settings.worlds?.[item.sourceWorldId]?.name||item.sourceWorldId,available:accountsHasConnection(req.user.id,item.blockId)}));
         const removedThreads=graph.removedConversations.filter(item=>!requested||item.blockId===requested).map(item=>({blockId:item.blockId,threadId:item.threadId,subject:item.subject||"(no subject)",from:item.from||"",date:item.date||"",removedAt:item.removedAt||"",selected:Boolean(item.selectedReference),shared:Array.isArray(item.sharedReferences)&&item.sharedReferences.length>0}));
-        res.json({threads:[...threads,...shared].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))),removedThreads,nextPageToken,selectedBlockId:requestedSource?.blockId||selected[0]?.blockId||""});
+        res.json({provider:activeAccount?.provider||"",threads:[...threads,...shared].sort((a,b)=>String(b.updatedAt).localeCompare(String(a.updatedAt))),removedThreads,nextPageToken,selectedBlockId:requestedSource?.blockId||selected[0]?.blockId||""});
     } catch(error) {
         const failure=classifyGmailConversationFailure(error);
         req.folderRocketBackendErrorName=failure.diagnosticType;
@@ -1800,16 +1860,20 @@ app.post("/worlds/:worldId/email/conversations/:threadId/removal",requireAuthent
     const worldId=String(req.params.worldId||"");const found=graphWorld(req,res,worldId);if(!found)return;
     const threadId=String(req.params.threadId||"");const blockId=typeof req.body?.blockId==="string"?req.body.blockId:"";const action=req.body?.action;
     if(!threadId||threadId.length>300||!blockId||blockId.length>120||!["remove","restore"].includes(action))return res.status(400).json({message:"Conversation removal request is invalid."});
+    if(req.body?.provider!==undefined&&req.body.provider!=="gmail")return res.status(409).json({provider:"outlook",providerUnsupported:true,message:"Local removal is currently supported for Gmail conversations only."});
     try {
         const graph=await planetGraph.readGraph(req.user.id,worldId);const key=`${blockId}:${threadId}`;
         const current=worldEmailAccountService.resolveWorldEmailAccount(found.world,found.settings,worldId).selection;
-        const selectedMailbox=current?.provider==="gmail"&&current.blockId===blockId;
+        const selectedConversationBlock=found.world.conversations?.accounts?.gmail?.blockId||"";
+        const selectedMailbox=req.body?.provider==="gmail"
+            ? selectedConversationBlock===blockId
+            : (current?.provider==="gmail"&&current.blockId===blockId)||selectedConversationBlock===blockId;
         const sharedReference=graph.sharedThreads.some(item=>item.blockId===blockId&&item.threadId===threadId);
         const tombstone=graph.removedConversations.find(item=>item.blockId===blockId&&item.threadId===threadId);
         if(action==="remove") {
             if(!selectedMailbox&&!sharedReference&&!graph.selectedConversations.some(item=>item.blockId===blockId&&item.threadId===threadId))return res.status(403).json({message:"This conversation is not available to remove from the current planet."});
             const summary=req.body?.summary&&typeof req.body.summary==="object"?req.body.summary:{};
-            const selectedReference=selectedMailbox?{provider:current.provider,blockId,threadId}:null;
+            const selectedReference=selectedMailbox?{provider:"gmail",blockId,threadId}:null;
             const updated=await planetGraph.removeConversation(req.user.id,worldId,blockId,threadId,{subject:summary.subject,from:summary.from,date:summary.date},{selectedReference});
             const removedThread=updated.removedConversations.find(item=>item.blockId===blockId&&item.threadId===threadId);
             return res.json({removed:true,removedThread:{blockId,threadId,subject:removedThread?.subject||"(no subject)",from:removedThread?.from||"",date:removedThread?.date||"",removedAt:removedThread?.removedAt||""}});
@@ -1874,10 +1938,19 @@ function accountsHasConnection(userId,blockId) {
     try {return require("./services/emailTokenStore").getConnection("gmail",userId,blockId)!=null;} catch {return false;}
 }
 
-async function resolveWorldThread(userId,settings,worldId,threadId,requestedBlockId) {
+async function resolveWorldThread(userId,settings,worldId,threadId,requestedBlockId,conversationAccount=null) {
+    const graph=await planetGraph.readGraph(userId,worldId);
+    if(conversationAccount?.provider==="gmail") {
+        if(conversationAccount.sharedOnly) {
+            const reference=graph.sharedThreads.find(item=>item.threadId===threadId&&item.blockId===requestedBlockId);
+            return reference?{blockId:reference.blockId,shared:true,sourceWorldId:reference.sourceWorldId,reference}:null;
+        }
+        if(conversationAccount.blockId===requestedBlockId)return {...conversationAccount,shared:false,sourceWorldId:worldId};
+        const reference=graph.sharedThreads.find(item=>item.threadId===threadId&&item.blockId===requestedBlockId);
+        return reference?{blockId:reference.blockId,shared:true,sourceWorldId:reference.sourceWorldId,reference}:null;
+    }
     const selected=selectedGmailBlock(settings,worldId,requestedBlockId);
     if(selected)return {...selected,shared:false,sourceWorldId:worldId};
-    const graph=await planetGraph.readGraph(userId,worldId);
     const reference=graph.sharedThreads.find(item=>item.threadId===threadId&&(!requestedBlockId||item.blockId===requestedBlockId));
     return reference?{blockId:reference.blockId,shared:true,sourceWorldId:reference.sourceWorldId,reference}:null;
 }
@@ -1885,10 +1958,34 @@ async function resolveWorldThread(userId,settings,worldId,threadId,requestedBloc
 app.get("/worlds/:worldId/email/conversations/:threadId",requireAuthenticated,async(req,res)=>{
     const worldId=String(req.params.worldId||"");const found=graphWorld(req,res,worldId);if(!found)return;
     const threadId=String(req.params.threadId||"");
-    const activeAccount=worldEmailAccountService.resolveWorldEmailAccount(found.world,found.settings,worldId).selection;
-    if(activeAccount?.provider==="outlook")return res.status(501).json({provider:"outlook",providerUnsupported:true,message:"Outlook conversation threads are not supported yet."});
+    const requestedBlockId=typeof req.query.blockId==="string"?req.query.blockId.trim():"";
+    let activeAccount;
+    if(req.query.provider==="gmail"&&requestedBlockId&&found.world.conversations?.accounts?.gmail?.blockId!==requestedBlockId) {
+        const graph=await planetGraph.readGraph(req.user.id,worldId);
+        const shared=graph.sharedThreads.some(item=>item.threadId===threadId&&item.blockId===requestedBlockId);
+        if(!shared) {activeAccount=resolveConversationAccount(req,res,found,worldId);if(!activeAccount)return;}
+        else activeAccount={provider:"gmail",blockId:requestedBlockId,sharedOnly:true};
+    } else {
+        activeAccount=resolveConversationAccount(req,res,found,worldId);if(!activeAccount)return;
+    }
+    if(activeAccount?.provider==="outlook") {
+        const requested=typeof req.query.blockId==="string"?req.query.blockId:"";
+        if(requested!==activeAccount.blockId)return res.status(403).json({provider:"outlook",message:"Choose the Outlook account selected for this planet."});
+        if(!getOutlookStatus(req.user.id,activeAccount.blockId).connected)return res.status(409).json({provider:"outlook",needsConsent:true,message:"Connect or reconnect the Outlook account selected for this planet."});
+        try {
+            const accounts=await listOutlookConnectedAccounts(req.user.id);
+            const account=accounts.find(item=>item.blockId===activeAccount.blockId);
+            if(!account)return res.status(409).json({provider:"outlook",needsConsent:true,message:"Reconnect the Outlook account selected for this planet."});
+            const detail=await getOutlookConversation(threadId,req.user.id,activeAccount.blockId,typeof req.query.cursor==="string"?req.query.cursor:"");
+            res.json({provider:"outlook",...detail,blockId:activeAccount.blockId,accountEmail:account.email||""});
+        } catch(error) {
+            if(error?.status===403)return res.status(403).json({provider:"outlook",needsConsent:true,message:"Outlook needs additional Microsoft Graph permissions. Reconnect the selected account and approve access."});
+            res.status(502).json({provider:"outlook",message:"FolderRocket could not load this Outlook conversation. Check the selected account connection and retry."});
+        }
+        return;
+    }
     try {
-        const source=await resolveWorldThread(req.user.id,found.settings,worldId,threadId,typeof req.query.blockId==="string"?req.query.blockId:"");
+        const source=await resolveWorldThread(req.user.id,found.settings,worldId,threadId,requestedBlockId,req.query.provider==="gmail"?activeAccount:null);
         if(!source)return res.status(403).json({message:"This conversation is not selected for or shared with this planet."});
         const accounts=await listGmailConnectedAccounts(req.user.id);
         if(!accounts.some(item=>item.blockId===source.blockId))return res.status(424).json({message:"The Gmail account used by this shared conversation is unavailable. Reconnect it in its source planet."});
@@ -1896,7 +1993,7 @@ app.get("/worlds/:worldId/email/conversations/:threadId",requireAuthenticated,as
         const pageSize=req.query.limit===undefined?10:Number(req.query.limit);
         if(before!==undefined&&(!Number.isInteger(before)||before<0)||!Number.isInteger(pageSize)||pageSize<1||pageSize>20)return res.status(400).json({message:"Conversation message page is invalid."});
         const thread=await getGmailThreadPage(threadId,req.user.id,source.blockId,{before,maxResults:pageSize});
-        res.json({...thread,blockId:source.blockId,accountEmail:accounts.find(item=>item.blockId===source.blockId)?.email||"",shared:source.shared,sourceWorldId:source.sourceWorldId});
+        res.json({provider:"gmail",...thread,blockId:source.blockId,accountEmail:accounts.find(item=>item.blockId===source.blockId)?.email||"",shared:source.shared,sourceWorldId:source.sourceWorldId});
     } catch(error) {
         const failure=classifyGmailConversationFailure(error);
         req.folderRocketBackendErrorName=failure.diagnosticType;
@@ -1920,10 +2017,12 @@ function classifyGmailConversationFailure(error) {
 app.post("/worlds/:worldId/email/conversations/:threadId/reply",requireAuthenticated,async(req,res)=>{
     const worldId=String(req.params.worldId||"");const found=graphWorld(req,res,worldId);if(!found)return;
     const threadId=String(req.params.threadId||"");
-    const activeAccount=worldEmailAccountService.resolveWorldEmailAccount(found.world,found.settings,worldId).selection;
-    if(activeAccount?.provider==="outlook")return res.status(501).json({provider:"outlook",providerUnsupported:true,message:"Replying to Outlook conversation threads is not supported yet."});
+    const requestedBlockId=typeof req.body?.blockId==="string"?req.body.blockId.trim():"";
+    const activeAccount=resolveConversationGmailAccount(req,res,found,worldId,{provider:req.body?.provider,blockId:requestedBlockId});if(!activeAccount)return;
     try {
-        const source=await resolveWorldThread(req.user.id,found.settings,worldId,threadId,typeof req.body?.blockId==="string"?req.body.blockId:"");
+        const sourceBlockId=requestedBlockId||activeAccount.blockId;
+        const conversationSelection=activeAccount.selectionSource==="conversations"?activeAccount:null;
+        const source=await resolveWorldThread(req.user.id,found.settings,worldId,threadId,sourceBlockId,conversationSelection);
         if(!source)return res.status(403).json({message:"This conversation is not selected for or shared with this planet."});
         const accounts=await listGmailConnectedAccounts(req.user.id);const account=accounts.find(item=>item.blockId===source.blockId);
         if(!account)return res.status(424).json({message:"The Gmail account for this conversation is unavailable."});
@@ -1955,7 +2054,7 @@ app.post("/worlds/:worldId/email/conversations/:threadId/reply",requireAuthentic
 app.post("/worlds/:worldId/email/conversations/:threadId/share",requireAuthenticated,async(req,res)=>{
     const sourceWorldId=String(req.params.worldId||"");const sourceWorld=graphWorld(req,res,sourceWorldId);if(!sourceWorld)return;
     const threadId=String(req.params.threadId||"");const blockId=typeof req.body?.blockId==="string"?req.body.blockId:"";
-    const source=selectedGmailBlock(sourceWorld.settings,sourceWorldId,blockId);if(!source)return res.status(403).json({message:"Select the Gmail account for this conversation in the source planet first."});
+    const source=resolveConversationGmailAccount(req,res,sourceWorld,sourceWorldId,{provider:req.body?.provider,blockId});if(!source)return;
     try {
         const accounts=await listGmailConnectedAccounts(req.user.id);const account=accounts.find(item=>item.blockId===source.blockId);if(!account)return res.status(424).json({message:"The source Gmail account is no longer connected."});
         const thread=await getGmailThread(threadId,req.user.id,source.blockId);const subject=thread.messages.at(-1)?.subject||"Shared email conversation";
@@ -2354,6 +2453,24 @@ function readAlertBlockId(request) {
     return /^[a-zA-Z0-9_-]{1,120}$/.test(value) ? value : "";
 }
 
+function teamsAlertScope(request, response, requireConnection = false) {
+    const worldId = readWorkspaceWorldId(request);
+    const blockId = readAlertBlockId(request);
+    if (!worldId || !blockId) { response.status(400).json({message:"Choose this planet and its Microsoft account first."}); return null; }
+    const found = readWorldRecord(request.user.id,worldId);
+    if (!found.world) { response.status(404).json({message:"Planet not found."}); return null; }
+    const selected = worldEmailAccountService.resolveWorldEmailAccount(found.world,found.settings,worldId).selection;
+    if (selected?.provider !== "outlook" || selected.blockId !== blockId) {
+        response.status(403).json({message:"Choose the Microsoft account selected for this planet."});
+        return null;
+    }
+    if (requireConnection && !getOutlookStatus(request.user.id,blockId).connected) {
+        response.status(409).json({needsConsent:true,message:"Connect or reconnect the Microsoft account selected for this planet and approve Teams access."});
+        return null;
+    }
+    return {worldId,blockId,world:found.world,settings:found.settings};
+}
+
 function getScopedProviderSettings(userId, provider, blockId, worldId = "") {
     const settings = getEmailAlertSettings(userId, worldId);
     if (!blockId) return {settings, providerSettings: settings[provider]};
@@ -2375,21 +2492,34 @@ function getScopedProviderSettings(userId, provider, blockId, worldId = "") {
 
 app.get("/email/alerts/settings/:provider", requireAuthenticated, (req, res) => {
     const provider = req.params.provider;
-    if (provider !== "gmail" && provider !== "outlook") return res.status(400).json({message: "Unknown email provider."});
-    const scoped = getScopedProviderSettings(req.user.id, provider, readAlertBlockId(req), readWorkspaceWorldId(req));
+    if (provider !== "gmail" && provider !== "outlook" && provider !== "teams") return res.status(400).json({message: "Unknown email alert provider."});
+    const blockId=readAlertBlockId(req);
+    const worldId=readWorkspaceWorldId(req);
+    if(provider==="teams"&&!teamsAlertScope(req,res,false))return;
+    const scoped = getScopedProviderSettings(req.user.id, provider, blockId, worldId);
+    if(provider==="teams") scoped.providerSettings.accountBlockId=blockId;
     res.json({providerSettings: scoped.providerSettings, favorites: scoped.settings.favorites});
 });
 
 app.put("/email/alerts/settings/:provider", requireAuthenticated, (req, res) => {
     try {
         const provider = req.params.provider;
-        if (provider !== "gmail" && provider !== "outlook") throw new Error("Unknown email provider.");
+        if (provider !== "gmail" && provider !== "outlook" && provider !== "teams") throw new Error("Unknown email alert provider.");
         const providerSettings = req.body?.providerSettings;
         if (!providerSettings || typeof providerSettings !== "object" || Array.isArray(providerSettings)) throw new Error("Invalid provider alert settings.");
         const worldId = readWorkspaceWorldId(req);
         const current = getEmailAlertSettings(req.user.id, worldId);
         const blockId = readAlertBlockId(req);
+        if(provider==="teams") {
+            const scope=teamsAlertScope(req,res,false);if(!scope)return;
+            if(!worldId||!blockId)throw new Error("Choose this planet and its Microsoft account first.");
+        }
         const previousProviderSettings = blockId ? current[provider].blocks?.[blockId] : current[provider];
+        const normalizedInput = provider === "teams"
+            ? normalizeProviderBlock({...providerSettings,accountBlockId:blockId,rules:(Array.isArray(providerSettings.rules)?providerSettings.rules:[]).map(rule=>({...rule,accountBlockId:blockId}))})
+            : providerSettings;
+        if(provider === "teams" && Array.isArray(providerSettings.rules) && normalizedInput.rules.length !== providerSettings.rules.length) throw new Error("One or more Teams alert rules are invalid.");
+        if(provider === "teams" && normalizedInput.rules.some(rule=>!rule.source?.id||(rule.source.kind==="channel"&&!rule.source.teamId))) throw new Error("Every Teams alert must select a chat or channel.");
         const selectedAccountId = value => value === null
             ? null
             : /^[a-zA-Z0-9_-]{1,120}$/.test(value || "") ? value : blockId;
@@ -2402,20 +2532,50 @@ app.put("/email/alerts/settings/:provider", requireAuthenticated, (req, res) => 
                 blocks: {
                     ...current[provider].blocks,
                     // Browser edits must never erase results written by the scheduler.
-                    [blockId]: {...providerSettings, runtime: gmailAccountChanged ? {} : (current[provider].blocks?.[blockId]?.runtime ?? {})}
+                    [blockId]: {...normalizedInput, runtime: gmailAccountChanged ? {} : (current[provider].blocks?.[blockId]?.runtime ?? {})}
                 }
             },
             favorites: Array.isArray(req.body?.favorites) ? req.body.favorites : current.favorites
         } : {
             ...current,
             // Legacy non-block route kept for backward compatibility.
-            [provider]: {...providerSettings, runtime: current[provider].runtime},
+            [provider]: {...normalizedInput, runtime: current[provider].runtime},
             favorites: Array.isArray(req.body?.favorites) ? req.body.favorites : current.favorites
         };
         const saved = saveEmailAlertSettings(req.user.id, next, worldId);
         res.json({providerSettings: blockId ? saved[provider].blocks[blockId] : saved[provider], favorites: saved.favorites});
     } catch (error) {
         res.status(400).json({message: error instanceof Error ? error.message : "Unable to save email-alert settings."});
+    }
+});
+
+app.post("/email/teams/warnings/check", requireAuthenticated, async (req,res) => {
+    const scope=teamsAlertScope(req,res,true);if(!scope)return;
+    const requestedIds=Array.isArray(req.body?.ruleIds)?new Set(req.body.ruleIds.filter(id=>typeof id==="string"&&/^[a-zA-Z0-9_-]{1,100}$/.test(id)).slice(0,20)):new Set();
+    if(!requestedIds.size)return res.status(400).json({message:"Choose saved Teams alert rules to check."});
+    const current=getEmailAlertSettings(req.user.id,scope.worldId);
+    const providerSettings=current.teams.blocks?.[scope.blockId]||normalizeProviderBlock({accountBlockId:scope.blockId});
+    const rules=providerSettings.rules.filter(rule=>requestedIds.has(rule.id)&&rule.enabled!==false&&rule.accountBlockId===scope.blockId&&rule.source?.id&&["chat","channel"].includes(rule.source.kind)&&(rule.source.kind!=="channel"||rule.source.teamId));
+    if(!rules.length)return res.status(400).json({message:"No enabled saved Teams alerts with a saved chat or channel scope match this request."});
+    const seenByRule=Object.fromEntries(rules.map(rule=>[rule.id,providerSettings.runtime?.rules?.[rule.id]?.seenMessageIds||[]]));
+    try {
+        const groups=new Map();
+        for(const rule of rules) {
+            const key=JSON.stringify(rule.source);const group=groups.get(key)||{source:rule.source,rules:[]};group.rules.push(rule);groups.set(key,group);
+        }
+        const results=[];
+        for(const group of groups.values())results.push(...await evaluateTeamsSourceRules({rules:group.rules,userId:req.user.id,blockId:scope.blockId,source:group.source,seenByRule,now:new Date()}));
+        const checkedAt=new Date().toISOString();
+        const runtime={...(providerSettings.runtime&&typeof providerSettings.runtime==="object"?providerSettings.runtime:{}),rules:{...(providerSettings.runtime?.rules&&typeof providerSettings.runtime.rules==="object"?providerSettings.runtime.rules:{})}};
+        for(const result of results) {
+            const previous=runtime.rules[result.ruleId]&&typeof runtime.rules[result.ruleId]==="object"?runtime.rules[result.ruleId]:{};
+            runtime.rules[result.ruleId]={...previous,lastCheckedAt:checkedAt,seenMessageIds:[...new Set([...(previous.seenMessageIds||[]),...(result.messageIds||[])])].slice(-500),result:{...result,messages:(result.messages||[]).slice(0,50)},error:result.error||""};
+        }
+        const saved=saveEmailAlertSettings(req.user.id,{...current,teams:{...current.teams,blocks:{...current.teams.blocks,[scope.blockId]:{...providerSettings,accountBlockId:scope.blockId,runtime}}}},scope.worldId);
+        res.json({provider:"teams",checkedAt,results,providerSettings:saved.teams.blocks[scope.blockId]});
+    } catch(error) {
+        if(error?.status===403)return res.status(403).json({needsConsent:true,message:"Teams alerts need the selected account's Teams message permissions. Reconnect it and approve access; channel messages may require administrator consent."});
+        res.status(502).json({message:"FolderRocket could not check Teams alerts for this source. Retry after checking the connected account."});
     }
 });
 
@@ -4080,16 +4240,62 @@ app.get("/email/outlook/accounts", requireAuthenticated, async (req, res) => {
 function respondTeamsError(res, error) {
     const message = error instanceof Error ? error.message : "Unable to load Microsoft Teams.";
     if (error?.status === 403 || /insufficientprivileges|permission|scope|consent/i.test(message)) {
-        return res.status(403).json({needsConsent: true, message: "Microsoft Teams needs additional Microsoft Graph permissions. Reconnect the selected Microsoft account and approve access; channel messages may require administrator consent."});
+        return res.status(403).json({needsConsent: true, message: "Microsoft Teams needs additional Microsoft Graph permissions. Reconnect the selected account and approve access; shared-file resolution requires Files.ReadWrite, and channel messages may require administrator consent."});
     }
     if (/not connected|reconnect outlook/i.test(message)) return res.status(401).json({needsConsent: true, message: "Connect or reconnect the Microsoft account selected for this planet."});
     return res.status(400).json({message});
 }
 
+function teamsWorldScope(request, response) {
+    const worldId = typeof request.query?.worldId === "string" ? request.query.worldId.trim() : "";
+    if (!validWorldId(worldId)) { response.status(400).json({message:"Choose a valid planet for Teams."}); return null; }
+    const found = readWorldRecord(request.user.id, worldId);
+    if (!found.world) { response.status(404).json({message:"Planet not found."}); return null; }
+    const conversationSurface = request.query?.conversation === "1";
+    const selected = conversationSurface
+        ? (found.world.conversations?.accounts?.teams?.blockId ? {provider:"teams",blockId:found.world.conversations.accounts.teams.blockId} : null)
+        : worldEmailAccountService.resolveWorldEmailAccount(found.world, found.settings, worldId).selection;
+    const requestedBlockId = readAlertBlockId(request);
+    if (!selected || (conversationSurface ? selected.provider !== "teams" : selected.provider !== "outlook") || !requestedBlockId || selected.blockId !== requestedBlockId) {
+        response.status(conversationSurface && !selected ? 409 : 403).json({provider:"teams",message:conversationSurface && !selected ? "No Teams account is selected for Conversations on this planet." : "Choose the Teams account linked to this planet."});
+        return null;
+    }
+    if (!getOutlookStatus(request.user.id, selected.blockId).connected) {
+        response.status(409).json({provider:"teams",needsConsent:true,message:"Connect or reconnect the Microsoft account selected for this planet and approve Teams access."});
+        return null;
+    }
+    return {worldId, blockId:selected.blockId, conversationSurface};
+}
+
+function teamsMessageFilters(query) {
+    const parse = (value, isEnd = false) => {
+        if (typeof value !== "string" || !value.trim()) return null;
+        const time = Date.parse(value);
+        if (!Number.isFinite(time)) return NaN;
+        const dateOnly = /^\d{4}-\d{2}-\d{2}$/u.test(value.trim());
+        return time + (isEnd && dateOnly ? 24 * 60 * 60 * 1000 - 1 : 0);
+    };
+    const from = parse(query.from);
+    const to = parse(query.to, true);
+    if (Number.isNaN(from) || Number.isNaN(to) || (from !== null && to !== null && from > to)) throw new Error("Choose a valid Teams date range.");
+    const sender = typeof query.sender === "string" ? query.sender.trim().toLocaleLowerCase().slice(0, 180) : "";
+    return {from, to, sender};
+}
+
+function filterTeamsMessages(messages, filters) {
+    return messages.filter(message => {
+        const at = Date.parse(message.createdAt || "");
+        if (filters.from !== null && (!Number.isFinite(at) || at < filters.from)) return false;
+        if (filters.to !== null && (!Number.isFinite(at) || at > filters.to)) return false;
+        if (filters.sender && !`${message.sender || ""} ${message.senderEmail || ""}`.toLocaleLowerCase().includes(filters.sender)) return false;
+        return true;
+    });
+}
+
 app.get("/teams/chats", requireAuthenticated, async (req, res) => {
     try {
-        const blockId = readAlertBlockId(req);
-        if (!getOutlookStatus(req.user.id, blockId).connected) return res.status(401).json({needsConsent: true, message: "Connect the Microsoft account selected for this planet."});
+        const scope = teamsWorldScope(req, res); if (!scope) return;
+        const {blockId} = scope;
         const page = typeof req.query.cursor === "string" && req.query.cursor
             ? await listTeamsDirectoryNextPage(req.query.cursor, "chats", req.user.id, blockId)
             : await listTeamsChats(req.user.id, blockId);
@@ -4099,8 +4305,8 @@ app.get("/teams/chats", requireAuthenticated, async (req, res) => {
 
 app.get("/teams/groups", requireAuthenticated, async (req, res) => {
     try {
-        const blockId = readAlertBlockId(req);
-        if (!getOutlookStatus(req.user.id, blockId).connected) return res.status(401).json({needsConsent: true, message: "Connect the Microsoft account selected for this planet."});
+        const scope = teamsWorldScope(req, res); if (!scope) return;
+        const {blockId} = scope;
         const page = typeof req.query.cursor === "string" && req.query.cursor
             ? await listTeamsDirectoryNextPage(req.query.cursor, "teams", req.user.id, blockId)
             : await listJoinedTeams(req.user.id, blockId);
@@ -4110,10 +4316,10 @@ app.get("/teams/groups", requireAuthenticated, async (req, res) => {
 
 app.get("/teams/groups/:teamId/channels", requireAuthenticated, async (req, res) => {
     try {
-        const blockId = readAlertBlockId(req);
-        if (!getOutlookStatus(req.user.id, blockId).connected) return res.status(401).json({needsConsent: true, message: "Connect the Microsoft account selected for this planet."});
+        const scope = teamsWorldScope(req, res); if (!scope) return;
+        const {blockId} = scope;
         const page = typeof req.query.cursor === "string" && req.query.cursor
-            ? await listTeamsDirectoryNextPage(req.query.cursor, "channels", req.user.id, blockId)
+            ? await listTeamsDirectoryNextPage(req.query.cursor, "channels", req.user.id, blockId, req.params.teamId)
             : await listTeamChannels(req.params.teamId, req.user.id, blockId);
         res.json({channels: page.items, nextLink: page.nextLink || ""});
     } catch (error) { respondTeamsError(res, error); }
@@ -4121,20 +4327,80 @@ app.get("/teams/groups/:teamId/channels", requireAuthenticated, async (req, res)
 
 app.get("/teams/messages", requireAuthenticated, async (req, res) => {
     try {
-        const blockId = readAlertBlockId(req);
-        if (!getOutlookStatus(req.user.id, blockId).connected) return res.status(401).json({needsConsent: true, message: "Connect the Microsoft account selected for this planet."});
+        const scope = teamsWorldScope(req, res); if (!scope) return;
+        const {blockId} = scope;
+        const filters = teamsMessageFilters(req.query);
+        const kind = req.query.kind === "channel" ? "channel" : req.query.kind === "chat" ? "chat" : "";
+        const identifier = typeof req.query.id === "string" ? req.query.id : "";
+        const teamId = typeof req.query.teamId === "string" ? req.query.teamId : "";
+        if (!kind || !identifier || (kind === "channel" && !teamId)) return res.status(400).json({message: "Choose a chat or channel first."});
+        const source = {kind,id:identifier,teamId,parentMessageId:typeof req.query.parentId === "string" ? req.query.parentId : ""};
         let page;
-        if (typeof req.query.cursor === "string" && req.query.cursor) page = await listTeamsNextPage(req.query.cursor, req.user.id, blockId, typeof req.query.parentId === "string" ? req.query.parentId : "");
+        if (typeof req.query.cursor === "string" && req.query.cursor) page = await listTeamsNextPage(req.query.cursor, req.user.id, blockId, source);
         else {
-            const kind = req.query.kind === "channel" ? "channel" : req.query.kind === "chat" ? "chat" : "";
-            const identifier = typeof req.query.id === "string" ? req.query.id : "";
-            if (!kind || !identifier) return res.status(400).json({message: "Choose a chat or channel first."});
             page = kind === "chat"
                 ? await listTeamsChatMessages(identifier, req.user.id, blockId)
-                : await listTeamsChannelMessages(typeof req.query.teamId === "string" ? req.query.teamId : "", identifier, req.user.id, blockId);
+                : await listTeamsChannelMessages(teamId, identifier, req.user.id, blockId);
         }
-        res.json({messages: page.messages, nextLink: page.nextLink || ""});
+        res.json({messages:filterTeamsMessages(page.messages,filters), nextLink: page.nextLink || ""});
     } catch (error) { respondTeamsError(res, error); }
+});
+
+app.get("/teams/files", requireAuthenticated, async (req, res) => {
+    try {
+        const scope = teamsWorldScope(req, res); if (!scope) return;
+        const filters = teamsMessageFilters(req.query);
+        const kind = req.query.kind === "channel" ? "channel" : req.query.kind === "chat" ? "chat" : "";
+        const sourceId = typeof req.query.id === "string" ? req.query.id : "";
+        const teamId = typeof req.query.teamId === "string" ? req.query.teamId : "";
+        if (!kind || !sourceId || (kind === "channel" && !teamId)) return res.status(400).json({message:"Choose one Teams chat or channel to list its files."});
+        const source={kind,id:sourceId,teamId,parentMessageId:typeof req.query.parentId === "string" ? req.query.parentId : ""};
+        const page = typeof req.query.cursor === "string" && req.query.cursor
+            ? await listTeamsNextPage(req.query.cursor, req.user.id, scope.blockId, source)
+            : kind === "chat"
+                ? await listTeamsChatMessages(sourceId, req.user.id, scope.blockId)
+                : await listTeamsChannelMessages(teamId, sourceId, req.user.id, scope.blockId);
+        const messages = filterTeamsMessages(page.messages, filters);
+        const files = messages.flatMap(message => (message.files || []).map(file => ({
+            ...file,
+            createdAt:message.createdAt || "",
+            sender:message.sender || "",
+            senderEmail:message.senderEmail || "",
+            kind,
+            sourceId,
+            teamId:kind === "channel" ? teamId : "",
+            context:kind === "channel" ? "Teams channel" : "Teams chat"
+        })));
+        res.json({files,nextLink:page.nextLink || "",source:{kind,id:sourceId,teamId:kind === "channel" ? teamId : ""}});
+    } catch (error) { respondTeamsError(res, error); }
+});
+
+app.get("/teams/files/download", requireAuthenticated, async (req, res) => {
+    const scope = teamsWorldScope(req, res); if (!scope) return;
+    const kind = req.query.kind === "channel" ? "channel" : req.query.kind === "chat" ? "chat" : "";
+    try {
+        if (!kind) return res.status(400).json({message:"Choose a Teams chat or channel first."});
+        const file = await downloadTeamsMessageFile({
+            kind,
+            id:typeof req.query.id === "string" ? req.query.id : "",
+            teamId:typeof req.query.teamId === "string" ? req.query.teamId : "",
+            messageId:typeof req.query.messageId === "string" ? req.query.messageId : "",
+            attachmentId:typeof req.query.fileId === "string" ? req.query.fileId : "",
+            userId:req.user.id,
+            blockId:scope.blockId
+        });
+        res.setHeader("Content-Type", file.mimeType);
+        res.setHeader("Content-Length", String(file.buffer.length));
+        res.setHeader("Content-Disposition", `attachment; filename*=UTF-8''${encodeURIComponent(file.name)}`);
+        res.setHeader("Cache-Control", "no-store");
+        res.setHeader("X-Content-Type-Options", "nosniff");
+        res.send(file.buffer);
+    } catch (error) {
+        if (error?.status === 403 || /permission|scope|consent/i.test(error?.message || "")) {
+            return res.status(403).json({needsConsent:true,message:"Teams file access needs Microsoft Graph Files.ReadWrite permission. Reconnect the selected account and approve the requested access; tenant administrator consent may be required."});
+        }
+        respondTeamsError(res, error);
+    }
 });
 
 app.post("/auth/outlook/disconnect", (req, res) => {

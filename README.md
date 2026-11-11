@@ -107,6 +107,41 @@ The UI fixtures under `tests/ui/` use synthetic data and mocked network response
 
 ## Repository map
 
+### Architecture
+
+```mermaid
+flowchart LR
+    User([User]) --> Electron[Electron main process\nLifecycle, windows, local backend]
+    Electron --> Renderer[Renderer\nReact + TypeScript + Vite]
+    Renderer <-->|HTTP on localhost| API[Local Express API]
+    Renderer <-->|Narrow preload bridge\nIPC| Electron
+    API --> Files[Local files and workspace data]
+    API --> Providers[Optional email, calendar, AI providers]
+    Gmail[Optional Gmail browser bridge] --> Renderer
+    Obsidian[Optional Obsidian companion] <-->|Local integration| Electron
+```
+
+Electron's main process owns the desktop lifecycle and starts the local backend. The renderer uses HTTP for backend operations and a limited preload bridge for desktop capabilities. Provider connections are optional.
+
+### Source tree
+
+```text
+FolderRocket/
+├── src/                         # React renderer, UI and assets
+├── backend/                     # Express API, AI, database, services and tests
+├── desktop/                     # Electron main process, preload and config template
+├── browser-extension/           # Optional Gmail attachment bridge
+├── obsidian-plugin/             # Optional Obsidian companion
+├── tests/                       # Workspace regression tests and UI fixtures
+├── docs/                        # Guides, architecture notes, plans and prompts
+├── scripts/                     # Packaging and local development tools
+├── build/                       # Desktop packaging assets
+├── agent-kit/                   # Agent pack integration
+└── .agents/ .codex/ .claude/ .cursor/  # Agent procedures and runtime configuration
+```
+
+The tree shows the checked-in source areas; local dependencies, generated builds, releases and user data are excluded. See [the documentation index](docs/README.md) for architecture and development guides.
+
 | Path | Purpose |
 | --- | --- |
 | `src/` | React, TypeScript, and Vite frontend |

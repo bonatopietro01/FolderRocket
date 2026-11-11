@@ -24,6 +24,7 @@ interface FolderRocketElectronDiagnostic {
 
 interface Window {
     folderRocketDesktop?: {
+        selectFolder?: () => Promise<{canceled: boolean; path?: string}>;
         getPathForFile: (file: File) => string;
         openExternal: (url: string) => Promise<boolean>;
         openObsidianVault: (request: {worldId: string; vaultPath: string}) => Promise<{opened:boolean;message?:string}>;

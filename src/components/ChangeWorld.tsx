@@ -97,13 +97,20 @@ const WorldGrid = memo(function WorldGrid({worlds, activeWorldId, switchingWorld
             const active = world.id === activeWorldId;
             const graph = graphReadiness[world.id];
             const graphIsQueryable = world.graphEnabled && graph?.queryable === true && graph.stale !== true;
-            const graphStatus = !world.graphEnabled ? "Graph disabled" : graph?.readiness === "indexing" ? `Indexing sources${graph.progress?.processed !== undefined ? ` · ${graph.progress.processed}${graph.progress.total ? ` / ${graph.progress.total}` : " processed"}` : "…"}` : graph?.readiness === "preparing" ? "Preparing knowledge…" : graph?.readiness === "partial" ? "" : graph?.readiness === "ready" ? "Knowledge graph ready" : graph?.readiness === "stale" || graph?.stale ? "Graph needs an update" : graph?.readiness === "empty" ? "No graph data yet" : graph?.readiness === "error" ? "Graph status unavailable" : "Checking graph…";
+            const wikiIsAvailable = graph?.managedMarkdown?.complete === true
+                && graph.managedMarkdown.status === "ready"
+                && Boolean(graph.managedMarkdown.revision)
+                && graph.managedMarkdown.revision === graph.revision
+                && graph.readiness === "ready"
+                && graph.stale !== true;
+            const wikiButtonLabel = wikiIsAvailable ? "Apri wiki" : "Graph disabled";
+            const graphStatus = !world.graphEnabled ? "" : graph?.readiness === "indexing" ? `Indexing sources${graph.progress?.processed !== undefined ? ` · ${graph.progress.processed}${graph.progress.total ? ` / ${graph.progress.total}` : " processed"}` : "…"}` : graph?.readiness === "preparing" ? "Preparing knowledge…" : graph?.readiness === "partial" ? "" : graph?.readiness === "ready" ? "Knowledge graph ready" : graph?.readiness === "stale" || graph?.stale ? "Graph needs an update" : graph?.readiness === "empty" ? "No graph data yet" : graph?.readiness === "error" ? "Graph status unavailable" : "Checking graph…";
             return <article key={world.id} className={`worldCard${active ? " selected" : ""}`} style={{"--planet-color": world.color} as CSSProperties}>
                 <div className="worldCardTop"><span>{active ? "AMBIENTE ATTIVO" : "AMBIENTE"}</span><button type="button" onClick={() => onEditWorld(world)} title={`Modifica ${world.name}`} aria-label={`Modifica ${world.name}`}><Pencil size={14}/></button></div>
                 <Planet world={world} large/>
                 <h2>{world.name}</h2>
                 <div className="worldCardMeta"><span><Sparkles size={12}/>{world.aiEnabled ? "AI disponibile" : "AI disattivata"}</span><span>{world.agents.filter(agent => agent.enabled).length + world.skills.filter(skill => skill.enabled).length} agenti/skill</span>{world.emailAccount&&<span className="worldCardEmailAccount"><Mail size={12}/>{world.emailAccount.provider === "gmail" ? "Gmail" : "Outlook"} · {world.emailAccount.email || "account linked"}</span>}</div>
-                <div className="worldCardActions"><button type="button" className="worldSelectButton" onClick={() => onSelectWorld(world.id)} disabled={Boolean(switchingWorldId)}>{switchingWorldId === world.id ? <><LoaderCircle className="worldInlineSpinner" size={15}/>Preparazione…</> : active ? <><Check size={15}/>Sei qui</> : <>Enter planet <span>→</span></>}</button><div className="worldCardWikiActions"><button type="button" onClick={()=>onOpenWiki(world)}><BookOpen size={14}/>Apri wiki</button></div>{graphIsQueryable&&<button type="button" className="worldGraphButton" onClick={() => onViewGraph(world)} title={`View ${world.name} graph`}><Network size={15}/>View graph</button>}{graphStatus&&<small className={`worldGraphReadiness ${graph?.readiness||"ready"}`} role="status">{graphStatus}</small>}{graph?.readiness==="error"&&<button type="button" onClick={() => setGraphCheckVersion(version=>version+1)}>Retry status</button>}</div>
+                <div className="worldCardActions"><button type="button" className="worldSelectButton" onClick={() => onSelectWorld(world.id)} disabled={Boolean(switchingWorldId)}>{switchingWorldId === world.id ? <><LoaderCircle className="worldInlineSpinner" size={15}/>Preparazione…</> : active ? <><Check size={15}/>Sei qui</> : <>Enter planet <span>→</span></>}</button><div className="worldCardWikiActions"><button type="button" onClick={()=>onOpenWiki(world)} disabled={!wikiIsAvailable} aria-label={wikiButtonLabel} title={wikiIsAvailable ? `Apri la wiki di ${world.name}` : wikiButtonLabel}><BookOpen size={14}/>{wikiButtonLabel}</button></div>{graphIsQueryable&&<button type="button" className="worldGraphButton" onClick={() => onViewGraph(world)} title={`View ${world.name} graph`}><Network size={15}/>View graph</button>}{graphStatus&&<small className={`worldGraphReadiness ${graph?.readiness||"ready"}`} role="status">{graphStatus}</small>}{graph?.readiness==="error"&&<button type="button" onClick={() => setGraphCheckVersion(version=>version+1)}>Retry status</button>}</div>
             </article>;
         })}
     </section>;
@@ -215,12 +222,14 @@ export default function ChangeWorld({worlds, activeWorldId, storageScope, onSync
         }
         setSaveError("");
         try {
+            const updatedWorld={...editingWorld,name};
+            await onUpdate(updatedWorld);
+            setEditingWorld(updatedWorld);
             const obsidian = {enabled: editingWorld.obsidian?.enabled === true, autoSync:editingWorld.obsidian?.autoSync===true, vaultPath: editingWorld.obsidian?.vaultPath || "", sourceSelection: fileOnlyObsidianSelection(editingWorld.obsidian?.sourceSelection)};
             const obsidianResponse = await fetch(`${API_BASE_URL}/worlds/${encodeURIComponent(editingWorld.id)}/obsidian`, {method:"PUT",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify(obsidian)});
             const obsidianData = await obsidianResponse.json().catch(() => ({})) as {config?:WorldObsidianSettings;message?:string};
-            if (!obsidianResponse.ok) throw new Error(obsidianData.message || "Obsidian settings could not be saved.");
+            if (!obsidianResponse.ok) throw new Error(`Planet saved, but Obsidian settings could not be saved: ${obsidianData.message || "try again."}`);
             if (obsidianData.config) setEditingWorld(current => current?.id === editingWorld.id ? {...current,obsidian:obsidianData.config} : current);
-            await onUpdate({...editingWorld, name});
             setEditingWorld(null);
         } catch (error) {
             setSaveError(error instanceof Error ? error.message : "Non è stato possibile salvare il pianeta.");

@@ -1,5 +1,5 @@
 import {useEffect, useMemo, useRef, useState, type DragEvent, type PointerEvent as ReactPointerEvent, type RefObject} from "react";
-import {CalendarDays, ChevronDown, ChevronLeft, ChevronRight, EyeOff, FilePlus2, FileText, FolderOpen, MailPlus, Minus, Rocket, RotateCw, ScanSearch, Send, Settings2, SlidersHorizontal, StickyNote, Trash2, X, Zap} from "lucide-react";
+import {CalendarDays, ChevronDown, ChevronLeft, ChevronRight, FilePlus2, FileText, FolderOpen, MailPlus, Minus, Rocket, RotateCw, ScanSearch, Send, Settings2, SlidersHorizontal, StickyNote, Trash2, X, Zap} from "lucide-react";
 import {API_BASE_URL} from "../api";
 import {browserBridgeDropId, resolveBrowserBridgeDrop} from "../browserBridge";
 import {EMAIL_ATTACHMENT_TYPE} from "./GmailSourcePanel";
@@ -249,6 +249,21 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, wo
         window.addEventListener("storage", receiveStorage);
         return () => { window.removeEventListener("folderrocket-calendar-context", receiveCalendar); window.removeEventListener("storage", receiveStorage); };
     }, [storageScope]);
+
+    useEffect(() => {
+        const receiveTeamsFiles = (event: Event) => {
+            const detail=(event as CustomEvent<{storageScope?:string;files?:File[]}>).detail;
+            if(detail?.storageScope!==storageScope||!Array.isArray(detail.files))return;
+            const incoming=detail.files.filter(file=>file instanceof File).map(file=>({id:cargoId(),kind:"file" as const,file,name:file.name,size:file.size}));
+            if(!incoming.length)return;
+            setItems(current=>[...current,...incoming]);
+            setMessage(`${incoming.length} Teams file${incoming.length===1?"":"s"} loaded aboard.`);
+            setMinimized(false);setOpen(true);
+            if(standalone)void window.folderRocketDesktop?.setCargoShipExpanded(true);
+        };
+        window.addEventListener("folderrocket:add-to-cargo",receiveTeamsFiles);
+        return()=>window.removeEventListener("folderrocket:add-to-cargo",receiveTeamsFiles);
+    },[storageScope,standalone]);
 
     useEffect(() => {
         const receive = (value: CargoReminder) => setActiveReminder(value);
@@ -781,18 +796,6 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, wo
         setMinimized(true);
         if (standalone) void window.folderRocketDesktop?.setCargoShipExpanded(false);
     }
-    function compactShip() {
-        const compactSize = {...MINIMUM_CARGO_SIZE};
-        if (standalone) {
-            void window.folderRocketDesktop?.resizeCargoShipWindow(compactSize);
-            return;
-        }
-        setShipSize(compactSize);
-        setPosition(current => ({
-            x: Math.max(8, Math.min(window.innerWidth - compactSize.width * shipScale - 8, current.x)),
-            y: Math.max(8, Math.min(window.innerHeight - compactSize.height * shipScale - 8, current.y))
-        }));
-    }
     function closeShip() {
         if (standalone) {
             void window.folderRocketDesktop?.closeCargoShipWindow();
@@ -818,7 +821,7 @@ export default function CargoShip({onOpenFileStudio, aiEnabled, storageScope, wo
         <button type="button" onClick={() => void sendToFolder()} disabled={!targetDestination || !items.length || working}>Organise</button>
     </div>;
     const shipPanel = <section ref={shipRef} className={`${dragging ? "cargoShip moving" : "cargoShip"}${standalone ? " cargoShipStandalone" : ""}${lensCapturing ? " lensCapturing" : ""}`} style={shipPanelStyle} onDragOver={mode === "email" ? event => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; } : undefined} onDrop={mode === "email" ? event => void handleDrop(event) : undefined}>
-        <header className="cargoShipHeader" onPointerDown={standalone ? undefined : startDrag}><span><Rocket size={15} />CargoRocket <small>{items.length} on board</small></span><span className="cargoShipHeaderActions"><button type="button" title="Use CargoRocket's smallest size" onClick={compactShip}><Minus size={14} /></button><button type="button" className="cargoShipHide" title="Hide CargoRocket as a movable bubble" onClick={minimizeShip}><EyeOff size={14} /></button><button type="button" className="cargoShipClose" title="Close CargoRocket" onClick={closeShip}><X size={14} /></button></span></header>
+        <header className="cargoShipHeader" onPointerDown={standalone ? undefined : startDrag}><span><Rocket size={15} />CargoRocket <small>{items.length} on board</small></span><span className="cargoShipHeaderActions"><button type="button" title="Minimize CargoRocket to its movable bubble" aria-label="Minimize CargoRocket" onClick={minimizeShip}><Minus size={14} /></button><button type="button" className="cargoShipClose" title="Close CargoRocket" onClick={closeShip}><X size={14} /></button></span></header>
         <div className="cargoShipModes" role="tablist">{enabledTools.includes("transport") && <button type="button" className={mode === "transport" ? "active" : ""} onClick={() => setMode("transport")}>Files</button>}{enabledTools.includes("calendar") && <button type="button" className={mode === "calendar" ? "active" : ""} onClick={() => setMode("calendar")}><CalendarDays size={11}/>Day</button>}{enabledTools.includes("note") && <button type="button" className={mode === "note" ? "active" : ""} onClick={() => setMode("note")}><StickyNote size={11}/>Note</button>}{enabledTools.includes("text") && <button type="button" className={mode === "text" ? "active" : ""} onClick={() => setMode("text")}><FilePlus2 size={11} />Text</button>}{enabledTools.includes("email") && <button type="button" className={mode === "email" ? "active" : ""} onClick={() => setMode("email")}><MailPlus size={11} />Email</button>}{enabledTools.includes("convert") && <button type="button" className={mode === "convert" ? "active" : ""} onClick={() => setMode("convert")}><RotateCw size={11} />Convert</button>}{aiEnabled && enabledTools.includes("lens") && <button type="button" className={mode === "lens" ? "active" : ""} onClick={() => setMode("lens")}><ScanSearch size={11} />Lens</button>}</div>
         {mode === "calendar" && <div className="cargoDayCalendar"><div className="cargoDayNavigation"><button type="button" onClick={() => setCalendarDay(current => { const day = new Date(`${current}T12:00:00`); day.setDate(day.getDate() - 1); return day.toISOString().slice(0, 10); })} title="Previous day"><ChevronLeft size={15}/></button><input type="date" value={calendarDay} onChange={event => setCalendarDay(event.target.value)}/><button type="button" onClick={() => setCalendarDay(current => { const day = new Date(`${current}T12:00:00`); day.setDate(day.getDate() + 1); return day.toISOString().slice(0, 10); })} title="Next day"><ChevronRight size={15}/></button></div><div>{calendarEvents.filter(event => event.start.slice(0, 10) === calendarDay).map((event, index) => <article key={`${event.start}-${event.title}-${index}`}><strong>{event.title}</strong><small>{new Date(event.start).toLocaleTimeString([], {hour: "2-digit", minute: "2-digit"})}{event.location ? ` · ${event.location}` : ""}</small>{event.attachments.map(file => <span key={file}><FileText size={11}/>{file}</span>)}</article>)}{!calendarEvents.some(event => event.start.slice(0, 10) === calendarDay) && <p>No events or files for this day.</p>}</div></div>}
         {mode === "transport" && <div className={dropActive ? "cargoDropArea active" : "cargoDropArea"} onDragOver={event => { event.preventDefault(); event.dataTransfer.dropEffect = "copy"; setDropActive(true); }} onDragLeave={() => setDropActive(false)} onDrop={handleDrop}>

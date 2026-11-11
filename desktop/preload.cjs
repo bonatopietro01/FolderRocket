@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld("folderRocketDesktop", {
     openExternal: url => ipcRenderer.invoke("folderrocket:open-external", url),
     openObsidianVault: payload => ipcRenderer.invoke("folderrocket:open-obsidian-vault", payload),
     saveDownload: payload => ipcRenderer.invoke("folderrocket:save-download", payload),
+    selectFolder: () => ipcRenderer.invoke("folderrocket:select-folder"),
     listDisplaySources: () => ipcRenderer.invoke("folderrocket:list-display-sources"),
     selectDisplaySource: sourceId => ipcRenderer.invoke("folderrocket:select-display-source", sourceId),
     capturePageRegion: region => ipcRenderer.invoke("folderrocket:capture-page-region", region),

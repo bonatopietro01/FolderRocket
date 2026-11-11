@@ -336,25 +336,42 @@ test("Daily Job creates recap drafts manually from accounts connected to the act
     assert.doesNotMatch(daily, /setInterval\(|schedule.*enabled/i);
 });
 
-test("Teams source offers selectable chats, channels, mentions and shared-file filters through read-only Graph routes", () => {
+test("Dashboard Teams source lists selected-source files and imports them locally without showing the chat feed", () => {
     const teams = source("src", "components", "TeamsSourcePanel.tsx");
     const outlook = source("backend", "services", "outlookService.js");
     const server = source("backend", "server.js");
     assert.match(teams, /Chats · 1:1 and groups/);
     assert.match(teams, /Teams channels/);
-    assert.match(teams, /Mentions/);
+    assert.match(teams, /People/);
     assert.match(teams, /Shared files/);
-    assert.match(teams, /Load older messages/);
-    assert.match(teams, /Load more replies/);
+    assert.match(teams, /Add to CargoRocket/);
+    assert.match(teams, /folderrocket:add-to-cargo/);
+    assert.match(teams, /AI alerts for this selection/);
+    assert.doesNotMatch(teams, /Load older messages|Load more replies|teamsMessageList/);
     assert.match(teams, /Load more chats/);
     assert.match(teams, /Load more channels/);
-    assert.match(server, /app\.get\("\/teams\/messages", requireAuthenticated/);
+    assert.match(server, /app\.get\("\/teams\/files", requireAuthenticated/);
+    assert.match(server, /listTeamsNextPage\(req\.query\.cursor, req\.user\.id, scope\.blockId, source\)/);
     assert.match(outlook, /\$expand=replies/);
     assert.match(outlook, /https:\/\/graph\.microsoft\.com\/Chat\.Read/);
     assert.match(outlook, /https:\/\/graph\.microsoft\.com\/ChannelMessage\.Read\.All/);
-    assert.match(teams, /&teams=1&format=json/);
+    assert.match(outlook, /https:\/\/graph\.microsoft\.com\/Files\.ReadWrite/);
+    assert.match(outlook, /downloadTeamsMessageFile/);
     assert.match(outlook, /const scopes = \[OUTLOOK_SCOPES, \.\.\.\(options\.includeTeams \? \[TEAMS_SCOPES\] : \[\]\), \.\.\.\(options\.includeSend \? \[OUTLOOK_SEND_SCOPE\] : \[\]\)\]\.join\(" "\)/);
     assert.match(teams, /Read-only/);
+});
+
+test("Conversations keeps foreign shared Gmail read-only and offers selected-account Teams consent", () => {
+    const conversations = source("src", "components", "EmailConversations.tsx");
+    const teams = source("src", "components", "TeamsConversationsView.tsx");
+    assert.match(conversations, /selected\.shared&&selected\.blockId!==accountBlockId\?\s*<p className="emailConversationReadOnlyHint"/);
+    assert.match(conversations, /This shared Gmail conversation is read-only on this planet/);
+    assert.match(teams, /needsConsent\?:boolean/);
+    assert.match(teams, /new URLSearchParams\(\{blockId,teams:"1",format:"json"\}\)/);
+    assert.match(teams, /window\.folderRocketDesktop\.openExternal\(data\.authorizationUrl\)/);
+    assert.match(teams, /onOAuthComplete\(provider=>\{if\(provider==="outlook"\)/);
+    assert.match(teams, /Reconnect Teams access/);
+    assert.match(teams, /Files\.ReadWrite/);
 });
 
 test("AI alerts accept open-ended planet topics and keep the existing small model", () => {

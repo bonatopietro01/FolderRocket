@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 const {getAuthorizationUrl, isSafeTeamsNextLink, listTeamsDirectoryNextPage, listTeamsNextPage, shapeTeamsMessage, shapeTeamsMessages} = require("../services/outlookService");
 
-test("Teams messages are normalized to safe text, mention labels, and HTTPS file links", () => {
+test("Teams messages are normalized to safe text and do not expose arbitrary links as downloadable files", () => {
     const message = shapeTeamsMessage({
         id: "message-1",
         createdDateTime: "2026-09-29T10:00:00Z",
@@ -19,10 +19,32 @@ test("Teams messages are normalized to safe text, mention labels, and HTTPS file
     assert.equal(message.text, "Hello Pietro");
     assert.deepEqual(message.mentions, ["Pietro"]);
     assert.deepEqual(message.attachments, [
-        {name: "report.pdf", url: "https://contoso.example/report.pdf"},
-        {name: "unsafe.txt", url: ""}
+        {id: "", name: "report.pdf", url: ""},
+        {id: "", name: "unsafe.txt", url: ""}
     ]);
+    assert.deepEqual(message.files, []);
     assert.equal(Object.hasOwn(message, "accessToken"), false);
+});
+
+test("Teams downloadable file references require a supported Microsoft share host", () => {
+    const supported = shapeTeamsMessage({attachments:[{
+        id:"attachment-1",
+        name:"report.pdf",
+        contentType:"reference",
+        contentUrl:"https://tenant.sharepoint.com/sites/team/Shared%20Documents/report.pdf"
+    }]});
+    const unsupported = shapeTeamsMessage({attachments:[{
+        id:"attachment-2",
+        name:"report.pdf",
+        contentType:"reference",
+        contentUrl:"https://contoso.example/report.pdf"
+    }]});
+
+    assert.equal(supported.files.length, 1);
+    assert.equal(supported.files[0].id, "attachment-1");
+    assert.equal(supported.attachments[0].url, "https://tenant.sharepoint.com/sites/team/Shared%20Documents/report.pdf");
+    assert.deepEqual(unsupported.files, []);
+    assert.equal(unsupported.attachments[0].url, "");
 });
 
 test("Teams message summaries bound text and attachment metadata", () => {
@@ -61,6 +83,7 @@ test("Teams consent is opt-in and normal Outlook authorization does not request 
         const teamsUrl = new URL(getAuthorizationUrl("user-test", "teams-block", {origin: "http://localhost:3000", includeTeams: true}));
         assert.match(teamsUrl.searchParams.get("scope"), /Chat\.Read/);
         assert.match(teamsUrl.searchParams.get("scope"), /ChannelMessage\.Read\.All/);
+        assert.match(teamsUrl.searchParams.get("scope"), /Files\.ReadWrite/);
         assert.equal(teamsUrl.searchParams.get("prompt"), "consent");
     } finally {
         if (previousId === undefined) delete process.env.OUTLOOK_CLIENT_ID; else process.env.OUTLOOK_CLIENT_ID = previousId;
@@ -69,9 +92,30 @@ test("Teams consent is opt-in and normal Outlook authorization does not request 
 });
 
 test("Teams paging accepts only Microsoft Graph continuation URLs", async () => {
-    assert.equal(isSafeTeamsNextLink("https://graph.microsoft.com/v1.0/chats/chat-id/messages?$skiptoken=abc"), true);
+    assert.equal(isSafeTeamsNextLink("https://graph.microsoft.com/v1.0/chats/chat-id/messages?$skiptoken=abc", {kind:"chat",id:"chat-id"}), true);
     assert.equal(isSafeTeamsNextLink("https://example.com/v1.0/chats"), false);
     await assert.rejects(listTeamsNextPage("https://example.com/steal", "user-test", "block-test"), /Invalid Teams message continuation link/);
     await assert.rejects(listTeamsDirectoryNextPage("https://example.com/steal", "chats", "user-test", "block-test"), /Invalid Teams directory continuation link/);
     await assert.rejects(listTeamsDirectoryNextPage("https://graph.microsoft.com/v1.0/me/chats", "other", "user-test", "block-test"), /Choose a valid Teams directory/);
+});
+
+test("Teams message continuations stay bound to the selected chat or team channel", () => {
+    const chatSource = {kind:"chat",id:"chat-1"};
+    const channelSource = {kind:"channel",teamId:"team-1",id:"channel-1"};
+    assert.equal(isSafeTeamsNextLink("https://graph.microsoft.com/v1.0/chats/chat-1/messages?$skiptoken=next", chatSource), true);
+    assert.equal(isSafeTeamsNextLink("https://graph.microsoft.com/v1.0/chats/chat-2/messages?$skiptoken=next", chatSource), false);
+    assert.equal(isSafeTeamsNextLink("https://graph.microsoft.com/v1.0/teams/team-1/channels/channel-1/messages?$skiptoken=next", channelSource), true);
+    assert.equal(isSafeTeamsNextLink("https://graph.microsoft.com/v1.0/teams/team-2/channels/channel-1/messages?$skiptoken=next", channelSource), false);
+    assert.equal(isSafeTeamsNextLink("https://graph.microsoft.com/v1.0/teams/team-1/channels/channel-2/messages?$skiptoken=next", channelSource), false);
+    assert.equal(isSafeTeamsNextLink("https://graph.microsoft.com/v1.0/me/messages?$skiptoken=next", chatSource), false);
+    assert.equal(isSafeTeamsNextLink("https://graph.microsoft.com/v1.0/users/user-1/messages?$skiptoken=next", chatSource), false);
+});
+
+test("Teams directory continuations stay bound to the directory and selected team", () => {
+    assert.equal(isSafeTeamsNextLink("https://graph.microsoft.com/v1.0/me/chats?$skiptoken=next", {directoryKind:"chats"}), true);
+    assert.equal(isSafeTeamsNextLink("https://graph.microsoft.com/v1.0/me/joinedTeams?$skiptoken=next", {directoryKind:"teams"}), true);
+    assert.equal(isSafeTeamsNextLink("https://graph.microsoft.com/v1.0/teams/team-1/channels?$skiptoken=next", {directoryKind:"channels",teamId:"team-1"}), true);
+    assert.equal(isSafeTeamsNextLink("https://graph.microsoft.com/v1.0/teams/team-2/channels?$skiptoken=next", {directoryKind:"channels",teamId:"team-1"}), false);
+    assert.equal(isSafeTeamsNextLink("https://graph.microsoft.com/v1.0/me/messages?$skiptoken=next", {directoryKind:"chats"}), false);
+    assert.equal(isSafeTeamsNextLink("https://graph.microsoft.com/v1.0/users/user-1/chats?$skiptoken=next", {directoryKind:"chats"}), false);
 });

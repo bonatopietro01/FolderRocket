@@ -33,6 +33,11 @@ export interface WorldEmailAccount {
     blockId: string;
     email?: string;
 }
+export interface WorldConversationAccounts {
+    gmail: {blockId: string | null};
+    outlook: {blockId: string | null};
+    teams: {blockId: string | null};
+}
 export interface WorldObsidianSettings {
     enabled: boolean;
     autoSync?: boolean;
@@ -99,6 +104,7 @@ export interface WorkspaceWorld {
     aiEnabled: boolean;
     graphEnabled: boolean;
     emailAccount?: WorldEmailAccount | null;
+    conversations?: {accounts: WorldConversationAccounts};
     treeRootMode?: WorldTreeRootMode;
     obsidian?: WorldObsidianSettings;
     agents: WorldAgentProfile[];
@@ -159,6 +165,11 @@ function normalizeWorlds(value: unknown): WorkspaceWorld[] | null {
                     ? {provider: world.emailAccount.provider, blockId: world.emailAccount.blockId, ...(typeof world.emailAccount.email === "string" ? {email: world.emailAccount.email.slice(0, 254)} : {})}
                     : null
                 : undefined,
+            conversations: world.conversations && typeof world.conversations === "object" ? {accounts:{
+                gmail:{blockId:typeof world.conversations.accounts?.gmail?.blockId === "string" ? world.conversations.accounts.gmail.blockId.slice(0,120) : null},
+                outlook:{blockId:typeof world.conversations.accounts?.outlook?.blockId === "string" ? world.conversations.accounts.outlook.blockId.slice(0,120) : null},
+                teams:{blockId:typeof world.conversations.accounts?.teams?.blockId === "string" ? world.conversations.accounts.teams.blockId.slice(0,120) : null}
+            }} : undefined,
             treeRootMode: world.treeRootMode === "desktop" ? "desktop" : "computer",
             obsidian: world.obsidian && typeof world.obsidian === "object"
                 ? {enabled: world.obsidian.enabled === true, autoSync: world.obsidian.autoSync === true, vaultPath: typeof world.obsidian.vaultPath === "string" ? world.obsidian.vaultPath.slice(0, 1024) : "", sourceSelection: normalizeObsidianSourceSelection(world.obsidian.sourceSelection), ...(typeof world.obsidian.lastSyncAt === "string" ? {lastSyncAt: world.obsidian.lastSyncAt.slice(0, 40)} : {}), ...(typeof world.obsidian.lastAttemptAt === "string" ? {lastAttemptAt: world.obsidian.lastAttemptAt.slice(0, 40)} : {}), ...(typeof world.obsidian.lastAttemptStatus === "string" ? {lastAttemptStatus: world.obsidian.lastAttemptStatus.slice(0, 40)} : {}), ...(typeof world.obsidian.status === "string" ? {status: world.obsidian.status.slice(0, 200)} : {}), ...(world.obsidian.lastResult && typeof world.obsidian.lastResult === "object" ? {lastResult: {total: finiteCount(world.obsidian.lastResult.total), written: finiteCount(world.obsidian.lastResult.written), unchanged: finiteCount(world.obsidian.lastResult.unchanged), conflicts: finiteCount(world.obsidian.lastResult.conflicts), warnings: Array.isArray(world.obsidian.lastResult.warnings) ? world.obsidian.lastResult.warnings.filter((item): item is string => typeof item === "string").slice(0, 20) : []}} : {})}

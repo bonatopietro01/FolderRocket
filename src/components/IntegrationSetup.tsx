@@ -144,15 +144,20 @@ export default function IntegrationSetup({isAdmin, onAIStatusChange, open, onOpe
                     <article className={aiReady ? "integrationCard ready" : "integrationCard"}>
                         <div><Sparkles size={16} /><strong>AI</strong><small>{savedValue(aiReady, "OpenAI connection")}</small></div>
                         <input type={showSecrets ? "text" : "password"} value={fields.openAiKey} onChange={event => updateField("openAiKey", event.target.value)} placeholder={aiReady ? "New OpenAI API key (optional)" : "OpenAI API key"} autoComplete="off" />
+                        <a className="integrationGuideLink" href="https://help.openai.com/en/articles/4936850-where-do-i-find-my-openai-api-key" target="_blank" rel="noreferrer">Find or create an OpenAI API key</a>
                     </article>
                     <article className={status?.gmailConfigured ? "integrationCard ready" : "integrationCard"}>
-                        <div><Mail size={16} /><strong>Gmail</strong><small>{savedValue(Boolean(status?.gmailConfigured), "Gmail app credentials")}</small></div>
+                        <div><Mail size={16} /><strong>Gmail · OAuth client</strong><small>{savedValue(Boolean(status?.gmailConfigured), "Google OAuth client credentials")}</small></div>
                         <input type="text" value={fields.gmailClientId} onChange={event => updateField("gmailClientId", event.target.value)} placeholder={status?.gmailConfigured ? "New Gmail client ID (optional)" : "Gmail client ID"} autoComplete="off" />
                         <input type={showSecrets ? "text" : "password"} value={fields.gmailClientSecret} onChange={event => updateField("gmailClientSecret", event.target.value)} placeholder={status?.gmailConfigured ? "New Gmail client secret (optional)" : "Gmail client secret"} autoComplete="off" />
+                        <small className="integrationCredentialHint">Gmail uses OAuth client credentials, not a Google API key. Connect the mailbox from its Gmail block.</small>
+                        <a className="integrationGuideLink" href="https://developers.google.com/workspace/guides/create-credentials" target="_blank" rel="noreferrer">Create Google OAuth credentials</a>
                     </article>
                     <article className={status?.googleCalendarConfigured ? "integrationCard ready" : "integrationCard"}>
                         <div><CalendarDays size={16} /><strong>Public Calendar key (optional)</strong><small>Private calendars connect directly inside their Calendar block.</small></div>
                         <input type={showSecrets ? "text" : "password"} value={fields.googleCalendarApiKey} onChange={event => updateField("googleCalendarApiKey", event.target.value)} placeholder={status?.googleCalendarConfigured ? "New public-calendar API key (optional)" : "Public-calendar API key (optional)"} autoComplete="off" />
+                        <small className="integrationCredentialHint">Only public calendar data uses this API key. Private calendars use Google OAuth in the Calendar block.</small>
+                        <a className="integrationGuideLink" href="https://developers.google.com/workspace/guides/create-credentials" target="_blank" rel="noreferrer">Create a Google Cloud API key</a>
                     </article>
                     <article className="integrationCard browserBridgeCard">
                         <div><KeyRound size={16} /><strong>Gmail browser bridge</strong><small>Drag attachments from Gmail in Chrome or Edge into FolderRocket.</small></div>
@@ -160,12 +165,16 @@ export default function IntegrationSetup({isAdmin, onAIStatusChange, open, onOpe
                         {browserBridgeCode && <div className="browserBridgeCode"><code>{browserBridgeCode}</code><button type="button" onClick={() => void copyBrowserBridgeCode()}>Copy</button></div>}
                     </article>
                     <article className={status?.outlookConfigured ? "integrationCard ready" : "integrationCard"}>
-                        <div><Mail size={16} /><strong>Outlook</strong><small>{savedValue(Boolean(status?.outlookConfigured), "Outlook app credentials")}</small></div>
+                        <div><Mail size={16} /><strong>Outlook and Teams · OAuth app</strong><small>{savedValue(Boolean(status?.outlookConfigured), "Microsoft app credentials")}</small></div>
                         <input type="text" value={fields.outlookClientId} onChange={event => updateField("outlookClientId", event.target.value)} placeholder={status?.outlookConfigured ? "New Outlook client ID (optional)" : "Outlook client ID"} autoComplete="off" />
                         <input type={showSecrets ? "text" : "password"} value={fields.outlookClientSecret} onChange={event => updateField("outlookClientSecret", event.target.value)} placeholder={status?.outlookConfigured ? "New Outlook client secret (optional)" : "Outlook client secret"} autoComplete="off" />
+                        <small className="integrationCredentialHint">Outlook and Teams use Microsoft OAuth; Teams does not need a separate API key. Add FolderRocket’s redirect URI to the app registration. Teams access uses delegated Chat.Read, Channel.ReadBasic.All, ChannelMessage.Read.All and Files.ReadWrite permissions. ChannelMessage.Read.All may require administrator consent. Files.ReadWrite is a broad Microsoft permission, although FolderRocket uses it here only to read and download shared files; reconnect the account if Teams asks you to approve updated permissions.</small>
+                        <a className="integrationGuideLink" href="https://learn.microsoft.com/en-us/entra/identity-platform/v2-app-types" target="_blank" rel="noreferrer">Register a Microsoft app</a>
+                        <a className="integrationGuideLink" href="https://learn.microsoft.com/en-us/graph/permissions-reference" target="_blank" rel="noreferrer">Review Microsoft Graph permissions</a>
+                        <a className="integrationGuideLink" href="https://learn.microsoft.com/en-us/entra/identity-platform/how-to-add-redirect-uri" target="_blank" rel="noreferrer">Add the FolderRocket redirect URI</a>
                     </article>
                     <div className="integrationActions"><button type="button" className="integrationReveal" onClick={() => setShowSecrets(current => !current)} title={showSecrets ? "Hide credentials" : "Show credentials"}>{showSecrets ? <EyeOff size={14} /> : <Eye size={14} />}{showSecrets ? "Hide" : "Show"}</button><button type="button" className="integrationSave" onClick={() => void saveSettings()} disabled={saving}><Save size={14} />{saving ? "Saving…" : "Save locally"}</button></div>
-                    <p className="integrationOAuthNote"><KeyRound size={13} />After Gmail or Outlook says “ready”, use Connect in that mailbox block and approve read-only access in the official Google or Microsoft page.</p>
+                    <p className="integrationOAuthNote"><KeyRound size={13} />After Gmail or Outlook says “ready”, use Connect in that mailbox block. Gmail and Outlook mail access are read-only. Teams shared-file import also requests Microsoft Files.ReadWrite, a broad permission that FolderRocket uses only to read and download the selected shared file; ChannelMessage.Read.All may require administrator consent. Reconnect the Microsoft account if Teams asks you to approve updated permissions.</p>
                     {message && <p className={message.startsWith("Saved") ? "integrationMessage success" : "integrationMessage"}>{message.startsWith("Saved") ? <Check size={14} /> : <CircleAlert size={14} />}{message}</p>}
                 </>}
             </>}

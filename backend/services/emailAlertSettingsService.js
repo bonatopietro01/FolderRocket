@@ -47,10 +47,22 @@ function normalizeRule(value) {
     const kind = ALERT_KINDS.has(value.kind) ? value.kind : "ai";
     const query = cleanText(value.query);
     if (!id || !query) return null;
+    let source;
+    if (value.source !== undefined) {
+        const rawSource = value.source && typeof value.source === "object" ? value.source : {};
+        const sourceKind = rawSource.kind === "chat" || rawSource.kind === "channel" ? rawSource.kind : "";
+        const sourceId = cleanText(rawSource.id, 512);
+        const teamId = cleanText(rawSource.teamId, 256);
+        if (!sourceKind || !sourceId || (sourceKind === "channel" && !teamId)) return null;
+        source = {kind:sourceKind,id:sourceId,...(sourceKind === "channel" ? {teamId} : {})};
+    }
+    const accountBlockId = /^[a-zA-Z0-9_-]{1,120}$/.test(value.accountBlockId || "") ? value.accountBlockId : "";
     return {
         id,
         kind,
         query,
+        ...(source ? {source} : {}),
+        ...(accountBlockId ? {accountBlockId} : {}),
         label: cleanText(value.label, 100) || (kind === "ai" ? "AI alert" : "Sender list"),
         color: ALERT_COLORS.has(value.color) ? value.color : (kind === "ai" ? "red" : "green"),
         enabled: value.enabled !== false,
@@ -103,7 +115,8 @@ function normalizeEmailAlertSettings(value) {
             .filter(Boolean)
             .slice(0, 30),
         gmail: normalizeProvider(source.gmail),
-        outlook: normalizeProvider(source.outlook)
+        outlook: normalizeProvider(source.outlook),
+        teams: normalizeProvider(source.teams)
     };
 }
 

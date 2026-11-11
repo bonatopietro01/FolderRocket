@@ -3,6 +3,7 @@ const {normalizeEmailAlertSettings} = require("./emailAlertSettingsService");
 const {evaluateGmailWarnings} = require("./gmailWarningService");
 const {listAttachments: listGmailAttachments, listInboxMessages: listGmailInboxMessages} = require("./gmailService");
 const {listAttachments: listOutlookAttachments, listInboxMessages: listOutlookInboxMessages} = require("./outlookService");
+const {evaluateTeamsSourceRules} = require("./teamsWarningService");
 const {appendDigestHistory, buildWorldActivityDigest, dueDigestKey, normalizeWorldActivityNotifications, sanitizeDigestText} = require("./worldActivityEmailService");
 
 const CHECK_INTERVAL_MS = 30_000;
@@ -101,6 +102,59 @@ async function runProviderRulesForBlocks(provider, providerSettings, userId) {
     return changed;
 }
 
+async function runTeamsRulesForWorld(worldId, world, userId, teamsSettings, now = new Date()) {
+    const selected = world?.emailAccount;
+    const blockId = selected?.provider === "outlook" && /^[a-zA-Z0-9_-]{1,120}$/.test(selected.blockId || "") ? selected.blockId : "";
+    if (!worldId || !blockId) return false;
+    const bucket = teamsSettings?.blocks?.[blockId];
+    if (!bucket || bucket.accountBlockId !== blockId || !Array.isArray(bucket.rules)) return false;
+    const dueRules = bucket.rules.filter(rule => scheduledRuleIsDue(rule, bucket.runtime, now)
+        && rule.accountBlockId === blockId
+        && rule.source?.id
+        && ["chat","channel"].includes(rule.source.kind)
+        && (rule.source.kind !== "channel" || rule.source.teamId));
+    if (!dueRules.length) return false;
+    bucket.runtime = bucket.runtime && typeof bucket.runtime === "object" ? bucket.runtime : {};
+    bucket.runtime.rules = bucket.runtime.rules && typeof bucket.runtime.rules === "object" ? bucket.runtime.rules : {};
+    const groups = new Map();
+    for (const rule of dueRules) {
+        const sourceKey = JSON.stringify(rule.source);
+        const group = groups.get(sourceKey) || {source:rule.source,rules:[]};
+        group.rules.push(rule);
+        groups.set(sourceKey,group);
+    }
+    for (const group of groups.values()) {
+        const seenByRule = Object.fromEntries(group.rules.map(rule => [rule.id,bucket.runtime.rules[rule.id]?.seenMessageIds || []]));
+        try {
+            const results = await evaluateTeamsSourceRules({rules:group.rules,userId,blockId,source:group.source,seenByRule,now});
+            const byId = new Map(results.map(result => [result.ruleId,result]));
+            for (const rule of group.rules) {
+                const previous = bucket.runtime.rules[rule.id] && typeof bucket.runtime.rules[rule.id] === "object" ? bucket.runtime.rules[rule.id] : {};
+                const result = byId.get(rule.id) || {ruleId:rule.id,total:0,newCount:0,messageIds:[],messages:[],error:""};
+                bucket.runtime.rules[rule.id] = {
+                    lastScheduledDay:localDayKey(now),
+                    lastCheckedAt:now.toISOString(),
+                    seenMessageIds:[...new Set([...(previous.seenMessageIds || []),...(result.messageIds || [])])].slice(-500),
+                    result:{...result,messages:(result.messages || []).slice(0,50)},
+                    error:result.error || ""
+                };
+            }
+        } catch (error) {
+            for (const rule of group.rules) {
+                const previous = bucket.runtime.rules[rule.id] && typeof bucket.runtime.rules[rule.id] === "object" ? bucket.runtime.rules[rule.id] : {};
+                const status=Number(error?.status);
+                const safeError=status===401||status===403
+                    ? "Reconnect the Microsoft account selected for this planet and approve Teams permissions."
+                    : status===429
+                        ? "Microsoft Teams is temporarily rate-limited. The next scheduled check will retry."
+                        : "FolderRocket could not check this Teams alert source.";
+                bucket.runtime.rules[rule.id] = {...previous,lastScheduledDay:localDayKey(now),lastCheckedAt:now.toISOString(),error:safeError};
+            }
+        }
+    }
+    return true;
+}
+
 async function runWorldActivityDigest(userId, worldId, worldName, worldSettings, persist, dependencies = {}) {
     const saved = worldSettings?.activityNotifications;
     if (!saved || typeof saved !== "object") return false;
@@ -147,14 +201,18 @@ async function runScheduledEmailAlerts() {
         const worldSettings = settings?.worlds && typeof settings.worlds === "object" ? settings.worlds : {};
         const worldContexts = Object.entries(worldSettings)
             .filter(([, value]) => value && typeof value === "object" && (value.emailAlerts || value.activityNotifications))
-            .map(([worldId, value]) => ({worldId, alerts: normalizeEmailAlertSettings(value.emailAlerts)}));
+            .map(([worldId, value]) => ({worldId, world:value, alerts: normalizeEmailAlertSettings(value.emailAlerts)}));
         const contexts = worldContexts.length
             ? worldContexts
             : [{worldId: "", alerts: normalizeEmailAlertSettings(settings?.emailAlerts)}];
-        const hasDueRule = contexts.some(({alerts}) => ["gmail", "outlook"].some(provider =>
+        const hasDueRule = contexts.some(({alerts,worldId,world}) => ["gmail", "outlook"].some(provider =>
             [alerts[provider], ...Object.values(alerts[provider].blocks ?? {})]
                 .some(providerSettings => providerSettings.rules.some(rule => scheduledRuleIsDue(rule, providerSettings.runtime)))
-        ));
+        ) || Boolean(worldId && world?.emailAccount?.provider === "outlook" && (() => {
+            const blockId = world.emailAccount.blockId;
+            const bucket = alerts.teams.blocks?.[blockId];
+            return bucket?.accountBlockId === blockId && bucket.rules?.some(rule => scheduledRuleIsDue(rule,bucket.runtime) && rule.accountBlockId === blockId);
+        })()));
         const hasDueDigest = Object.entries(worldSettings).some(([, value]) => value && dueDigestKey(value.activityNotifications, value.activityNotifications?.runtime));
         if (!hasDueRule && !hasDueDigest) continue;
         runningUsers.add(record.userId);
@@ -164,7 +222,8 @@ async function runScheduledEmailAlerts() {
             for (const context of contexts) {
                 const gmailChanged = await runProviderRulesForBlocks("gmail", context.alerts.gmail, record.userId);
                 const outlookChanged = await runProviderRulesForBlocks("outlook", context.alerts.outlook, record.userId);
-                if (!gmailChanged && !outlookChanged) continue;
+                const teamsChanged = context.worldId ? await runTeamsRulesForWorld(context.worldId,context.world,record.userId,context.alerts.teams) : false;
+                if (!gmailChanged && !outlookChanged && !teamsChanged) continue;
                 changed = true;
                 if (context.worldId) {
                     next = {...next, worlds: {...next.worlds, [context.worldId]: {...next.worlds[context.worldId], emailAlerts: context.alerts}}};
@@ -198,4 +257,4 @@ function startEmailAlertScheduler() {
     setTimeout(() => void runScheduledEmailAlerts(), 5_000).unref?.();
 }
 
-module.exports = {runScheduledEmailAlerts, runWorldActivityDigest, startEmailAlertScheduler};
+module.exports = {runScheduledEmailAlerts, runWorldActivityDigest, runTeamsRulesForWorld, startEmailAlertScheduler};

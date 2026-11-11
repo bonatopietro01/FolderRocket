@@ -117,7 +117,8 @@ test("Gmail picker keeps selection world-scoped, explicit, and race-isolated", (
     const root = path.join(__dirname, "..", "..");
     const app = require("node:fs").readFileSync(path.join(root, "src", "App.tsx"), "utf8");
     const panel = require("node:fs").readFileSync(path.join(root, "src", "components", "GmailSourcePanel.tsx"), "utf8");
-    assert.match(app, /key=\{`\$\{world\.id\}-\$\{block\.id\}-\$\{block\.accountBlockId === null \? "none" : block\.accountBlockId \|\| "default"\}`\}/);
+    assert.match(app, /key=\{`\$\{world\.id\}-\$\{block\.id\}-\$\{world\.emailAccount\?\.provider === "gmail" \? world\.emailAccount\.blockId : "none"\}`\}/);
+    assert.match(app, /accountBlockId=\{world\.emailAccount\?\.provider === "gmail" \? world\.emailAccount\.blockId : null\}/);
     assert.match(panel, /accountBlockId === null \? "" : accountBlockId \|\| alertBlockId/);
     assert.match(panel, /className="emailAccountChoices" role="listbox"/);
     assert.match(panel, /aria-selected=\{selected\}/);

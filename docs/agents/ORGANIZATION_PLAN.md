@@ -1,6 +1,41 @@
-# Proposed FolderRocket organization plan
+# FolderRocket organization direction
 
-Status: proposal only. No source file was moved or reorganized. The user describes FolderRocket as operating; runtime was not independently observed. The current checkout had pre-existing dirty source, tests and plans, so any implementation must start from a separate copy/worktree with an explicit snapshot of that baseline. Restart, deployment, and data migration are outside this plan and need separate authorization.
+Status: proposal only. No source file was moved or reorganized. This plan consolidates earlier organization analysis and is a direction for future work, not a description of current paths. Keep `src/`, `backend/` and `desktop/` at the repository root: the root build and Electron packaging, backend package, and source tests rely on those paths. Improve GitHub navigation in the README and group implementation files only when a concrete ownership boundary supports the move.
+
+## GitHub presentation
+
+The root README is the visitor entry point. It presents the current product architecture with a Mermaid process diagram and a compact checked-in source tree. `docs/README.md` indexes the longer guides. Keep diagrams aligned with current source and label proposed structure as future direction.
+
+## Gradual internal direction
+
+Potential frontend feature groups, created only when related files can move together without pass-through layers:
+
+```text
+src/
+├── assets/
+├── components/             # shared UI
+├── features/
+│   ├── files/
+│   ├── conversations/
+│   ├── planets/
+│   ├── knowledge/
+│   └── daily-work/
+└── App.tsx                  # application composition
+```
+
+Potential backend route extraction, performed one route family at a time:
+
+```text
+backend/
+├── routes/                  # extracted route registration modules
+├── services/                # existing business and integration logic
+├── ai/
+├── database/
+├── test/
+└── server.js                # startup and route composition
+```
+
+These are proposed destinations, not existing directories. Preserve current public behavior, file-system safeguards, world scoping, Electron preload permissions and packaging paths. Do not move files solely for symmetry or visual appearance.
 
 ## Ownership
 

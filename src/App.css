@@ -2678,6 +2678,8 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .integrationCard strong { min-width:0; font-size:12px; }.integrationCard small { min-width:0; color:#708398; font-size:10px; overflow-wrap:anywhere; text-align:right; }
 .integrationCard input { width:100%; min-width:0; box-sizing:border-box; padding:6px 7px; border:1px solid #c5d2df; border-radius:6px; background:#fff; color:#23394e; font:inherit; font-size:11px; }
 .integrationCard input:focus { outline:2px solid rgba(31,121,205,.16); border-color:#3988d2; }
+.integrationCard .integrationCredentialHint { color:#596f85; font-size:10px; line-height:1.35; text-align:left; }
+.integrationCard .integrationGuideLink { width:fit-content; color:#176fc8; font-size:10px; font-weight:800; text-decoration:underline; text-underline-offset:2px; }
 .browserBridgeCard > button { justify-self:start; border:1px solid #b5cce0; border-radius:6px; background:#edf6ff; color:#21639b; cursor:pointer; font:inherit; font-size:10px; font-weight:800; padding:6px 8px; }.browserBridgeCode { display:flex; min-width:0; align-items:center; gap:5px; padding:6px; border:1px dashed #9db8d1; border-radius:6px; background:#f6fbff; }.browserBridgeCode code { min-width:0; flex:1; overflow:hidden; color:#24516f; font:9px/1.2 Consolas,monospace; text-overflow:ellipsis; white-space:nowrap; }.browserBridgeCode button { flex:0 0 auto; border:0; border-radius:5px; background:#176fc8; color:#fff; cursor:pointer; font-size:10px; font-weight:800; padding:5px 7px; }
 .integrationActions { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:9px; }
 .integrationActions button { display:inline-flex; align-items:center; justify-content:center; gap:5px; min-height:29px; border:0; border-radius:6px; cursor:pointer; font-size:11px; font-weight:800; }
@@ -5741,10 +5743,27 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .teamsMessage p { margin:5px 0 0; color:#475569; font-size:10px; line-height:1.4; white-space:pre-wrap; overflow-wrap:anywhere; }
 .teamsMessageMeta { display:flex; align-items:center; gap:4px; margin-top:5px; color:#685696; font-size:9px; overflow-wrap:anywhere; }
 .teamsMessageMeta a { color:#4c64a1; }
-.teamsAccountChooser { position:absolute; z-index:35; top:40px; right:7px; display:grid; width:min(270px,calc(100% - 14px)); gap:5px; max-height:70%; overflow:auto; padding:8px; border:1px solid #d6d1e7; border-radius:9px; background:#fff; box-shadow:0 8px 24px #24203a2b; }
-.teamsAccountChooser strong { color:#51437a; font-size:10px; }
-.teamsAccountChooser button { min-height:29px; overflow:hidden; padding:5px 7px; border:1px solid #e0e1ea; border-radius:6px; background:#fbfbfe; color:#405268; text-align:left; text-overflow:ellipsis; white-space:nowrap; cursor:pointer; font-size:10px; }
-.teamsAccountChooser button.active { border-color:#9886c4; background:#f2effb; }
+.teamsAccountMissing { align-content:start; }
+.teamsAccountMissing p { margin:0; color:#66778c; font-size:10px; line-height:1.4; }
+.teamsPeopleList { display:flex; min-width:0; flex-wrap:wrap; align-items:center; gap:5px; padding:6px 7px; border:1px solid #e3e0f0; border-radius:7px; background:#faf9fe; }
+.teamsPeopleList > strong { display:inline-flex; align-items:center; gap:4px; color:#584a89; font-size:9px; }
+.teamsPeopleList > button { max-width:180px; overflow:hidden; padding:3px 6px; border:1px solid #ded9ee; border-radius:12px; background:#fff; color:#53637a; cursor:pointer; font-size:9px; text-overflow:ellipsis; white-space:nowrap; }
+.teamsPeopleList > button.active { border-color:#8374b5; background:#eeeafb; color:#4a3b7a; }
+.teamsPeopleList > small { color:#7c8797; font-size:9px; }
+.teamsFilesHeading { display:flex; align-items:center; justify-content:space-between; gap:7px; }
+.teamsFilesHeading > strong { display:inline-flex; align-items:center; gap:5px; color:#4f4776; font-size:10px; }
+.teamsFilesHeading .teamsLoadButton { min-height:26px; padding:3px 6px; font-size:9px; }
+.teamsFilesList { display:grid; min-height:0; gap:5px; overflow:auto; }
+.teamsFileRow { display:grid; min-width:0; grid-template-columns:16px minmax(0,1fr) auto; align-items:center; gap:6px; padding:6px; border:1px solid #e2e5ef; border-radius:7px; background:#fff; }
+.teamsFileRow > svg { color:#6555a0; }
+.teamsFileRow > span { display:grid; min-width:0; gap:2px; }
+.teamsFileRow > span > strong,.teamsFileRow > span > small { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.teamsFileRow > span > strong { color:#364b63; font-size:10px; }
+.teamsFileRow > span > small { color:#748397; font-size:8px; }
+.teamsFileRow > button { display:flex; align-items:center; justify-content:center; gap:4px; min-height:26px; padding:3px 6px; border:1px solid #c9bee4; border-radius:6px; background:#f2effa; color:#59478d; cursor:pointer; font-size:9px; font-weight:800; }
+.teamsFileRow > button:disabled { cursor:not-allowed; opacity:.5; }
+.teamsAlertToggle { display:flex; width:100%; align-items:center; justify-content:space-between; gap:6px; padding:6px 7px; border:1px solid #e3e0f0; border-radius:7px; background:#fcfbff; color:#584a89; cursor:pointer; font-size:10px; font-weight:800; }
+.teamsAlertPanel { display:grid; min-width:0; max-height:320px; gap:5px; overflow:auto; padding:6px; border:1px solid #e3e0f0; border-radius:7px; background:#fff; }
 .teamsPermissionHint { display:block; margin-top:5px; color:#7c8797; font-size:8px; line-height:1.3; }
 
 /* Daily Job uses due-today reminders and creates a recap draft only after an explicit click. */
@@ -6366,6 +6385,11 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .emailConversationsTitle span { display:grid; gap:2px; }
 .emailConversationsTitle strong { font-size:16px; }
 .emailConversationsTitle small { color:#73889a; }
+.emailConversationsTitle .emailConversationContext { display:flex; min-width:0; align-items:center; gap:7px; color:#36556e; font-size:11px; line-height:1.2; }
+.emailConversationContext b { overflow:hidden; font-weight:800; text-overflow:ellipsis; white-space:nowrap; }
+.emailConversationContext i { color:#8a9bad; font-style:normal; }
+.emailConversationContext button { padding:0; border:0; background:transparent; color:#176fc8; cursor:pointer; font:inherit; font-weight:800; }
+.emailConversationsHeader .emailAccountSettingsButton { min-height:29px; padding:5px 8px; color:#537087; font-size:10px; }
 .emailConversationsHeader .emailGraphButton { color:#2473a3; }
 .emailConversationsHeader .emailAddChatButton { color:#2473a3; background:#edf7fc; }
 .emailAddChatScrim { position:fixed; z-index:2100; inset:0; display:grid; place-items:center; padding:20px; background:#06111ccc; }
@@ -6418,6 +6442,7 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 .emailMessageAttachments,.emailReplyFiles { display:flex; flex-wrap:wrap; gap:6px; }
 .emailMessageAttachments span,.emailReplyFiles span { display:flex; align-items:center; gap:4px; padding:4px 7px; border-radius:7px; color:#43657d; background:#eef5f9; font-size:11px; }
 .emailReplyComposer { display:grid; gap:8px; padding:12px; border-top:1px solid #dfe8ee; background:#fff; }
+.emailConversationReadOnlyHint { margin:0; padding:12px; border-top:1px solid #dfe8ee; background:#f7fafc; color:#64778a; font-size:11px; line-height:1.45; }
 .emailReplyTitle { display:flex; justify-content:space-between; gap:8px; font-size:12px; }
 .emailReplyTitle small { color:#7a8e9d; }
 .emailReplyRecipient { display:flex; align-items:center; gap:7px; color:#75899a; font-size:11px; }
@@ -7202,8 +7227,59 @@ body:has(.cargoShipStandaloneWindow) { overflow:hidden; }
 /* R44: tabs and refresh control stay inside the toolbar at narrow widths. */
 .treeRocketToolbar .treeRocketTabs { min-width:0; max-width:100%; box-sizing:border-box; }
 .treeRocketToolbar .treeRocketTabs button { min-width:0; padding-inline:clamp(5px,1vw,9px); }
+.treeRocketToolbar .treeRocketTabs { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr) 28px; }
+.treeRocketToolbar .treeRocketTabs > [role="tab"] { width:100%; min-width:0; }
+.treeRocketToolbar .treeRocketTabs .treeRocketAppsRefresh { width:28px; min-width:28px; }
 .treeRocketToolbar .treeRocketTabs .treeRocketAppsRefresh { flex:0 0 28px; width:28px; padding:0; }
 @media(max-width:650px) {
   .treeRocketToolbar .treeRocketTabs { flex:0 1 auto; overflow:hidden; }
   .treeRocketToolbar .treeRocketTabs button { flex:0 1 auto; }
 }
+
+/* Keep folders in place while each connection stack scrolls on its own. */
+.dashboard { overflow:hidden; }
+.dashboard > .sourcesColumn,.dashboard > .rightSourcesColumn { height:100%; min-height:0; max-height:100%; overflow:hidden!important; overscroll-behavior:contain; }
+.dashboard > .sourcesColumn > .sourcesBlockList,.dashboard > .rightSourcesColumn > .sourcesBlockList { min-height:0; flex:1 1 auto; overflow-x:hidden; overflow-y:auto; overscroll-behavior:contain; padding-bottom:14px; }
+.dashboard > .foldersColumn { min-height:0; overflow:hidden!important; }
+.sourceBlockMenu.sourceBlockMenuPortal { position:fixed!important; top:var(--source-block-menu-top,0px)!important; right:auto!important; left:var(--source-block-menu-left,0px)!important; z-index:10050!important; }
+.sourceBlockMenuPortal[data-positioned="false"] { visibility:hidden; }
+@media (max-width:1050px) {
+  .dashboard.dashboardFoldersTop { grid-template-rows:max-content minmax(min(260px,50vh),min(50vh,520px)); }
+  .dashboard.dashboardFoldersTop > .sourcesColumn,.dashboard.dashboardFoldersTop > .rightSourcesColumn { height:100%; min-height:0; max-height:none; }
+}
+@media (max-width:650px) {
+  .dashboard.dashboardFoldersTop { grid-template-rows:max-content minmax(min(220px,48vh),min(48vh,420px)) minmax(min(220px,48vh),min(48vh,420px)); }
+}
+
+.conversationProviderTabs { display:flex; align-items:center; gap:6px; min-width:0; padding:7px 12px; border-bottom:1px solid #d9e4ed; background:#f5f9fc; }
+.conversationProviderTabs > button { min-height:30px; padding:5px 10px; border:1px solid #ccd9e5; border-radius:7px; background:#fff; color:#52667b; cursor:pointer; font-size:11px; font-weight:750; }
+.conversationProviderTabs > button.active { border-color:#6ba5d2; background:#e7f3fc; color:#145a8d; }
+.conversationProviderTabs > label { display:flex; align-items:center; gap:7px; min-width:0; margin-left:auto; color:#52667b; font-size:10px; font-weight:700; }
+.conversationProviderTabs select { max-width:min(300px,42vw); min-width:180px; min-height:30px; padding:4px 8px; border:1px solid #cbd7e2; border-radius:7px; background:#fff; color:#30465c; }
+.teamsConversationView { display:grid; min-height:0; grid-template-rows:auto auto auto minmax(0,1fr); gap:9px; padding:12px; overflow:auto; }
+.teamsConversationView > header { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.teamsConversationView > header > div { display:grid; grid-template-columns:19px auto; align-items:center; gap:4px 7px; }
+.teamsConversationView > header small { grid-column:2; color:#6b7c8c; font-size:10px; }
+.teamsConversationView > header button,.teamsConversationControls > button { display:flex; align-items:center; gap:5px; min-height:29px; padding:5px 8px; border:1px solid #cbd8e4; border-radius:7px; background:#fff; color:#36516b; cursor:pointer; font-size:10px; }
+.teamsConversationControls { display:flex; align-items:end; flex-wrap:wrap; gap:8px; }
+.teamsConversationControls > label { display:grid; gap:3px; color:#52667b; font-size:9px; font-weight:750; }
+.teamsConversationControls select,.teamsConversationControls input { max-width:280px; min-height:30px; padding:4px 7px; border:1px solid #ccd8e3; border-radius:6px; background:#fff; color:#30465c; }
+.teamsConversationSearch { display:flex!important; align-items:center; gap:4px!important; }
+.teamsConversationSearch input { width:160px; }
+.teamsConversationPeople { display:flex; flex-wrap:wrap; align-items:center; gap:5px; color:#465b70; font-size:10px; }
+.teamsConversationPeople strong { display:flex; align-items:center; gap:4px; margin-right:4px; }
+.teamsConversationPeople button { border:1px solid #d2dce5; border-radius:12px; background:#fff; color:#52667b; cursor:pointer; font-size:9px; padding:4px 8px; }
+.teamsConversationPeople button.active { border-color:#82aad0; background:#e8f2fb; color:#255987; }
+.teamsConversationMessages { display:grid; align-content:start; gap:7px; min-height:180px; padding:2px; }
+.teamsConversationMessages article { padding:9px 11px; border:1px solid #dce5ec; border-radius:9px; background:#fff; }
+.teamsConversationMessages article > header { display:flex; justify-content:space-between; gap:10px; color:#364b61; font-size:10px; }
+.teamsConversationMessages article time,.teamsConversationMessages article small { color:#778797; font-size:9px; }
+.teamsConversationMessages article p { margin:7px 0 3px; color:#33485c; font-size:11px; white-space:pre-wrap; }
+.teamsConversationError { color:#a34134; }
+.teamsConsentPrompt { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:8px 10px; padding:10px 12px; border:1px solid #e5c47c; border-radius:9px; background:#fff8e8; color:#6e5420; }
+.teamsConsentPrompt > div { display:grid; gap:4px; min-width:0; }
+.teamsConsentPrompt strong { font-size:11px; }
+.teamsConsentPrompt p,.teamsConsentPrompt small { margin:0; color:#77633c; font-size:10px; line-height:1.45; }
+.teamsConsentPrompt button { display:inline-flex; flex:none; align-items:center; justify-content:center; gap:5px; min-height:31px; padding:5px 9px; border:1px solid #c5a04e; border-radius:7px; background:#fff; color:#6a501a; cursor:pointer; font-size:10px; font-weight:750; }
+.teamsConsentPrompt button:disabled { cursor:wait; opacity:.6; }
+@media(max-width:650px) { .conversationProviderTabs { flex-wrap:wrap; } .conversationProviderTabs > label { width:100%; margin-left:0; } .conversationProviderTabs select { flex:1; max-width:none; } .teamsConversationControls > label { flex:1 1 145px; } }

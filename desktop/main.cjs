@@ -911,6 +911,19 @@ app.whenReady().then(async () => {
         fs.writeFileSync(selection.filePath, bytes);
         return {saved: true, path: selection.filePath};
     });
+    ipcMain.handle("folderrocket:select-folder", async event => {
+        try {
+            if (new URL(event.sender.getURL()).origin !== new URL(APP_ORIGIN).origin || !mainWindow || event.sender.id !== mainWindow.webContents.id) return {canceled:true};
+        } catch { return {canceled:true}; }
+        const options = {
+            title:"Choose a folder",
+            buttonLabel:"Choose folder",
+            properties:["openDirectory"]
+        };
+        const selection = await dialog.showOpenDialog(mainWindow,options);
+        if (selection.canceled || !selection.filePaths?.[0]) return {canceled:true};
+        return {canceled:false,path:selection.filePaths[0]};
+    });
     // Give immediate visual feedback while the local services initialise.
     createWindow(false);
     let existingBackend;
