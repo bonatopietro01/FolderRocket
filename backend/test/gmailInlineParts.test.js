@@ -11,8 +11,8 @@ test("Gmail exposes and downloads inline MIME parts with direct body data",async
     const script=String.raw`
     (async()=>{
       const assert=require("node:assert/strict");
-      const tokens=require("./services/emailTokenStore");
-      const gmail=require("./services/gmailService");
+      const tokens=require("./services/shared/emailTokenStore");
+      const gmail=require("./services/integrations/gmailService");
       const user="inline-fixture-user",block="inline-fixture-account";
       tokens.saveConnection("gmail",user,{accessToken:"synthetic-access",refreshToken:"synthetic-refresh",expiresAt:Date.now()+3600000},block);
       const bytes=Buffer.from("synthetic-inline-image");

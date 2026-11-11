@@ -18,7 +18,7 @@ Rifinire i flussi richiesti nel prompt del 2026-10-01: scrolling Folders on Top,
 
 - La pagina Applications gestisce profili di estensioni e scansioni file. Esiste anche un helper Windows che risolve e apre un'app per nome tramite App Paths o Start Apps, ma non espone un catalogo completo delle applicazioni con icone. Tree Rocket Apps non deve quindi presentare i profili come app installate né avviare scansioni arbitrarie del disco.
 - `TreeRocket.tsx` è un overlay full-screen con elenco directory live e ricerca file/cartelle; l'azione Add corrente chiude l'overlay e il conteggio file non è mostrato.
-- La navigazione Folder Tree e l'elenco dei file dipendono da `backend/services/treeRocketService.js`; i test backend ne coprono limiti di scansione e directory autorizzate.
+- La navigazione Folder Tree e l'elenco dei file dipendono da `backend/services/files/treeRocketService.js`; i test backend ne coprono limiti di scansione e directory autorizzate.
 - Le istruzioni aggiornate specificano di non convertire la rotellina verticale in movimento orizzontale tra gruppi Folders on Top.
 
 ## Decision Log
@@ -39,7 +39,7 @@ Verifiche finali: `npm run lint` superato; `npm test` superato (52/52; un timeou
 
 ## Context and Orientation
 
-La dashboard è in `src/App.tsx`; le cartelle raggruppate sono in `src/folderProjects.ts`, `src/components/FolderScrollFrame.tsx` e `src/App.css`. Tree Rocket è in `src/components/TreeRocket.tsx`, montato dal portale in `src/components/FolderManagement.tsx`, con accesso alle directory tramite `backend/services/treeRocketService.js` e route `backend/server.js`. La pagina Application corrente (`src/components/ApplicationsWorkspace.tsx`) tratta profili file, non software installato. File Studio usa `src/components/ProcessingWorkspace.tsx` e `src/components/ChangeFormatPanel.tsx`; Cargo Rocket e Gmail vivono in `src/components/CargoShip.tsx` e `src/components/GmailSourcePanel.tsx`.
+La dashboard è in `src/App.tsx`; le cartelle raggruppate sono in `src/folderProjects.ts`, `src/components/shared/FolderScrollFrame.tsx` e `src/App.css`. Tree Rocket è in `src/components/file-browser/TreeRocket.tsx`, montato dal portale in `src/components/file-browser/FolderManagement.tsx`, con accesso alle directory tramite `backend/services/files/treeRocketService.js` e route `backend/server.js`. La pagina Application corrente (`src/components/applications/ApplicationsWorkspace.tsx`) tratta profili file, non software installato. File Studio usa `src/components/file-studio/ProcessingWorkspace.tsx` e `src/components/file-studio/ChangeFormatPanel.tsx`; Cargo Rocket e Gmail vivono in `src/components/file-workflows/CargoShip.tsx` e `src/components/mail/GmailSourcePanel.tsx`.
 
 ## Plan of Work
 

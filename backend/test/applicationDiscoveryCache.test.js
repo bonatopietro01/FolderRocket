@@ -8,7 +8,7 @@ test("application discovery cache persists, validates extensions, and removes en
     const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), "folderrocket-cache-"));
     t.after(() => fs.promises.rm(root, {recursive:true,force:true}));
     process.env.FOLDERROCKET_DATA_DIR = root;
-    const cache = require("../services/applicationDiscoveryCache");
+    const cache = require("../services/files/applicationDiscoveryCache");
     const result = {
         files:[{name:"drawing.sldprt",path:path.join(root,"drawing.sldprt"),size:42}],
         directories:[{path:root,mtimeMs:123}]

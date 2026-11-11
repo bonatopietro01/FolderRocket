@@ -3,8 +3,8 @@ import {Component, type ErrorInfo, type ReactNode} from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
 import App from './App.tsx'
-import AuthGate from './components/AuthGate.tsx'
-import {captureDiagnostic, installDiagnostics} from './diagnostics.ts'
+import AuthGate from './components/auth/AuthGate.tsx'
+import {captureDiagnostic, installDiagnostics} from './components/diagnostics/diagnostics.ts'
 
 class DiagnosticErrorBoundary extends Component<{userId: string; children: ReactNode}, {failed: boolean}> {
   state = {failed: false}

@@ -40,7 +40,7 @@ L’implementazione è completa per le lacune confermate. Per R5 non è stata ne
 
 ## Context and Orientation
 
-Il progetto è React/TypeScript/Vite, backend Node/Express e Electron. File rilevanti: `src/App.tsx`, `src/App.css`, `src/worlds.css`, `src/components/ChangeWorld.tsx`, `src/components/PlanetGraph.tsx`, `src/components/FolderManagement.tsx`, `src/components/TreeRocket.tsx`, `backend/services/planetGraphService.js` e `backend/services/obsidianVaultService.js`. L’indice Graphify è consultivo e va confermato nei sorgenti.
+Il progetto è React/TypeScript/Vite, backend Node/Express e Electron. File rilevanti: `src/App.tsx`, `src/App.css`, `src/planets/worlds.css`, `src/components/ChangeWorld.tsx`, `src/components/planet-knowledge/PlanetGraph.tsx`, `src/components/file-browser/FolderManagement.tsx`, `src/components/file-browser/TreeRocket.tsx`, `backend/services/planet-knowledge/planetGraphService.js` e `backend/services/planet-knowledge/obsidianVaultService.js`. L’indice Graphify è consultivo e va confermato nei sorgenti.
 
 ## Plan of Work
 

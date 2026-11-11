@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import discovery from '../backend/services/applicationDiscoveryService.js';
+import discovery from '../backend/services/files/applicationDiscoveryService.js';
 
 test('discovery covers more than 1000 files, nested cloud/Desktop paths and cyclic junctions', async () => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), 'folderrocket-discovery-'));

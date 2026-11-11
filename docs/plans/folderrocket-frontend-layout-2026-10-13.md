@@ -66,7 +66,7 @@ Rendere leggibili e utilizzabili le superfici frontend di FolderRocket, riparand
 
 ## Context and Orientation
 
-La directory di lavoro è la radice FolderRocket in Windows. `src/App.tsx` seleziona le pagine e collega le preferenze con scope per utente/pianeta. `src/components/TreeRocket.tsx` contiene navigazione gerarchica, ricerca e dati della preview file. `src/components/FolderManagement.tsx` contiene la tabella delle cartelle, i pannelli di anteprima e le azioni di copia/spostamento. `src/App.css` è il foglio condiviso con una cascata lunga e breakpoint stratificati; `src/worlds.css` contiene regole planet-specifiche.
+La directory di lavoro è la radice FolderRocket in Windows. `src/App.tsx` seleziona le pagine e collega le preferenze con scope per utente/pianeta. `src/components/file-browser/TreeRocket.tsx` contiene navigazione gerarchica, ricerca e dati della preview file. `src/components/file-browser/FolderManagement.tsx` contiene la tabella delle cartelle, i pannelli di anteprima e le azioni di copia/spostamento. `src/App.css` è il foglio condiviso con una cascata lunga e breakpoint stratificati; `src/planets/worlds.css` contiene regole planet-specifiche.
 
 All’avvio, i file frontend e molti documenti/test erano già modificati. La copia di confronto del sorgente preesistente è stata salvata in `%TEMP%\folderrocket-frontend-baseline-2026-10-13\src`; non usarla per sovrascrivere il working tree. I fixture sotto `tests/ui/` usano cartelle/file e risposte API sintetici. Le descrizioni storiche di `CODEX.md` sono contesto, non prova della UI corrente.
 

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {answerPlanetGraphQuery} from "../src/components/planetGraphQuery.ts";
+import {answerPlanetGraphQuery} from "../src/components/planet-knowledge/planetGraphQuery.ts";
 
 const graph={nodes:[
     {id:"f1",type:"folder",label:"Research",sourceType:"filesystem",sourceRef:{path:"C:/Research"},details:{}},

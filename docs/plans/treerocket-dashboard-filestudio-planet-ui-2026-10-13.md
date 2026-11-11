@@ -55,7 +55,7 @@ Rendere TreeRocket, Dashboard, File Studio e le viste planetarie leggibili e uti
 
 ## Context and Orientation
 
-Il progetto usa React/TypeScript in `src/`, servizi locali in `backend/` ed Electron in `desktop/`. Punti d'ingresso attesi, da confermare sul sorgente corrente: `src/components/TreeRocket.tsx` e `src/App.css` per TreeRocket; `src/App.tsx`, `src/App.css` e `src/components/DashboardSourceColumn.tsx` per shell e menu Dashboard; `src/components/GmailSourcePanel.tsx` e il provider/account state per Gmail; `src/components/ProcessingWorkspace.tsx` e `src/components/FileDropZone.tsx` per Rename; `src/components/ChangeWorld.tsx`, `src/worlds.css` e gli asset planetari per pianeti; `src/components/PlanetGraph.tsx` per il grafo.
+Il progetto usa React/TypeScript in `src/`, servizi locali in `backend/` ed Electron in `desktop/`. Punti d'ingresso attesi, da confermare sul sorgente corrente: `src/components/file-browser/TreeRocket.tsx` e `src/App.css` per TreeRocket; `src/App.tsx`, `src/App.css` e `src/components/dashboard/DashboardSourceColumn.tsx` per shell e menu Dashboard; `src/components/mail/GmailSourcePanel.tsx` e il provider/account state per Gmail; `src/components/file-studio/ProcessingWorkspace.tsx` e `src/components/file-workflows/FileDropZone.tsx` per Rename; `src/components/ChangeWorld.tsx`, `src/planets/worlds.css` e gli asset planetari per pianeti; `src/components/planet-knowledge/PlanetGraph.tsx` per il grafo.
 
 Il checkout è già dirty. La differenza Git dalla HEAD comprende lavoro preesistente e non identifica il delta di questo task; Frontend deve adattarsi ai file in working tree senza sovrascriverli. Test e smoke fixture esistenti possono anch'essi includere modifiche pregresse.
 

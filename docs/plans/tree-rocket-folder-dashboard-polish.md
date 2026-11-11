@@ -42,7 +42,7 @@ Rifinire Tree Rocket e il layout Folders on Top senza cambiare i flussi di gesti
 
 ## Context and Orientation
 
-La UI principale è composta da `src/App.tsx`; `src/components/TreeRocket.tsx` crea una schermata fullscreen via portal e carica cartelle e app da API già esistenti. `src/components/FolderManagement.tsx` contiene la tabella, la toolbar e il launcher Tree Rocket. Le regole globali e responsive, incluse quelle di dashboard e Tree Rocket, sono in `src/App.css`. `src/components/FolderScrollFrame.tsx` gestisce i bordi e l’overflow dell’area centrale dashboard. Recent Files è un blocco sorgente implementato in `src/components/RecentFilesSourcePanel.tsx`.
+La UI principale è composta da `src/App.tsx`; `src/components/file-browser/TreeRocket.tsx` crea una schermata fullscreen via portal e carica cartelle e app da API già esistenti. `src/components/file-browser/FolderManagement.tsx` contiene la tabella, la toolbar e il launcher Tree Rocket. Le regole globali e responsive, incluse quelle di dashboard e Tree Rocket, sono in `src/App.css`. `src/components/shared/FolderScrollFrame.tsx` gestisce i bordi e l’overflow dell’area centrale dashboard. Recent Files è un blocco sorgente implementato in `src/components/sources/RecentFilesSourcePanel.tsx`.
 
 I test di regressione testuali condivisi sono in `backend/test/dashboardTreeRocketUi.test.js`; i test UI documentati e gli altri test del backend si trovano sotto `tests/` e `backend/test/`. I comandi verificati nel `package.json` sono `npm run lint`, `npm test` e `npm run build`; la build include `tsc -b`. Graphify è locale e code-only, prodotto sotto `graphify-out/`.
 

@@ -5,14 +5,14 @@ import {readFileSync} from "node:fs";
 const read = path => readFileSync(new URL(path, import.meta.url), "utf8");
 
 test("planet email identity, local Obsidian metadata, and Tree Rocket mode stay explicitly scoped", () => {
-    const worlds = read("../src/worlds.ts");
+    const worlds = read("../src/planets/worlds.ts");
     const app = read("../src/App.tsx");
     const electron = read("../desktop/main.cjs");
     const editor = read("../src/components/ChangeWorld.tsx");
-    const tree = read("../src/components/TreeRocket.tsx");
-    const activity = read("../src/worldActivitySnapshot.ts");
-    const gmail = read("../src/components/GmailSourcePanel.tsx");
-    const outlook = read("../src/components/OutlookSourcePanel.tsx");
+    const tree = read("../src/components/file-browser/TreeRocket.tsx");
+    const activity = read("../src/planets/worldActivitySnapshot.ts");
+    const gmail = read("../src/components/mail/GmailSourcePanel.tsx");
+    const outlook = read("../src/components/mail/OutlookSourcePanel.tsx");
     const css = read("../src/App.css");
 
     assert.match(worlds, /emailAccount\?: WorldEmailAccount \| null/);
@@ -73,12 +73,12 @@ test("planet graph retries, Tree Rocket file previews, and email account identit
     const app = read("../src/App.tsx");
     const css = read("../src/App.css");
     const planet = read("../src/components/ChangeWorld.tsx");
-    const planetCss = read("../src/worlds.css");
-    const graph = read("../src/components/PlanetGraph.tsx");
-    const layout = read("../src/components/planetGraphLayout.ts");
-    const tree = read("../src/components/TreeRocket.tsx");
-    const email = read("../src/components/EmailConversations.tsx");
-    const daily = read("../src/components/DailyJob.tsx");
+    const planetCss = read("../src/planets/worlds.css");
+    const graph = read("../src/components/planet-knowledge/PlanetGraph.tsx");
+    const layout = read("../src/components/planet-knowledge/planetGraphLayout.ts");
+    const tree = read("../src/components/file-browser/TreeRocket.tsx");
+    const email = read("../src/components/email-conversations/EmailConversations.tsx");
+    const daily = read("../src/components/daily-work/DailyJob.tsx");
     const navigation = css.slice(css.lastIndexOf("/* Keep the logo anchored while presenting navigation as consistent, reachable tabs. */"));
     const finalNavigation = css.slice(css.lastIndexOf("/* Shared destinations now sit between the header and page columns. */"));
 
@@ -89,7 +89,7 @@ test("planet graph retries, Tree Rocket file previews, and email account identit
     assert.match(planet, /className="worldPlanetArtwork galaxyArtwork"/);
     assert.match(planetCss, /\.worldPlanet\.black-hole \.worldPlanetCore \{[^}]*radial-gradient/);
     assert.match(planetCss, /\.worldPlanetArtwork \{[^}]*object-fit:contain/);
-    assert.match(read("../src/worlds.ts"), /\["rocky", "planet", "ringed", "glowing", "asteroid", "black-hole", "galaxy"\]/);
+    assert.match(read("../src/planets/worlds.ts"), /\["rocky", "planet", "ringed", "glowing", "asteroid", "black-hole", "galaxy"\]/);
     assert.doesNotMatch(planet, /const artwork = <svg/);
     assert.match(app, /<WorldPlanet world=\{worldTravelTarget\}/);
     assert.match(app, /aria-current=\{page === "daily" \? "page" : undefined\}/);

@@ -19,7 +19,7 @@ test('Electron backend lists nested directories and ASAR files without DEP0180',
         await fs.writeFile(path.join(root, 'parent', 'child', 'example.docx'), 'fixture');
         await fs.copyFile(bundledArchive, path.join(root, 'parent', 'application.asar'));
         const script = `
-            require('./backend/services/hostFilesystem');
+            require('./backend/services/files/hostFilesystem');
             const assert = require('node:assert/strict');
             const fs = require('node:fs');
             const path = require('node:path');
@@ -35,7 +35,7 @@ test('Electron backend lists nested directories and ASAR files without DEP0180',
             require('./backend/node_modules/express');
             const ExcelJS = require('./backend/node_modules/exceljs');
             new ExcelJS.Workbook().addWorksheet('Test');
-            require('./backend/services/applicationDiscoveryService')
+            require('./backend/services/files/applicationDiscoveryService')
                 .discoverApplicationFiles([root], ['docx', 'asar', 'js'])
                 .then(result => {
                     assert.deepEqual(result.files.map(file => file.name).sort(), ['application.asar', 'example.docx']);

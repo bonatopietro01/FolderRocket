@@ -6,7 +6,7 @@ const os = require("node:os");
 const path = require("node:path");
 const {spawn} = require("node:child_process");
 const test = require("node:test");
-const planetGraph = require("../services/planetGraphService");
+const planetGraph = require("../services/planet-knowledge/planetGraphService");
 
 async function freePort() {
     const probe = net.createServer();
@@ -141,7 +141,7 @@ global.fetch = async (input, init = {}) => {
     const previousTokenDirectory = process.env.FOLDERROCKET_TOKEN_DIR;
     process.env.FOLDERROCKET_TOKEN_DIR = tokenDirectory;
     try {
-        const tokenStore = require("../services/emailTokenStore");
+        const tokenStore = require("../services/shared/emailTokenStore");
         tokenStore.saveConnection("gmail", user.id, {email:"dashboard-a@example.test",accessToken:"dashboard-a-token",refreshToken:"synthetic-a-refresh",expiresAt:Date.now()+3_600_000}, "gmail-dashboard-a");
         tokenStore.saveConnection("gmail", user.id, {email:"conversations-b@example.test",accessToken:"conversations-b-token",refreshToken:"synthetic-b-refresh",expiresAt:Date.now()+3_600_000}, "gmail-conversations-b");
         const json = {"Content-Type":"application/json"};

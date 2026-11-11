@@ -5,12 +5,12 @@ import test from "node:test";
 const projectRoot = new URL("../", import.meta.url);
 const readProjectFile = path => readFileSync(new URL(path, projectRoot), "utf8");
 const worldSource = readProjectFile("src/components/ChangeWorld.tsx");
-const wikiSource = readProjectFile("src/components/PlanetWiki.tsx");
+const wikiSource = readProjectFile("src/components/planet-knowledge/PlanetWiki.tsx");
 const appSource = readProjectFile("src/App.tsx");
-const diagnosticsSource = readProjectFile("src/diagnostics.ts");
-const folderManagementSource = readProjectFile("src/components/FolderManagement.tsx");
-const usbSource = readProjectFile("src/components/UsbSourcePanel.tsx");
-const planetStyles = readProjectFile("src/worlds.css");
+const diagnosticsSource = readProjectFile("src/components/diagnostics/diagnostics.ts");
+const folderManagementSource = readProjectFile("src/components/file-browser/FolderManagement.tsx");
+const usbSource = readProjectFile("src/components/devices/UsbSourcePanel.tsx");
+const planetStyles = readProjectFile("src/planets/worlds.css");
 
 test("wiki readiness stays a guard and diagnostics direct the user to planet Obsidian settings", () => {
     assert.match(diagnosticsSource, /KNOWLEDGE_INCOMPLETE/);

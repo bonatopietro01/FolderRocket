@@ -34,7 +34,7 @@ Verifica: `npm run lint`, `npm test` (60/60), regressioni helper `node --test te
 
 ## Context and Orientation
 
-`src/components/TreeRocket.tsx` crea la schermata full-screen, le schede Folder/Apps e la navigazione. Gli stili applicativi sono in `src/App.css`; il catalogo e l’avvio delle app passano per `backend/server.js` e `backend/scripts/open-application.ps1` tramite `backend/services/windowsTask.js`. I test di regressione Tree Rocket sono in `backend/test/dashboardTreeRocketUi.test.js`. La working copy era già sporca: le modifiche preesistenti in altri file e quelle già presenti in questi file devono rimanere intatte salvo le righe strettamente necessarie.
+`src/components/file-browser/TreeRocket.tsx` crea la schermata full-screen, le schede Folder/Apps e la navigazione. Gli stili applicativi sono in `src/App.css`; il catalogo e l’avvio delle app passano per `backend/server.js` e `backend/scripts/open-application.ps1` tramite `backend/services/windowsTask.js`. I test di regressione Tree Rocket sono in `backend/test/dashboardTreeRocketUi.test.js`. La working copy era già sporca: le modifiche preesistenti in altri file e quelle già presenti in questi file devono rimanere intatte salvo le righe strettamente necessarie.
 
 ## Plan of Work
 

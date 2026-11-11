@@ -1,7 +1,7 @@
 const test=require("node:test");
 const assert=require("node:assert/strict");
 const {EventEmitter}=require("node:events");
-const {createSelectedFolderWatcher,directoryMetadataSignature}=require("../services/selectedFolderWatcher");
+const {createSelectedFolderWatcher,directoryMetadataSignature}=require("../services/files/selectedFolderWatcher");
 const fs=require("node:fs/promises");
 const os=require("node:os");
 const path=require("node:path");

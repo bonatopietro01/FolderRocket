@@ -8,7 +8,7 @@ function source(...parts) { return fs.readFileSync(path.join(root, ...parts), "u
 
 test("dashboard layout is stored with the active planet settings and available in Workspace Control", () => {
     const app = source("src", "App.tsx");
-    const account = source("src", "components", "AuthGate.tsx");
+    const account = source("src", "components", "auth", "AuthGate.tsx");
     assert.match(app, /dashboardLayout\?: "three-column" \| "folders-top"/);
     assert.match(app, /dashboardLayout, searchFolderIds/);
     assert.match(app, /\$\{DASHBOARD_LAYOUT_KEY\}-\$\{workspaceScope\}/);
@@ -22,8 +22,8 @@ test("dashboard layout is stored with the active planet settings and available i
 
 test("Tree Rocket is mounted from Folder Management and navigates without reading file contents", () => {
     const app = source("src", "App.tsx");
-    const manager = source("src", "components", "FolderManagement.tsx");
-    const tree = source("src", "components", "TreeRocket.tsx");
+    const manager = source("src", "components", "file-browser", "FolderManagement.tsx");
+    const tree = source("src", "components", "file-browser", "TreeRocket.tsx");
     const server = source("backend", "server.js");
     assert.match(tree, /createPortal\(<section className="treeRocketOverlay"/);
     assert.match(tree, /appRoot\.inert = true/);
@@ -109,15 +109,15 @@ test("Tree Rocket is mounted from Folder Management and navigates without readin
     assert.match(css.slice(css.lastIndexOf("/* Tree Rocket is a separate, space-themed workspace.")), /@media \(prefers-reduced-motion:reduce\) \{\s*\.treeRocketNode \{ transition:none; \}\s*\.treeRocketNode:hover,\.treeRocketNode:focus-within \{ transform:none; \}\s*\}/);
     assert.doesNotMatch(css.slice(css.lastIndexOf("/* Tree Rocket uses the same full-screen")), /background-size:24px 24px/);
     assert.match(app, /type === "teams"/);
-    assert.match(source("src", "components", "DashboardSourceBlock.tsx"), /"teams"/);
+    assert.match(source("src", "components", "dashboard", "DashboardSourceBlock.tsx"), /"teams"/);
     assert.match(server, /fs\.promises\.realpath\(userWorkspace\(req\.user\)\)/);
     assert.match(server, /if \(!isPathWithin\(workspaceRealPath, directoryRealPath\)\)/);
     assert.match(server, /if \(current\.enabled !== true\) return res\.status\(409\)\.json\(\{message:"Activity notifications are disabled for this planet\."\}\)/);
-    assert.match(server, /nextDigestAt:require\("\.\/services\/worldActivityEmailService"\)\.nextDigestAt/);
+    assert.match(server, /nextDigestAt:require\("\.\/services\/conversations\/worldActivityEmailService"\)\.nextDigestAt/);
 });
 
 test("Tree Rocket uses app icons, shared zoom, a fixed root branch and no bottom action bar", () => {
-    const tree = source("src", "components", "TreeRocket.tsx");
+    const tree = source("src", "components", "file-browser", "TreeRocket.tsx");
     const css = source("src", "App.css");
     const script = source("backend", "scripts", "open-application.ps1");
     assert.match(tree, /iconDataUrl\?: string/);
@@ -152,9 +152,9 @@ test("Tree Rocket uses app icons, shared zoom, a fixed root branch and no bottom
 });
 
 test("Tree Rocket shows folder nodes only while preserving file indexing and explicit See files", () => {
-    const tree = source("src", "components", "TreeRocket.tsx");
-    const service = source("backend", "services", "treeRocketService.js");
-    const planetGraphService = source("backend", "services", "planetGraphService.js");
+    const tree = source("src", "components", "file-browser", "TreeRocket.tsx");
+    const service = source("backend", "services", "files", "treeRocketService.js");
+    const planetGraphService = source("backend", "services", "planet-knowledge", "planetGraphService.js");
     const server = source("backend", "server.js");
     const css = source("src", "App.css");
     assert.match(tree, /function graphNodeId\(kind:"folder"\|"file", value:string\)/);
@@ -186,14 +186,14 @@ test("Tree Rocket shows folder nodes only while preserving file indexing and exp
 
 test("dashboard, planet, graph guide, and reorder presentation retain shared accessible styles", () => {
     const app = source("src", "App.css");
-    const worlds = source("src", "worlds.css");
+    const worlds = source("src", "planets", "worlds.css");
     const changeWorld = source("src", "components", "ChangeWorld.tsx");
-    const planetGraph = source("src", "components", "PlanetGraph.tsx");
+    const planetGraph = source("src", "components", "planet-knowledge", "PlanetGraph.tsx");
     assert.match(app, /\.pageNavigation \.pageMenuItems > button\.active \{[^}]*background:linear-gradient\(180deg,#dff2ff,#c3e5fa\)/);
     assert.match(worlds, /\.changeWorldTitle > img \{ display:block; width:min\(390px,56vw\); height:93px;/);
     assert.match(changeWorld, /src=\{folderRocketMark\}/);
     assert.match(changeWorld, /\["planet", "ringed", "glowing", "asteroid", "black-hole", "galaxy"\] as WorldPlanetStyle\[\]/);
-    assert.match(source("src", "worlds.ts"), /\["rocky", "planet", "ringed", "glowing", "asteroid", "black-hole", "galaxy"\]/);
+    assert.match(source("src", "planets", "worlds.ts"), /\["rocky", "planet", "ringed", "glowing", "asteroid", "black-hole", "galaxy"\]/);
     assert.match(changeWorld, /<span className="worldPlanetCore"\/>/);
     assert.match(changeWorld, /className="worldPlanetRing"/);
     assert.match(changeWorld, /className="worldPlanetArtwork blackHoleArtwork"/);
@@ -209,7 +209,7 @@ test("dashboard, planet, graph guide, and reorder presentation retain shared acc
 });
 
 test("Planet Graph indexing warnings are consolidated with accessible, source-scoped retry", () => {
-    const graph = source("src", "components", "PlanetGraph.tsx");
+    const graph = source("src", "components", "planet-knowledge", "PlanetGraph.tsx");
     assert.match(graph, /className="planetGraphNoticeButton"/);
     assert.match(graph, /aria-expanded=\{noticesOpen\}/);
     assert.match(graph, /aria-controls=\{noticesOpen\?"planetGraphNoticePanel":undefined\}/);
@@ -225,7 +225,7 @@ test("Planet Graph indexing warnings are consolidated with accessible, source-sc
 
 test("dashboard folder layouts use compact rows and conditional scroll-edge fades", () => {
     const app = source("src", "App.tsx");
-    const frame = source("src", "components", "FolderScrollFrame.tsx");
+    const frame = source("src", "components", "shared", "FolderScrollFrame.tsx");
     const groups = source("src", "folderProjects.ts");
     const css = source("src", "App.css");
     assert.match(app, /<FolderScrollFrame layout=\{dashboardLayout\} itemCount=\{dashboardBrowser \? 0 : folders\.length\}>/);
@@ -246,8 +246,8 @@ test("dashboard folder layouts use compact rows and conditional scroll-edge fade
 });
 
 test("File Studio queue labels and cards adapt without changing their queues", () => {
-    const workspace = source("src", "components", "ProcessingWorkspace.tsx");
-    const changeFormat = source("src", "components", "ChangeFormatPanel.tsx");
+    const workspace = source("src", "components", "file-studio", "ProcessingWorkspace.tsx");
+    const changeFormat = source("src", "components", "file-studio", "ChangeFormatPanel.tsx");
     const css = source("src", "App.css");
     assert.match(workspace, /queue\.length > 0 && <div className="studioQueueHeading"><span>Files to convert<\/span>/);
     assert.doesNotMatch(workspace, /The original file remains unchanged|conversionEmptyState/);
@@ -263,7 +263,7 @@ test("File Studio queue labels and cards adapt without changing their queues", (
 });
 
 test("Folder Management reorder and add controls use a compact toolbar above the list", () => {
-    const manager = source("src", "components", "FolderManagement.tsx");
+    const manager = source("src", "components", "file-browser", "FolderManagement.tsx");
     const css = source("src", "App.css");
     assert.match(manager, /className="folderTableToolbar" role="toolbar"/);
     assert.match(manager, /orderingFolders \? "Finish ordering folders" : "Reorder folders"/);
@@ -278,7 +278,7 @@ test("Folder Management reorder and add controls use a compact toolbar above the
 });
 
 test("Application filters can be composed and reset, and account integration descriptions remain under their titles", () => {
-    const applications = source("src", "components", "ApplicationsWorkspace.tsx");
+    const applications = source("src", "components", "applications", "ApplicationsWorkspace.tsx");
     const integrationCss = source("src", "App.css");
     assert.match(applications, /aria-label=\{`\$\{app\.name\} initial letter`\}/);
     assert.match(applications, /linked-folder filter/);
@@ -290,7 +290,7 @@ test("Application filters can be composed and reset, and account integration des
 });
 
 test("Cargo Rocket switches back to the yellow Simple Post-it action without a connected-mailbox label", () => {
-    const cargo = source("src", "components", "CargoShip.tsx");
+    const cargo = source("src", "components", "file-workflows", "CargoShip.tsx");
     const css = source("src", "App.css");
     assert.match(cargo, /className=\{postItMode === "ai" \? "active aiMode postItSimpleMode"/);
     assert.match(cargo, /className=\{postItMode === "reminder" \? "active reminderMode postItSimpleMode"/);
@@ -300,7 +300,7 @@ test("Cargo Rocket switches back to the yellow Simple Post-it action without a c
 });
 
 test("Cargo Rocket email choices are loaded only from the active planet's dashboard", () => {
-    const cargo = source("src", "components", "CargoShip.tsx");
+    const cargo = source("src", "components", "file-workflows", "CargoShip.tsx");
     const server = source("backend", "server.js");
     assert.match(cargo, /email-sources\?worldId=\$\{encodeURIComponent\(worldId\)\}/);
     assert.match(cargo, /No email account is selected for this planet[\s\S]*Gmail block on the Dashboard/);
@@ -312,7 +312,7 @@ test("Cargo Rocket email choices are loaded only from the active planet's dashbo
 });
 
 test("Gmail Read attachments menu is allowed to escape the source block clipping", () => {
-    const gmail = source("src", "components", "GmailSourcePanel.tsx");
+    const gmail = source("src", "components", "mail", "GmailSourcePanel.tsx");
     const css = source("src", "App.css");
     assert.match(gmail, /emailReaderHeaderButton[\s\S]*aria-expanded=\{showSettings\}[\s\S]*createPortal\([\s\S]*role="dialog"/);
     assert.match(gmail, /aria-controls=\{readerMenuId\}/);
@@ -322,7 +322,7 @@ test("Gmail Read attachments menu is allowed to escape the source block clipping
 });
 
 test("Daily Job creates recap drafts manually from accounts connected to the active planet", () => {
-    const daily = source("src", "components", "DailyJob.tsx");
+    const daily = source("src", "components", "daily-work", "DailyJob.tsx");
     const app = source("src", "App.tsx");
     const server = source("backend", "server.js");
     assert.match(app, /<DailyJob storageScope=\{workspaceScope\} worldId=\{world\.id\}/);
@@ -337,8 +337,8 @@ test("Daily Job creates recap drafts manually from accounts connected to the act
 });
 
 test("Dashboard Teams source lists selected-source files and imports them locally without showing the chat feed", () => {
-    const teams = source("src", "components", "TeamsSourcePanel.tsx");
-    const outlook = source("backend", "services", "outlookService.js");
+    const teams = source("src", "components", "mail", "TeamsSourcePanel.tsx");
+    const outlook = source("backend", "services", "integrations", "outlookService.js");
     const server = source("backend", "server.js");
     assert.match(teams, /Chats · 1:1 and groups/);
     assert.match(teams, /Teams channels/);
@@ -362,8 +362,8 @@ test("Dashboard Teams source lists selected-source files and imports them locall
 });
 
 test("Conversations keeps foreign shared Gmail read-only and offers selected-account Teams consent", () => {
-    const conversations = source("src", "components", "EmailConversations.tsx");
-    const teams = source("src", "components", "TeamsConversationsView.tsx");
+    const conversations = source("src", "components", "email-conversations", "EmailConversations.tsx");
+    const teams = source("src", "components", "email-conversations", "TeamsConversationsView.tsx");
     assert.match(conversations, /selected\.shared&&selected\.blockId!==accountBlockId\?\s*<p className="emailConversationReadOnlyHint"/);
     assert.match(conversations, /This shared Gmail conversation is read-only on this planet/);
     assert.match(teams, /needsConsent\?:boolean/);
@@ -375,8 +375,8 @@ test("Conversations keeps foreign shared Gmail read-only and offers selected-acc
 });
 
 test("AI alerts accept open-ended planet topics and keep the existing small model", () => {
-    const builder = source("src", "components", "EmailAlertBuilder.tsx");
-    const alerts = source("backend", "services", "gmailWarningService.js");
+    const builder = source("src", "components", "mail", "EmailAlertBuilder.tsx");
+    const alerts = source("backend", "services", "conversations", "gmailWarningService.js");
     assert.match(builder, /Topics or instructions to watch/);
     assert.match(builder, /AI alert topics and instructions/);
     assert.match(alerts, /model: "gpt-4\.1-mini"/);

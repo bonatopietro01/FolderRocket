@@ -3,10 +3,10 @@ import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 
 const worldSource = readFileSync(new URL("../src/components/ChangeWorld.tsx", import.meta.url), "utf8");
-const graphSource = readFileSync(new URL("../src/components/PlanetGraph.tsx", import.meta.url), "utf8");
-const planetStyles = readFileSync(new URL("../src/worlds.css", import.meta.url), "utf8");
-const treeSource = readFileSync(new URL("../src/components/TreeRocket.tsx", import.meta.url), "utf8");
-const worldTypes = readFileSync(new URL("../src/worlds.ts", import.meta.url), "utf8");
+const graphSource = readFileSync(new URL("../src/components/planet-knowledge/PlanetGraph.tsx", import.meta.url), "utf8");
+const planetStyles = readFileSync(new URL("../src/planets/worlds.css", import.meta.url), "utf8");
+const treeSource = readFileSync(new URL("../src/components/file-browser/TreeRocket.tsx", import.meta.url), "utf8");
+const worldTypes = readFileSync(new URL("../src/planets/worlds.ts", import.meta.url), "utf8");
 const visualFixture = readFileSync(new URL("./ui/followup-smoke.tsx", import.meta.url), "utf8");
 const appStyles = readFileSync(new URL("../src/App.css", import.meta.url), "utf8");
 

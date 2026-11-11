@@ -7,7 +7,7 @@ const root = path.join(__dirname, "..", "..");
 function readSource(...segments) { return fs.readFileSync(path.join(root, ...segments), "utf8"); }
 
 test("CargoRocket keeps saved notes out of the composer and switches between three creation modes", () => {
-    const cargo = readSource("src", "components", "CargoShip.tsx");
+    const cargo = readSource("src", "components", "file-workflows", "CargoShip.tsx");
     assert.match(cargo, /useState<CargoPostItMode>\("simple"\)/);
     assert.match(cargo, /postItMode === "simple"/);
     assert.match(cargo, /postItMode === "ai"/);
@@ -22,8 +22,8 @@ test("CargoRocket keeps saved notes out of the composer and switches between thr
 });
 
 test("email account pickers stay in Read attachments without the connected-account label", () => {
-    const gmail = readSource("src", "components", "GmailSourcePanel.tsx");
-    const outlook = readSource("src", "components", "OutlookSourcePanel.tsx");
+    const gmail = readSource("src", "components", "mail", "GmailSourcePanel.tsx");
+    const outlook = readSource("src", "components", "mail", "OutlookSourcePanel.tsx");
     assert.match(gmail, /emailReaderHeaderMenu[\s\S]{0,1800}emailAccountPickerRow/);
     assert.match(gmail, /className="emailAccountChoices" role="listbox"/);
     assert.match(gmail, /onAccountBlockIdChange\?\.\(null\)/);
@@ -35,7 +35,7 @@ test("email account pickers stay in Read attachments without the connected-accou
 });
 
 test("File Studio hides the Rename composer while keeping its template data and shared logic", () => {
-    const studio = readSource("src", "components", "ProcessingWorkspace.tsx");
+    const studio = readSource("src", "components", "file-studio", "ProcessingWorkspace.tsx");
     assert.doesNotMatch(studio, /conversionRenameMenuButton|conversionRenameMenu|conversionRenamePreview|Add blocks to compose the new name/);
     assert.match(studio, /interface RenamePart/);
     assert.match(studio, /folderrocket-conversion-rename-template/);

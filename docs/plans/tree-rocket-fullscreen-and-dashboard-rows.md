@@ -44,7 +44,7 @@ Confermati nell'ultima esecuzione TypeScript tramite `npm run build`, lint senza
 
 ## Context and Orientation
 
-`src/App.tsx` monta dashboard e Folder Management e passa `onAdd={addFolder}`. `src/components/FolderManagement.tsx` contiene il launcher e monta `TreeRocket`. `src/components/TreeRocket.tsx` usa `/filesystem/tree-roots`, `/filesystem/tree-children` e `/filesystem/tree-search`. `src/App.css` contiene regole dashboard e due generazioni di stili Tree Rocket; le regole più recenti dominano. `FileKindIcon` fornisce le icone già usate nell'app. `graphify-out/graph.json` è un artefatto locale ignorato da Git; le relazioni Graphify sono state confermate nei sorgenti.
+`src/App.tsx` monta dashboard e Folder Management e passa `onAdd={addFolder}`. `src/components/file-browser/FolderManagement.tsx` contiene il launcher e monta `TreeRocket`. `src/components/file-browser/TreeRocket.tsx` usa `/filesystem/tree-roots`, `/filesystem/tree-children` e `/filesystem/tree-search`. `src/App.css` contiene regole dashboard e due generazioni di stili Tree Rocket; le regole più recenti dominano. `FileKindIcon` fornisce le icone già usate nell'app. `graphify-out/graph.json` è un artefatto locale ignorato da Git; le relazioni Graphify sono state confermate nei sorgenti.
 
 ## Plan of Work
 

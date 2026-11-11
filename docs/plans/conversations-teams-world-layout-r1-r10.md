@@ -48,7 +48,7 @@ Rendere coerenti i comandi Planet/Wiki, correggere il salvataggio del nome, migl
 
 ## Context and Orientation
 
-Punti di partenza verificati: `src/components/ChangeWorld.tsx`, `src/components/EmailConversations.tsx`, `src/components/TeamsSourcePanel.tsx`, `src/components/IntegrationSetup.tsx`, `src/components/FolderManagement.tsx`, `src/components/TreeRocket.tsx`, `src/components/CargoShip.tsx`, `src/components/DashboardSourceColumn.tsx`, `src/App.tsx`, `src/App.css`, `backend/server.js`, `backend/services/outlookService.js`, `backend/services/desktopIntegrationConfigService.js`, `desktop/main.cjs` e `desktop/preload.cjs`.
+Punti di partenza verificati: `src/components/ChangeWorld.tsx`, `src/components/email-conversations/EmailConversations.tsx`, `src/components/mail/TeamsSourcePanel.tsx`, `src/components/settings/IntegrationSetup.tsx`, `src/components/file-browser/FolderManagement.tsx`, `src/components/file-browser/TreeRocket.tsx`, `src/components/file-workflows/CargoShip.tsx`, `src/components/dashboard/DashboardSourceColumn.tsx`, `src/App.tsx`, `src/App.css`, `backend/server.js`, `backend/services/integrations/outlookService.js`, `backend/services/integrations/desktopIntegrationConfigService.js`, `desktop/main.cjs` e `desktop/preload.cjs`.
 
 `ChangeWorld` richiede `/worlds/:worldId/graph?summary=1`; la wiki ha indice API e readiness propri. `EmailConversations` è Gmail-centric e include Add chat, Share e Remove from planet. `TeamsSourcePanel` interroga chat/canali/messaggi. `IntegrationSetup` salva configurazione condivisa tramite API admin. `CargoShip` associa Minus a `compactShip` e EyeOff a `minimizeShip`.
 

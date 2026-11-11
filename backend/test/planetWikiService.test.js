@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const wiki = require("../services/planetWikiService");
+const wiki = require("../services/planet-knowledge/planetWikiService");
 
 test("wiki preview applies the configured scope and reports metadata-only limits", () => {
     const walked = { nodes: [

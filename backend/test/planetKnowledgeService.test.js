@@ -3,8 +3,8 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
-const {emptyKnowledge,normalizeKnowledge,readKnowledge,writeKnowledge,filePath,managedMarkdownRoot,ensureManagedMarkdownRoot,readiness} = require("../services/planetKnowledgeService");
-const obsidianVault=require("../services/obsidianVaultService");
+const {emptyKnowledge,normalizeKnowledge,readKnowledge,writeKnowledge,filePath,managedMarkdownRoot,ensureManagedMarkdownRoot,readiness} = require("../services/planet-knowledge/planetKnowledgeService");
+const obsidianVault=require("../services/planet-knowledge/obsidianVaultService");
 
 test("planet knowledge persistence is isolated by user and planet", async t => {
     const root=await fs.mkdtemp(path.join(os.tmpdir(),"folderrocket-knowledge-store-"));
@@ -97,7 +97,7 @@ test("backend knowledge sync rebuilds complete snapshots and isolates unsupporte
     assert.match(sync,/old\?\.signature===signature&&addDescriptor\(candidate\.id,old\.descriptor,old\)/,"unchanged local sources reuse their retained descriptor without content extraction");
     assert.match(sync,/stats\.ctimeMs/,"local file signatures include change time as well as size and modified time");
     assert.ok(sync.indexOf("const selectedCandidates=allCandidates.filter(item=>item.selected)")<sync.indexOf("if(selectedCandidates.length>KNOWLEDGE_MAX_FILES)"),"user exclusions are applied before the selected source cap");
-    const descriptorService=await fs.readFile(path.join(__dirname,"..","services","planetKnowledgeService.js"),"utf8");
+    const descriptorService=await fs.readFile(path.join(__dirname,"..", "services", "planet-knowledge", "planetKnowledgeService.js"),"utf8");
     assert.match(descriptorService,/explicitLinks/,"bounded retained wiki references can be resolved across worker batches");
     assert.match(sync,/const nodeMap=new Map\(\);for\(const item of newNodes\)/,"a completed rebuild replaces the prior node set instead of carrying stale edges forward");
     assert.match(sync,/if\(!KNOWLEDGE_READABLE_EXTENSIONS\.has\(extension\)\)\{const reason=[\s\S]*?exclusions\.push\(\{sourceId:candidate\.id,reason\}\);continue;/,"unsupported formats become explicit per-source exclusions");

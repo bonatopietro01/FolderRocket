@@ -18,7 +18,7 @@ test("R8-R9 refined by R16 retain five accessible destinations inside the header
 });
 
 test("R10 refined by R17 keeps distinct non-Planet artwork with the saved color and AI marker", () => {
-    const css = read("../src/worlds.css");
+    const css = read("../src/planets/worlds.css");
     const changeWorld = read("../src/components/ChangeWorld.tsx");
     const styles = ["rocky", "glowing", "asteroid", "black-hole", "galaxy"];
     const surfaces = styles.map(style => css.match(new RegExp(`\\.worldPlanet\\.${style} \\.worldPlanetCore \\{([^}]+)\\}`))?.[1]);
@@ -33,7 +33,7 @@ test("R10 refined by R17 keeps distinct non-Planet artwork with the saved color 
 });
 
 test("R11 removes the empty-account wording from Gmail while retaining clear and account-selection actions", () => {
-    const gmail = read("../src/components/GmailSourcePanel.tsx");
+    const gmail = read("../src/components/mail/GmailSourcePanel.tsx");
     assert.doesNotMatch(gmail, /No account selected/);
     assert.match(gmail, /Choose account/);
     assert.match(gmail, /Clear selection/);
@@ -66,7 +66,7 @@ test("R14 gives TreeRocket add and check actions the same centered footprint", (
 });
 
 test("R37 supersedes R15 persistent roots with the same current-folder stage for Desktop and Computer", () => {
-    const tree = read("../src/components/TreeRocket.tsx");
+    const tree = read("../src/components/file-browser/TreeRocket.tsx");
     const css = read("../src/App.css");
     assert.match(tree, /className="treeRocketGraphStage"/);
     assert.match(tree, /desktopRootLabel\(folder\)/);

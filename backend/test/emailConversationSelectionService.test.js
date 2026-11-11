@@ -1,6 +1,6 @@
 const assert=require("node:assert/strict");
 const test=require("node:test");
-const {matchesSavedConversationScope,normalizedSenderIdentity,conversationContactIdentity,mergeSavedChatSelectorThreads,findInboxThreadById,chatInboxPageOptions}=require("../services/emailConversationSelectionService");
+const {matchesSavedConversationScope,normalizedSenderIdentity,conversationContactIdentity,mergeSavedChatSelectorThreads,findInboxThreadById,chatInboxPageOptions}=require("../services/conversations/emailConversationSelectionService");
 
 test("saved chat scope includes its provider thread and new messages from the same normalized sender only",()=>{
     const saved=[{blockId:"gmail-a",threadId:"thread-1",sender:"Alice Smith <ALICE@example.test>"}];

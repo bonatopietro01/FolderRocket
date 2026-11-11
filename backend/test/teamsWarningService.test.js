@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const {filterTeamsAlertMessages, evaluateTeamsSourceRules} = require("../services/teamsWarningService");
+const {filterTeamsAlertMessages, evaluateTeamsSourceRules} = require("../services/conversations/teamsWarningService");
 
 test("Teams alert filtering keeps only the selected date range and bounded message metadata", () => {
     const localDateTime = value => {

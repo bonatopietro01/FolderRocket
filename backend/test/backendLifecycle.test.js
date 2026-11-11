@@ -5,7 +5,7 @@ const net = require("node:net");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const planetGraph = require("../services/planetGraphService");
+const planetGraph = require("../services/planet-knowledge/planetGraphService");
 
 async function freePort() {
     const probe = net.createServer();

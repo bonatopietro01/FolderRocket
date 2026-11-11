@@ -8,7 +8,7 @@ test("diagnostics are bounded, sanitized, user-isolated and clearable", async t 
     const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), "folderrocket-diagnostics-"));
     t.after(() => fs.promises.rm(root, {recursive: true, force: true}));
     process.env.FOLDERROCKET_DATA_DIR = root;
-    const service = require("../services/diagnosticsService");
+    const service = require("../services/diagnostics/diagnosticsService");
 
     assert.equal(service.safeText("Failed at C:\\Synthetic User\\Workspace With Spaces\\private.pdf (EACCES)"), "Failed at [local path] (EACCES)");
     await service.recordDiagnostic("alice", {id: "req-1", type: "http", message: "Bad request\nalice@example.test Bearer super-secret C:\\Users\\bonat\\private.pdf", route: "/files", worldId: "work", status: 400});
@@ -32,7 +32,7 @@ test("a diagnostics storage failure is contained and does not reject the caller"
     const blocker=path.join(root,"not-a-directory");
     await fs.promises.writeFile(blocker,"block");
     process.env.FOLDERROCKET_DATA_DIR=path.join(blocker,"data");
-    const service=require("../services/diagnosticsService");
+    const service=require("../services/diagnostics/diagnosticsService");
     const pending=service.recordDiagnostic("alice",{type:"backend",message:"safe failure"});
     assert.equal(typeof pending.then,"function");
     assert.equal(await pending,null);

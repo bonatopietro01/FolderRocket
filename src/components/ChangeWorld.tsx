@@ -1,15 +1,15 @@
 import {memo, useCallback, useEffect, useRef, useState, type CSSProperties} from "react";
 import {ArrowLeft, BellRing, CalendarDays, Check, CirclePlus, Clock3, LoaderCircle, Mail, Pencil, Plus, Send, Sparkles, Trash2, X, Network, BookOpen, FolderOpen, RefreshCw} from "lucide-react";
-import type {WorldActivityNotifications, WorldAgentProfile, WorldAssistantCapability, WorldAssistantModel, WorkspaceWorld, WorldPlanetStyle, WorldSkillProfile, WorldDigestSource, WorldObsidianSettings, WorldObsidianSourceSelection} from "../worlds";
-import {DEFAULT_OBSIDIAN_SOURCE_SELECTION, normalizeActivityNotifications} from "../worlds";
-import {API_BASE_URL} from "../api";
-import {readWorldActivitySnapshot, selectWorldActivitySnapshot} from "../worldActivitySnapshot";
-import {isKnowledgeCandidateSelected, updateKnowledgeExcludedFileIds} from "./knowledgeCandidateSelection";
-import PlanetWikiRebuildControls from "./PlanetWikiRebuildControls";
+import type {WorldActivityNotifications, WorldAgentProfile, WorldAssistantCapability, WorldAssistantModel, WorkspaceWorld, WorldPlanetStyle, WorldSkillProfile, WorldDigestSource, WorldObsidianSettings, WorldObsidianSourceSelection} from "../planets/worlds.ts";
+import {DEFAULT_OBSIDIAN_SOURCE_SELECTION, normalizeActivityNotifications} from "../planets/worlds.ts";
+import {API_BASE_URL} from "../api.ts";
+import {readWorldActivitySnapshot, selectWorldActivitySnapshot} from "../planets/worldActivitySnapshot.ts";
+import {isKnowledgeCandidateSelected, updateKnowledgeExcludedFileIds} from "./planet-knowledge/knowledgeCandidateSelection.ts";
+import PlanetWikiRebuildControls from "./planet-knowledge/PlanetWikiRebuildControls.tsx";
 import folderRocketMark from "../assets/folderrocket-mark.png";
 import blackHoleArtwork from "../assets/planet-black-hole-inspired.png";
 import galaxyArtwork from "../assets/planet-galaxy-inspired.png";
-import "../worlds.css";
+import "../planets/worlds.css";
 
 interface Props {
     worlds: WorkspaceWorld[];

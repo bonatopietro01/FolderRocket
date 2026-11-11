@@ -35,7 +35,7 @@ Tree Rocket ora include i file diretti nel ramo selezionato, con paginazione, no
 
 ## Context and Orientation
 
-La vista è in `src/components/TreeRocket.tsx`; gli stili condivisi sono in `src/App.css`. Le API filesystem e il servizio relativo si trovano in `backend/server.js` e `backend/services/treeRocketService.js`. I controlli disponibili includono `backend/test/treeRocketService.test.js`, `backend/test/dashboardTreeRocketUi.test.js` e la fixture sintetica `tests/ui/tree-rocket-smoke.html` con guida in `tests/README.md`.
+La vista è in `src/components/file-browser/TreeRocket.tsx`; gli stili condivisi sono in `src/App.css`. Le API filesystem e il servizio relativo si trovano in `backend/server.js` e `backend/services/files/treeRocketService.js`. I controlli disponibili includono `backend/test/treeRocketService.test.js`, `backend/test/dashboardTreeRocketUi.test.js` e la fixture sintetica `tests/ui/tree-rocket-smoke.html` con guida in `tests/README.md`.
 
 La struttura del grafo deve essere derivata dai percorsi e dai metadati restituiti dal backend. Gli ID dei nodi vanno resi stabili con normalizzazione dei path coerente con Windows. Gli archi devono avere estremi effettivamente presenti e rispettare paginazione e filtri. Le radici Desktop personale/pubblica e l’eventuale percorso reindirizzato non vanno confusi né duplicati.
 

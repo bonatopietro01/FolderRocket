@@ -3,7 +3,7 @@ const test = require("node:test");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
-const {invokeWorldAssistant} = require("../services/stickyNoteAiService");
+const {invokeWorldAssistant} = require("../services/planet-knowledge/stickyNoteAiService");
 
 test("world assistant calls the shared AI with only selected profile instructions and user prompt", async () => {
     const requests = [];

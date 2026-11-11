@@ -38,7 +38,7 @@ Limite API Gmail: `threads.get(format=metadata)` restituisce gli ID e metadata d
 
 ## Context and Orientation
 
-Il frontend è React/TypeScript. `src/App.tsx` monta Applications dentro `applicationsView`; `src/components/ApplicationsWorkspace.tsx` contiene griglia e filtri. `src/components/TreeRocket.tsx` presenta Browse, modalità computer/desktop, schede Folder/Apps e ricerca. `src/components/ChangeWorld.tsx` contiene l'editor del pianeta e i pannelli di configurazione. `src/components/PlanetGraph.tsx` contiene fascia chat e conversazioni selezionate. `src/components/EmailConversations.tsx` visualizza thread e modale Add chat. `backend/server.js` espone le route e `backend/services/gmailService.js` parla con Gmail.
+Il frontend è React/TypeScript. `src/App.tsx` monta Applications dentro `applicationsView`; `src/components/applications/ApplicationsWorkspace.tsx` contiene griglia e filtri. `src/components/file-browser/TreeRocket.tsx` presenta Browse, modalità computer/desktop, schede Folder/Apps e ricerca. `src/components/ChangeWorld.tsx` contiene l'editor del pianeta e i pannelli di configurazione. `src/components/planet-knowledge/PlanetGraph.tsx` contiene fascia chat e conversazioni selezionate. `src/components/email-conversations/EmailConversations.tsx` visualizza thread e modale Add chat. `backend/server.js` espone le route e `backend/services/integrations/gmailService.js` parla con Gmail.
 
 ## Plan of Work
 

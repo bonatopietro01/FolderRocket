@@ -6,7 +6,7 @@ const test = require("node:test");
 const ts = require("typescript");
 
 function loadWorldModule(storage) {
-    const sourcePath = path.join(__dirname, "..", "..", "src", "worlds.ts");
+    const sourcePath = path.join(__dirname, "..", "..", "src", "planets", "worlds.ts");
     const source = fs.readFileSync(sourcePath, "utf8");
     const output = ts.transpileModule(source, {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
     const module = {exports:{}};
@@ -55,11 +55,11 @@ test("legacy planet style identifiers remain unchanged during visual preference 
 });
 
 test("planet artwork and world switch retain distinct styles and reduced-motion handling", () => {
-    const css = fs.readFileSync(path.join(__dirname,"..","..","src","worlds.css"),"utf8");
+    const css = fs.readFileSync(path.join(__dirname,"..", "..", "src", "planets", "worlds.css"),"utf8");
     const app = fs.readFileSync(path.join(__dirname,"..","..","src","App.tsx"),"utf8");
     const worldsScreen = fs.readFileSync(path.join(__dirname,"..","..","src","components","ChangeWorld.tsx"),"utf8");
-    const account = fs.readFileSync(path.join(__dirname,"..","..","src","components","AuthGate.tsx"),"utf8");
-    const integrations = fs.readFileSync(path.join(__dirname,"..","..","src","components","IntegrationSetup.tsx"),"utf8");
+    const account = fs.readFileSync(path.join(__dirname,"..", "..", "src", "components", "auth", "AuthGate.tsx"),"utf8");
+    const integrations = fs.readFileSync(path.join(__dirname,"..", "..", "src", "components", "settings", "IntegrationSetup.tsx"),"utf8");
     assert.match(css,/\.worldPlanet \{[^}]*border-radius:50%[^}]*background:radial-gradient/);
     assert.match(css,/\.worldPlanet\.glowing::before/);
     assert.match(css,/\.worldPlanet\.ringed\s*>\s*em/);
@@ -104,7 +104,7 @@ test("planet artwork and world switch retain distinct styles and reduced-motion 
 
 test("workspace restores the light background and keeps the active planet beside the wordmark", () => {
     const appCss = fs.readFileSync(path.join(__dirname,"..","..","src","App.css"),"utf8");
-    const worldsCss = fs.readFileSync(path.join(__dirname,"..","..","src","worlds.css"),"utf8");
+    const worldsCss = fs.readFileSync(path.join(__dirname,"..", "..", "src", "planets", "worlds.css"),"utf8");
     const app = fs.readFileSync(path.join(__dirname,"..","..","src","App.tsx"),"utf8");
     const worldScreen = fs.readFileSync(path.join(__dirname,"..","..","src","components","ChangeWorld.tsx"),"utf8");
     assert.match(appCss,/body\s*\{\s*background:\s*linear-gradient\([\s\S]*?#ffffff 0%[\s\S]*?#f2f6fb 100%/);
@@ -122,7 +122,7 @@ test("workspace restores the light background and keeps the active planet beside
 
 test("world switch reuses its freshly loaded settings and records timing without the old long delay", () => {
     const app = fs.readFileSync(path.join(__dirname,"..","..","src","App.tsx"),"utf8");
-    const worldsCss = fs.readFileSync(path.join(__dirname,"..","..","src","worlds.css"),"utf8");
+    const worldsCss = fs.readFileSync(path.join(__dirname,"..", "..", "src", "planets", "worlds.css"),"utf8");
     assert.match(app,/if \(settingsPreloadedRef\.current\) \{[\s\S]*?return \(\) => \{ active = false; \};\s*\}\s*fetch\(dashboardSettingsUrl/);
     assert.match(app,/settingsPreloaded=\{preloadedSettingsWorldId === activeWorld\.id\}/);
     assert.match(app,/setPreloadedSettingsWorldId\(worldId\);\s*setActiveWorldId\(worldId\)/);
@@ -137,7 +137,7 @@ test("world switch reuses its freshly loaded settings and records timing without
 
 test("planet editor keeps the card grid stable and uses contained modal scrolling", () => {
     const screen = fs.readFileSync(path.join(__dirname,"..","..","src","components","ChangeWorld.tsx"),"utf8");
-    const css = fs.readFileSync(path.join(__dirname,"..","..","src","worlds.css"),"utf8");
+    const css = fs.readFileSync(path.join(__dirname,"..", "..", "src", "planets", "worlds.css"),"utf8");
     assert.match(screen,/const WorldGrid = memo\(function WorldGrid/);
     assert.match(screen,/const beginEditWorld = useCallback/);
     assert.match(screen,/const selectPlanet = useCallback[\s\S]*?\}, \[onSelect, switchingWorldId\]\)/);

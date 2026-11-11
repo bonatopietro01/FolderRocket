@@ -64,7 +64,7 @@ Il benchmark Graph confronta il servizio salvato prima delle patch con il serviz
 
 ## Context and Orientation
 
-`src/components/ChangeWorld.tsx` contiene il rendering Planet condiviso. `src/worlds.css` contiene gli stili dei pianeti. `src/App.css`, `src/App.tsx`, `FolderManagement.tsx` e `TreeRocket.tsx` governano header, righe e layout. `PlanetGraph.tsx`, `backend/services/planetGraphService.js` e `obsidianVaultService.js` governano grafo e vault. `EmailConversations.tsx`, Gmail/Outlook e i servizi di selezione governano i messaggi e gli account. Le fixture sotto `tests/ui/` usano dati inventati.
+`src/components/ChangeWorld.tsx` contiene il rendering Planet condiviso. `src/planets/worlds.css` contiene gli stili dei pianeti. `src/App.css`, `src/App.tsx`, `FolderManagement.tsx` e `TreeRocket.tsx` governano header, righe e layout. `PlanetGraph.tsx`, `backend/services/planet-knowledge/planetGraphService.js` e `obsidianVaultService.js` governano grafo e vault. `EmailConversations.tsx`, Gmail/Outlook e i servizi di selezione governano i messaggi e gli account. Le fixture sotto `tests/ui/` usano dati inventati.
 
 TaskState iniziale:
 

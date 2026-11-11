@@ -1,5 +1,5 @@
 require("./services/pipeErrorGuards").attachLogPipeErrorGuards([process.stdout, process.stderr]);
-require("./services/hostFilesystem");
+require("./services/files/hostFilesystem");
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
@@ -28,50 +28,50 @@ function getXlsx() { return xlsxModule ??= require("xlsx"); }
 function readFileContent(...args) { return (readFileContentModule ??= require("./ai/reader"))(...args); }
 function analyzeDocument(...args) { return (analyzeDocumentModule ??= require("./ai/analyzer"))(...args); }
 function saveFileInfo(...args) { return (saveFileInfoModule ??= require("./database/excelManager"))(...args); }
-function checkFolderDeadlines(...args) { return (checkFolderDeadlinesModule ??= require("./services/deadlineService").checkFolderDeadlines)(...args); }
-function addManualDeadline(...args) { return (addManualDeadlineModule ??= require("./services/deadlineService").addManualDeadline)(...args); }
-function syncArchive(...args) { return (syncArchiveModule ??= require("./services/archiveService").syncArchive)(...args); }
+function checkFolderDeadlines(...args) { return (checkFolderDeadlinesModule ??= require("./services/analysis/deadlineService").checkFolderDeadlines)(...args); }
+function addManualDeadline(...args) { return (addManualDeadlineModule ??= require("./services/analysis/deadlineService").addManualDeadline)(...args); }
+function syncArchive(...args) { return (syncArchiveModule ??= require("./services/files/archiveService").syncArchive)(...args); }
 
-const {moveToTrash} = require("./services/trashService");
-const {executeCopyBatch, executeMoveBatch, moveFilePortable, pathExists} = require("./services/fileBatchService");
-const {searchFiles} = require("./services/searchService");
-const {inventoryFileTypes} = require("./services/fileTypeInventoryService");
-const {readDashboardPreferences, writeDashboardPreferences} = require("./services/userPreferencesService");
-const planetGraph = require("./services/planetGraphService");
-const {matchesSavedConversationScope,conversationContactIdentity,mergeSavedChatSelectorThreads,findInboxThreadById,chatInboxPageOptions,senderInboxQuery} = require("./services/emailConversationSelectionService");
-const {buildGmailAccountCatalog} = require("./services/gmailAccountCatalog");
-const {buildProviderAccountCatalog} = require("./services/providerAccountCatalog");
-const worldEmailAccountService = require("./services/worldEmailAccountService");
-const obsidianVault = require("./services/obsidianVaultService");
-const planetKnowledge = require("./services/planetKnowledgeService");
-const planetWiki = require("./services/planetWikiService");
-const {summarizeKnowledgeBlockers,knowledgeStatusForBlockers} = require("./services/knowledgeReadiness");
-const {createSerialWorkQueue,createLatestGenerationSlot} = require("./services/planetKnowledgePipeline");
-const localModelRuntime = require("./services/localModelRuntime");
-const canonicalPathContainment = require("./services/canonicalPathContainment");
-const {safePlanetVaultFolderName,migrateLegacyVault} = require("./services/obsidianVaultPaths");
+const {moveToTrash} = require("./services/files/trashService");
+const {executeCopyBatch, executeMoveBatch, moveFilePortable, pathExists} = require("./services/files/fileBatchService");
+const {searchFiles} = require("./services/files/searchService");
+const {inventoryFileTypes} = require("./services/files/fileTypeInventoryService");
+const {readDashboardPreferences, writeDashboardPreferences} = require("./services/auth/userPreferencesService");
+const planetGraph = require("./services/planet-knowledge/planetGraphService");
+const {matchesSavedConversationScope,conversationContactIdentity,mergeSavedChatSelectorThreads,findInboxThreadById,chatInboxPageOptions,senderInboxQuery} = require("./services/conversations/emailConversationSelectionService");
+const {buildGmailAccountCatalog} = require("./services/shared/gmailAccountCatalog");
+const {buildProviderAccountCatalog} = require("./services/shared/providerAccountCatalog");
+const worldEmailAccountService = require("./services/conversations/worldEmailAccountService");
+const obsidianVault = require("./services/planet-knowledge/obsidianVaultService");
+const planetKnowledge = require("./services/planet-knowledge/planetKnowledgeService");
+const planetWiki = require("./services/planet-knowledge/planetWikiService");
+const {summarizeKnowledgeBlockers,knowledgeStatusForBlockers} = require("./services/planet-knowledge/knowledgeReadiness");
+const {createSerialWorkQueue,createLatestGenerationSlot} = require("./services/planet-knowledge/planetKnowledgePipeline");
+const localModelRuntime = require("./services/planet-knowledge/localModelRuntime");
+const canonicalPathContainment = require("./services/files/canonicalPathContainment");
+const {safePlanetVaultFolderName,migrateLegacyVault} = require("./services/planet-knowledge/obsidianVaultPaths");
 const {getRuntimeUploadsDirectory} = require("./services/runtimePaths");
-const {assertWorkspacePath} = require("./services/userPathSecurity");
-const {listTreeDirectory, listTreeRoots, resolveDesktopRoot, resolveDesktopRoots, searchTreeRoots, treeRootsResponse} = require("./services/treeRocketService");
-const conversationNotifications = require("./services/conversationNotificationService");
-const {observeInboxThreads} = require("./services/conversationNotificationPolling");
-const {getEmailAlertSettings, normalizeProviderBlock, saveEmailAlertSettings} = require("./services/emailAlertSettingsService");
-const {startEmailAlertScheduler} = require("./services/emailAlertScheduler");
+const {assertWorkspacePath} = require("./services/files/userPathSecurity");
+const {listTreeDirectory, listTreeRoots, resolveDesktopRoot, resolveDesktopRoots, searchTreeRoots, treeRootsResponse} = require("./services/files/treeRocketService");
+const conversationNotifications = require("./services/conversations/conversationNotificationService");
+const {observeInboxThreads} = require("./services/conversations/conversationNotificationPolling");
+const {getEmailAlertSettings, normalizeProviderBlock, saveEmailAlertSettings} = require("./services/conversations/emailAlertSettingsService");
+const {startEmailAlertScheduler} = require("./services/conversations/emailAlertScheduler");
 const knowledgeJobsByScope = new Map();
 const knowledgeJobsById = new Map();
 const knowledgeWatchersByScope = new Map();
 const initializedKnowledgeScopes = new Set();
 const knowledgePipelineQueue=createSerialWorkQueue();
 const knowledgeFolderRefreshes=new Set();
-const selectedFolderWatcher=require("./services/selectedFolderWatcher");
-const {migrateLegacyConnections} = require("./services/emailTokenStore");
-const {addAuditEvent, listAuditEvents} = require("./services/auditLogService");
-const {analyzeDomainPage, analyzeProjection, downloadDomainFile, listDomainDownloads, readDomainPreview} = require("./services/projectionAnalysisService");
-const {createStickyNote, invokeWorldAssistant} = require("./services/stickyNoteAiService");
-const {recordDiagnostic, listDiagnostics, clearDiagnostics, flushDiagnostics, hasStorageWarning, safeText: safeDiagnosticText} = require("./services/diagnosticsService");
-const {integrationStatus, saveIntegrationConfiguration} = require("./services/desktopIntegrationConfigService");
-const {evaluateTeamsSourceRules} = require("./services/teamsWarningService");
-const {createBrowserBridgeToken, resolveBrowserDrop, stageBrowserDrop} = require("./services/browserBridgeService");
+const selectedFolderWatcher=require("./services/files/selectedFolderWatcher");
+const {migrateLegacyConnections} = require("./services/shared/emailTokenStore");
+const {addAuditEvent, listAuditEvents} = require("./services/diagnostics/auditLogService");
+const {analyzeDomainPage, analyzeProjection, downloadDomainFile, listDomainDownloads, readDomainPreview} = require("./services/analysis/projectionAnalysisService");
+const {createStickyNote, invokeWorldAssistant} = require("./services/planet-knowledge/stickyNoteAiService");
+const {recordDiagnostic, listDiagnostics, clearDiagnostics, flushDiagnostics, hasStorageWarning, safeText: safeDiagnosticText} = require("./services/diagnostics/diagnosticsService");
+const {integrationStatus, saveIntegrationConfiguration} = require("./services/integrations/desktopIntegrationConfigService");
+const {evaluateTeamsSourceRules} = require("./services/conversations/teamsWarningService");
+const {createBrowserBridgeToken, resolveBrowserDrop, stageBrowserDrop} = require("./services/integrations/browserBridgeService");
 const {
     createEvent: createGoogleCalendarEvent,
     authenticateRequest,
@@ -85,7 +85,7 @@ const {
     removeSession,
     resetPassword,
     setupRequired
-} = require("./services/userAuthService");
+} = require("./services/auth/userAuthService");
 
 const {
     createDraft: createGmailDraft,
@@ -107,11 +107,11 @@ const {
     listConnectedAccounts: listGmailConnectedAccounts,
     listInboxMessages,
     listInboxThreads: listGmailInboxThreads
-} = require("./services/gmailService");
+} = require("./services/integrations/gmailService");
 
 const {
     evaluateGmailWarnings
-} = require("./services/gmailWarningService");
+} = require("./services/conversations/gmailWarningService");
 
 const {
     disconnect: disconnectGoogleCalendar,
@@ -121,7 +121,7 @@ const {
     getStatus: getGoogleCalendarStatus,
     hasPendingAuthorization: hasPendingGoogleCalendarAuthorization,
     listEvents: listGoogleCalendarEvents
-} = require("./services/googleCalendarService");
+} = require("./services/integrations/googleCalendarService");
 
 const {
     createDraft: createOutlookDraft,
@@ -146,7 +146,7 @@ const {
     listTeamsChannelMessages,
     listTeamsNextPage,
     downloadTeamsMessageFile
-} = require("./services/outlookService");
+} = require("./services/integrations/outlookService");
 
 const app = express();
 const PORT = Number(process.env.PORT || process.env.FOLDERROCKET_PORT) || 3000;
@@ -678,7 +678,7 @@ app.put("/settings/worlds/:worldId", requireAuthenticated, async (req, res) => {
             if (req.body[key] !== undefined) nextWorld[key] = normaliseProfiles(req.body[key]);
         }
         if (req.body.activityNotifications !== undefined) {
-            const service = require("./services/worldActivityEmailService");
+            const service = require("./services/conversations/worldActivityEmailService");
             let config = service.normalizeWorldActivityNotifications(req.body.activityNotifications);
             const previous = currentWorld.activityNotifications || {};
             if (config.enabled) {
@@ -1194,7 +1194,7 @@ async function waitKnowledgeBatch(job){
 function boundedKnowledgeArray(value,limit){return Array.isArray(value)?value.slice(0,limit):[];}
 function analyzeKnowledgeInWorker(documents,limits,signal){
     if(!documents.length)return Promise.resolve({nodes:[],edges:[],notes:[],exclusions:[]});
-    const modulePath=path.join(__dirname,"services","localKnowledgeEngine.js");
+    const modulePath=path.join(__dirname,"services","planet-knowledge","localKnowledgeEngine.js");
     const source="const {parentPort,workerData}=require('node:worker_threads');try{const engine=require(workerData.modulePath);const result=engine.analyzeKnowledgeDocuments({documents:workerData.documents,limits:workerData.limits});parentPort.postMessage({ok:true,result});}catch(error){parentPort.postMessage({ok:false,error:String(error&&error.message||error)});}";
     return new Promise((resolve,reject)=>{
         const worker=new Worker(source,{eval:true,workerData:{modulePath,documents,limits}});let settled=false;
@@ -1261,7 +1261,7 @@ async function runKnowledgeSync(job,context){
         const flushRawBatch=async()=>{
             if(!rawBatch.length)return;
             if(runtimeStatus.available&&generatedSummaryCount<maxGeneratedSummaries){
-                const engine=require("./services/localKnowledgeEngine");
+                const engine=require("./services/planet-knowledge/localKnowledgeEngine");
                 for(const document of rawBatch){
                     await waitKnowledgeBatch(job);
                     if(generatedSummaryCount>=maxGeneratedSummaries)break;
@@ -1510,7 +1510,7 @@ app.post("/worlds/:worldId/knowledge/query",requireAuthenticated,async(req,res)=
     const query=typeof req.body?.question==="string"?req.body.question.trim().slice(0,600):"";if(!query)return res.status(400).json({message:"Enter a question to search this planet's local knowledge."});
     try{
         const knowledge=await planetKnowledge.readKnowledge(req.user.id,worldId);if(!knowledge.sourceSelectionFingerprint||knowledge.sourceSelectionFingerprint!==scope.fingerprint||!planetKnowledge.readiness({enabled:true,knowledge,fingerprint:scope.fingerprint,graphRevision:scope.graphRevision}).queryable)return res.status(409).json({message:"Current source evidence is not ready for this planet. Run or retry local knowledge sync first."});
-        const engine=require("./services/localKnowledgeEngine");const result=await engine.retrieveKnowledge({nodes:knowledge.nodes,edges:knowledge.edges,query,limit:8});
+        const engine=require("./services/planet-knowledge/localKnowledgeEngine");const result=await engine.retrieveKnowledge({nodes:knowledge.nodes,edges:knowledge.edges,query,limit:8});
         res.json({...result,externalAi:false,sourceSelectionFingerprint:knowledge.sourceSelectionFingerprint,revision:knowledge.graphRevision||"",readiness:knowledge.status});
     }catch(error){res.status(500).json({message:error instanceof Error?error.message:"Unable to query local planet knowledge."});}
 });
@@ -1935,7 +1935,7 @@ app.post("/worlds/:worldId/email/notifications/acknowledge",requireAuthenticated
 });
 
 function accountsHasConnection(userId,blockId) {
-    try {return require("./services/emailTokenStore").getConnection("gmail",userId,blockId)!=null;} catch {return false;}
+    try {return require("./services/shared/emailTokenStore").getConnection("gmail",userId,blockId)!=null;} catch {return false;}
 }
 
 async function resolveWorldThread(userId,settings,worldId,threadId,requestedBlockId,conversationAccount=null) {
@@ -2038,7 +2038,7 @@ app.post("/worlds/:worldId/email/conversations/:threadId/reply",requireAuthentic
         const mode=req.body?.mode==="send"?"send":"draft";const originalMessageId=typeof req.body?.originalMessageId==="string"?req.body.originalMessageId:"";const references=typeof req.body?.references==="string"?req.body.references:"";const subject=typeof req.body?.subject==="string"?req.body.subject:"";
         if(mode==="send") {
             const sent=await sendGmailReply({threadId,to,subject,text,attachments,originalMessageId,references},req.user.id,source.blockId);
-            const replyResult=await require("./services/sentReplyGraphUpdate").recordSentReplyGraphUpdate({sent,threadId,updateGraph:async()=>{
+            const replyResult=await require("./services/conversations/sentReplyGraphUpdate").recordSentReplyGraphUpdate({sent,threadId,updateGraph:async()=>{
                 const messageNode=planetGraph.node("email-message","gmail",`${source.blockId}:${sent.id||crypto.randomUUID()}`,subject||"Sent reply",{kind:"gmail-message",blockId:source.blockId,messageId:sent.id||"",threadId},{at:new Date().toISOString()});
                 const threadNode=planetGraph.node("email-thread","gmail",`${source.blockId}:${threadId}`,subject||"Email conversation",{kind:"gmail-thread",blockId:source.blockId,threadId});
                 if(found.world.graphEnabled===true)await planetGraph.upsertGraphData(req.user.id,worldId,[threadNode,messageNode],[planetGraph.edge("contains",threadNode.id,messageNode.id,"gmail-reply")]);
@@ -2082,7 +2082,7 @@ app.delete("/worlds/:worldId/email/conversations/:threadId/share",requireAuthent
 function readWorldActivityConfig(userId, worldId) {
     const settings = readDashboardPreferences(userId) || {};
     const world = settings.worlds?.[worldId] || {};
-    return {settings, world, config:require("./services/worldActivityEmailService").normalizeWorldActivityNotifications(world.activityNotifications)};
+    return {settings, world, config:require("./services/conversations/worldActivityEmailService").normalizeWorldActivityNotifications(world.activityNotifications)};
 }
 
 app.get("/settings/worlds/:worldId/activity-notifications", requireAuthenticated, (req, res) => {
@@ -2090,13 +2090,13 @@ app.get("/settings/worlds/:worldId/activity-notifications", requireAuthenticated
     if (!validWorldId(worldId)) return res.status(400).json({message:"Invalid planet identifier."});
     const {config, world} = readWorldActivityConfig(req.user.id, worldId);
     const runtime = world.activityNotifications?.runtime && typeof world.activityNotifications.runtime === "object" ? world.activityNotifications.runtime : {};
-    res.json({config, runtime, nextDigestAt:require("./services/worldActivityEmailService").nextDigestAt(world.activityNotifications, runtime), scheduler:"Runs every 30 seconds while FolderRocket backend is active."});
+    res.json({config, runtime, nextDigestAt:require("./services/conversations/worldActivityEmailService").nextDigestAt(world.activityNotifications, runtime), scheduler:"Runs every 30 seconds while FolderRocket backend is active."});
 });
 
 app.put("/settings/worlds/:worldId/activity-notifications", requireAuthenticated, (req, res) => {
     const worldId = String(req.params.worldId || "").trim();
     if (!validWorldId(worldId)) return res.status(400).json({message:"Invalid planet identifier."});
-    const service = require("./services/worldActivityEmailService");
+    const service = require("./services/conversations/worldActivityEmailService");
     try {
         const {settings, world, config:previous} = readWorldActivityConfig(req.user.id, worldId);
         let config = service.normalizeWorldActivityNotifications(req.body?.config);
@@ -2116,11 +2116,11 @@ app.put("/settings/worlds/:worldId/activity-notifications", requireAuthenticated
 });
 
 function awaitableListGmailAccounts(userId) {
-    try { return require("./services/emailTokenStore").listConnections("gmail", userId).map(connection => ({blockId:connection.blockId,canSend:!connection.scopes || String(connection.scopes).split(/\s+/).includes("https://www.googleapis.com/auth/gmail.compose")})); }
+    try { return require("./services/shared/emailTokenStore").listConnections("gmail", userId).map(connection => ({blockId:connection.blockId,canSend:!connection.scopes || String(connection.scopes).split(/\s+/).includes("https://www.googleapis.com/auth/gmail.compose")})); }
     catch { return []; }
 }
 function awaitableListOutlookAccounts(userId) {
-    try { return require("./services/emailTokenStore").listConnections("outlook", userId).map(connection => ({blockId:connection.blockId,canSend:String(connection.scopes || "").split(/\s+/).includes("https://graph.microsoft.com/Mail.Send")})); }
+    try { return require("./services/shared/emailTokenStore").listConnections("outlook", userId).map(connection => ({blockId:connection.blockId,canSend:String(connection.scopes || "").split(/\s+/).includes("https://graph.microsoft.com/Mail.Send")})); }
     catch { return []; }
 }
 
@@ -2130,7 +2130,7 @@ app.post("/settings/worlds/:worldId/activity-snapshot", requireAuthenticated, (r
     const {settings, world} = readWorldActivityConfig(req.user.id, worldId);
     const current = world.activityNotifications && typeof world.activityNotifications === "object" ? world.activityNotifications : {};
     if (current.enabled !== true) return res.status(409).json({message:"Activity notifications are disabled for this planet."});
-    const snapshot = require("./services/worldActivityEmailService").selectActivitySnapshotSources(req.body?.snapshot, current.sources);
+    const snapshot = require("./services/conversations/worldActivityEmailService").selectActivitySnapshotSources(req.body?.snapshot, current.sources);
     writeDashboardPreferences(req.user.id, {...settings, worlds:{...(settings.worlds || {}), [worldId]:{...world, activityNotifications:{...current, snapshot}}}});
     res.json({saved:true, updatedAt:snapshot.updatedAt});
 });
@@ -2140,7 +2140,7 @@ app.post("/settings/worlds/:worldId/activity-notifications/preview", requireAuth
     if (!validWorldId(worldId)) return res.status(400).json({message:"Invalid planet identifier."});
     try {
         const {world} = readWorldActivityConfig(req.user.id, worldId);
-        const digest = require("./services/worldActivityEmailService").buildWorldActivityDigest({worldName:String(req.body?.worldName || world.name || "Workspace").slice(0,80), config:req.body?.config, snapshot:req.body?.snapshot, emailAlerts:world.emailAlerts});
+        const digest = require("./services/conversations/worldActivityEmailService").buildWorldActivityDigest({worldName:String(req.body?.worldName || world.name || "Workspace").slice(0,80), config:req.body?.config, snapshot:req.body?.snapshot, emailAlerts:world.emailAlerts});
         res.json({preview:digest});
     } catch (error) { res.status(400).json({message:error instanceof Error ? error.message : "Unable to build digest preview."}); }
 });
@@ -2150,16 +2150,16 @@ app.post("/settings/worlds/:worldId/activity-notifications/test", requireAuthent
     if (!validWorldId(worldId)) return res.status(400).json({message:"Invalid planet identifier."});
     try {
         const {settings, world} = readWorldActivityConfig(req.user.id, worldId);
-        const config = require("./services/worldActivityEmailService").normalizeWorldActivityNotifications(req.body?.config);
+        const config = require("./services/conversations/worldActivityEmailService").normalizeWorldActivityNotifications(req.body?.config);
         const accounts = config.senderProvider === "gmail" ? await listGmailConnectedAccounts(req.user.id) : await listOutlookConnectedAccounts(req.user.id);
         const account = accounts.find(item => item.blockId === config.senderBlockId);
         if (!account) throw new Error("The selected sender account is no longer connected.");
-        require("./services/worldActivityEmailService").validForEnable({...config, enabled:true, sources:config.sources.length ? config.sources : ["dailyActivities"]}, account.canSend === true);
-        const digest = require("./services/worldActivityEmailService").buildWorldActivityDigest({worldName:String(req.body?.worldName || world.name || "Workspace").slice(0,80), config, snapshot:req.body?.snapshot, emailAlerts:world.emailAlerts});
+        require("./services/conversations/worldActivityEmailService").validForEnable({...config, enabled:true, sources:config.sources.length ? config.sources : ["dailyActivities"]}, account.canSend === true);
+        const digest = require("./services/conversations/worldActivityEmailService").buildWorldActivityDigest({worldName:String(req.body?.worldName || world.name || "Workspace").slice(0,80), config, snapshot:req.body?.snapshot, emailAlerts:world.emailAlerts});
         const sender = config.senderProvider === "gmail" ? sendGmailEmail : sendOutlookEmail;
         await sender({to:config.recipient, subject:`Test · ${digest.subject}`, text:digest.text}, req.user.id, config.senderBlockId);
         const activityNotifications = world.activityNotifications && typeof world.activityNotifications === "object" ? world.activityNotifications : {};
-        const history = require("./services/worldActivityEmailService").appendDigestHistory(activityNotifications.runtime, {at:new Date().toISOString(),kind:"test",status:"sent"});
+        const history = require("./services/conversations/worldActivityEmailService").appendDigestHistory(activityNotifications.runtime, {at:new Date().toISOString(),kind:"test",status:"sent"});
         writeDashboardPreferences(req.user.id, {...settings, worlds:{...(settings.worlds || {}), [worldId]:{...world, activityNotifications:{...activityNotifications, runtime:history}}}});
         res.json({sent:true, message:"Test email sent at your explicit request."});
     } catch (error) { res.status(400).json({message:error instanceof Error ? error.message : "Unable to send test email."}); }
@@ -3304,7 +3304,7 @@ app.post("/search-files", async (req, res) => {
 
 app.post("/files/recent", requireAuthenticated, requireAdministrator, async (req, res) => {
     try {
-        const {recentFiles, defaultRecentRoots} = require("./services/recentFilesService");
+        const {recentFiles, defaultRecentRoots} = require("./services/files/recentFilesService");
         const extra = (Array.isArray(req.body?.folders) ? req.body.folders : []).slice(0, 60).map(folder => assertUserPath(req.user, folder, {allowMissing: true}));
         res.json(await recentFiles([...defaultRecentRoots(), ...extra], {hours: req.body?.hours}));
     } catch (error) { res.status(400).json({message: error.message}); }
@@ -3380,7 +3380,7 @@ app.post("/applications/discover", requireAuthenticated, requireAdministrator, a
             res.setHeader("Cache-Control", "no-store");
             res.flushHeaders();
             const send = payload => { if (!res.destroyed && !res.writableEnded) res.write(`${JSON.stringify(payload)}\n`); };
-            const cache = require("./services/applicationDiscoveryCache");
+            const cache = require("./services/files/applicationDiscoveryCache");
             const previous = cache.read(req.user.id, appId, extensions);
             if (cachedOnly) {
                 const files = previous?.files ?? [];
@@ -3393,7 +3393,7 @@ app.post("/applications/discover", requireAuthenticated, requireAdministrator, a
                 if (!res.destroyed && !res.writableEnded) res.end();
                 return;
             }
-            const result = await require("./services/applicationDiscoveryService").discoverApplicationFiles(roots, extensions, {signal:controller.signal, previous, onProgress:progress => send({type:"progress", ...progress})});
+            const result = await require("./services/files/applicationDiscoveryService").discoverApplicationFiles(roots, extensions, {signal:controller.signal, previous, onProgress:progress => send({type:"progress", ...progress})});
             cache.write(req.user.id, appId, extensions, result);
             const {directories, ...response} = result;
             send({type:"complete", result:response});
@@ -3410,7 +3410,7 @@ app.delete("/applications/discover", requireAuthenticated, requireAdministrator,
     try {
         const appId = String(req.body?.appId || "");
         if (!/^[a-zA-Z0-9_-]{1,120}$/.test(appId)) throw new Error("Invalid application identifier.");
-        require("./services/applicationDiscoveryCache").remove(req.user.id, appId);
+        require("./services/files/applicationDiscoveryCache").remove(req.user.id, appId);
         res.json({ok:true});
     } catch (error) { res.status(400).json({message:error instanceof Error?error.message:"Unable to clear the application cache."}); }
 });
@@ -3950,7 +3950,7 @@ app.post("/files/change-format", requireAuthenticated, requireAdministrator, asy
         const mother = assertUserPath(req.user, req.body?.mother);
         const children = (Array.isArray(req.body?.children) ? req.body.children : []).map(file => assertUserPath(req.user, file));
         for (const file of [mother, ...children]) if (!(await fs.promises.stat(file)).isFile()) throw new Error("Choose files, not folders.");
-        const result = await require("./services/changeFormatService").changeFormat(mother, children, req.body?.options || {}, userWorkspace(req.user));
+        const result = await require("./services/files/changeFormatService").changeFormat(mother, children, req.body?.options || {}, userWorkspace(req.user));
         res.json(result);
     } catch (error) { res.status(400).json({message:error.message || "Unable to apply the mother format. Microsoft Word is required for documents."}); }
 });

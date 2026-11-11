@@ -3,7 +3,7 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const {listTreeDirectory, listTreeRoots, resolveDesktopRoots, searchTreeRoots, treeRootsResponse, MAX_TREE_FILES, MAX_TREE_FOLDER_COUNTS} = require("../services/treeRocketService");
+const {listTreeDirectory, listTreeRoots, resolveDesktopRoots, searchTreeRoots, treeRootsResponse, MAX_TREE_FILES, MAX_TREE_FOLDER_COUNTS} = require("../services/files/treeRocketService");
 
 test("Tree Rocket resolves the personal and public Windows Desktop roots", async () => {
     const roots = await resolveDesktopRoots({

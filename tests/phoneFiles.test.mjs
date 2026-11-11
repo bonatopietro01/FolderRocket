@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {phoneFileType} from '../src/phoneFiles.ts';
+import {phoneFileType} from '../src/components/devices/phoneFiles.ts';
 
 test('uses iPhone MTP extension when Explorer hides it from the displayed name', () => {
     assert.deepEqual(phoneFileType({name:'IMG_0042', extension:'.HEIC', mimeType:'image/heic'}), {extension:'heic', category:'image', label:'HEIC', iconName:'IMG_0042.heic'});

@@ -3,7 +3,7 @@ const fs=require("node:fs/promises");
 const os=require("node:os");
 const path=require("node:path");
 const test=require("node:test");
-const graph=require("../services/planetGraphService");
+const graph=require("../services/planet-knowledge/planetGraphService");
 
 test("folder graph reports global limits separately and keeps every source issue",async t=>{
     const root=await fs.mkdtemp(path.join(os.tmpdir(),"folderrocket-graph-diagnostics-"));

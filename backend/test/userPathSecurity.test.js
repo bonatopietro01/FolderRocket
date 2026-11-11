@@ -3,7 +3,7 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const {assertWorkspacePath} = require("../services/userPathSecurity");
+const {assertWorkspacePath} = require("../services/files/userPathSecurity");
 
 test("account workspace path validation rejects links that escape the workspace", async t => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "folderrocket-user-path-"));

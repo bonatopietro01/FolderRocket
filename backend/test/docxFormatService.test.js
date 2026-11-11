@@ -4,7 +4,7 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const JSZip = require("jszip");
-const {formatDocx} = require("../services/docxFormatService");
+const {formatDocx} = require("../services/files/docxFormatService");
 
 const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 const CT = "http://schemas.openxmlformats.org/package/2006/content-types";

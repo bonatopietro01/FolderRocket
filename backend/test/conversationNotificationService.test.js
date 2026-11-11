@@ -2,7 +2,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const test = require("node:test");
-const {createConversationNotificationService} = require("../services/conversationNotificationService");
+const {createConversationNotificationService} = require("../services/conversations/conversationNotificationService");
 
 const scope = {
     userId:"user-one",

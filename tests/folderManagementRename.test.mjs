@@ -6,7 +6,7 @@ import test from "node:test";
 
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
-const source = fs.readFileSync(new URL("../src/components/FolderManagement.tsx", import.meta.url), "utf8");
+const source = fs.readFileSync(new URL("../src/components/file-browser/FolderManagement.tsx", import.meta.url), "utf8");
 const ast = ts.createSourceFile("FolderManagement.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const handlers = [];
 function visit(node) {

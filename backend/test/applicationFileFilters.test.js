@@ -6,7 +6,7 @@ const test = require("node:test");
 const ts = require("typescript");
 
 function loadApplicationFiles() {
-    const source = fs.readFileSync(path.join(__dirname, "..", "..", "src", "applicationFiles.ts"), "utf8");
+    const source = fs.readFileSync(path.join(__dirname, "..", "..", "src", "components", "applications", "applicationFiles.ts"), "utf8");
     const output = ts.transpileModule(source, {compilerOptions: {module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022}}).outputText;
     const loaded = {exports: {}};
     vm.runInNewContext(output, {module: loaded, exports: loaded.exports});

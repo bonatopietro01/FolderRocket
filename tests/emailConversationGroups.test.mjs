@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFile} from "node:fs/promises";
-import {groupEmailConversations, normalizedSenderIdentity} from "../src/components/emailConversationGroups.ts";
-import {emailConversationScopeKey, emailConversationSelectionKey} from "../src/components/emailConversationScope.ts";
+import {groupEmailConversations, normalizedSenderIdentity} from "../src/components/email-conversations/emailConversationGroups.ts";
+import {emailConversationScopeKey, emailConversationSelectionKey} from "../src/components/email-conversations/emailConversationScope.ts";
 
 test("conversation scope and selected thread keys isolate world and mounted account", () => {
     assert.notEqual(emailConversationScopeKey("planet-a", "gmail", "block-a", "me@example.test"), emailConversationScopeKey("planet-b", "gmail", "block-a", "me@example.test"));
@@ -51,7 +51,7 @@ test("conversation grouping prefers the correspondent when the newest message is
 });
 
 test("planet conversation removal uses a persistent per-thread endpoint and exposes restore without provider deletion", async () => {
-    const component=await readFile(new URL("../src/components/EmailConversations.tsx",import.meta.url),"utf8");
+    const component=await readFile(new URL("../src/components/email-conversations/EmailConversations.tsx",import.meta.url),"utf8");
     assert.match(component,/removedThreads/);
     assert.match(component,/Removed from this planet/);
     assert.match(component,/Restore conversation/);

@@ -3,9 +3,9 @@ const assert=require("node:assert/strict");
 const fs=require("node:fs/promises");
 const os=require("node:os");
 const path=require("node:path");
-const graph=require("../services/planetGraphService");
-const readiness=require("../services/knowledgeReadiness");
-const sentReplyGraphUpdate=require("../services/sentReplyGraphUpdate");
+const graph=require("../services/planet-knowledge/planetGraphService");
+const readiness=require("../services/planet-knowledge/knowledgeReadiness");
+const sentReplyGraphUpdate=require("../services/conversations/sentReplyGraphUpdate");
 
 async function withTempDirectory(run){
     const root=await fs.mkdtemp(path.join(os.tmpdir(),"folderrocket-diagnostic-test-"));

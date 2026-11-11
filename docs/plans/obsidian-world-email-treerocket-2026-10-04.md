@@ -48,11 +48,11 @@ Limiti: non è stata eseguita una prova visiva/manuale nell'app né una verifica
 
 ## Context and Orientation
 
-- `src/worlds.ts`, `src/components/ChangeWorld.tsx`: modello pianeta, personalizzazione e selezione account.
+- `src/planets/worlds.ts`, `src/components/ChangeWorld.tsx`: modello pianeta, personalizzazione e selezione account.
 - `src/App.tsx`, `src/App.css`: stato del pianeta attivo, header/logo, navigazione, sorgenti dashboard e passaggio dati a Conversation.
-- `src/components/EmailConversations.tsx`, `backend/server.js`, `backend/services/gmailService.js`, `backend/services/outlookService.js`, cataloghi account in `backend/services/`: account e thread per Conversation.
-- `src/components/TreeRocket.tsx`, `backend/services/treeRocketService.js`, route filesystem in `backend/server.js`: origini e navigazione cartelle.
-- `src/components/PlanetGraph.tsx`, `backend/services/planetGraphService.js`: grafo interno già esistente, da collegare agli ID Markdown generati.
+- `src/components/email-conversations/EmailConversations.tsx`, `backend/server.js`, `backend/services/integrations/gmailService.js`, `backend/services/integrations/outlookService.js`, cataloghi account in `backend/services/`: account e thread per Conversation.
+- `src/components/file-browser/TreeRocket.tsx`, `backend/services/files/treeRocketService.js`, route filesystem in `backend/server.js`: origini e navigazione cartelle.
+- `src/components/planet-knowledge/PlanetGraph.tsx`, `backend/services/planet-knowledge/planetGraphService.js`: grafo interno già esistente, da collegare agli ID Markdown generati.
 - Plugin Obsidian ufficiali: [Vault](https://docs.obsidian.md/Plugins/Vault), [Build a plugin](https://docs.obsidian.md/Plugins/Getting%20started/Build%20a%20plugin), [Obsidian URI](https://help.obsidian.md/Extending%2BObsidian/Obsidian%2BURI).
 - Il grafo `graphify-out/graph.json` è stato aggiornato il 2026-10-03 23:29 UTC; i sorgenti pertinenti risultano più vecchi. Rinfrescare soltanto se Analyzer rileva modifiche successive o la query non trova relazioni pertinenti.
 

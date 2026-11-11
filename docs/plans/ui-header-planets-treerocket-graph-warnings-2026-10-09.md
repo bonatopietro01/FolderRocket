@@ -44,7 +44,7 @@ Rendere i controlli di navigazione leggibili senza coprire il marchio, migliorar
 
 ## Context and Orientation
 
-Il progetto usa React/TypeScript/Vite. Le aree di questo intervento sono `src/App.tsx` e `src/App.css` per il menu Dashboard; `src/components/ChangeWorld.tsx`, `src/worlds.ts` e `src/worlds.css` per la grafica dei pianeti; `src/components/TreeRocket.tsx` e gli stili locali in `src/App.css` per la gerarchia cartelle; `src/components/PlanetGraph.tsx` e `src/App.css` per gli avvisi; `tests/ui/tree-rocket-smoke.tsx` e `tests/README.md` per la fixture con dati inventati.
+Il progetto usa React/TypeScript/Vite. Le aree di questo intervento sono `src/App.tsx` e `src/App.css` per il menu Dashboard; `src/components/ChangeWorld.tsx`, `src/planets/worlds.ts` e `src/planets/worlds.css` per la grafica dei pianeti; `src/components/file-browser/TreeRocket.tsx` e gli stili locali in `src/App.css` per la gerarchia cartelle; `src/components/planet-knowledge/PlanetGraph.tsx` e `src/App.css` per gli avvisi; `tests/ui/tree-rocket-smoke.tsx` e `tests/README.md` per la fixture con dati inventati.
 
 TaskState:
 

@@ -55,12 +55,12 @@ Limiti rimasti: selezione granulare di singole cartelle non implementata (le car
 
 ## Context and Orientation
 
-- `src/components/PlanetGraph.tsx` e `backend/services/planetGraphService.js`: grafo per utente/pianeta e layout SVG.
-- `backend/services/obsidianVaultService.js` e route in `backend/server.js`: note Markdown, manifest, sync e fonti.
-- `src/components/ChangeWorld.tsx` e persistenza in `src/worlds.ts`: pianeti, impostazioni e controlli.
+- `src/components/planet-knowledge/PlanetGraph.tsx` e `backend/services/planet-knowledge/planetGraphService.js`: grafo per utente/pianeta e layout SVG.
+- `backend/services/planet-knowledge/obsidianVaultService.js` e route in `backend/server.js`: note Markdown, manifest, sync e fonti.
+- `src/components/ChangeWorld.tsx` e persistenza in `src/planets/worlds.ts`: pianeti, impostazioni e controlli.
 - `src/App.tsx` e `src/App.css`: logo, navigazione, schede, Conversation e disposizione principale.
-- `src/components/EmailConversations.tsx`, `backend/services/gmailService.js`, `outlookService.js`, `worldEmailAccountService.js`: account e conversazioni.
-- `src/components/TreeRocket.tsx`, `backend/services/treeRocketService.js`, `applicationDiscoveryService.js` e `applicationDiscoveryCache.js`: radici file, Desktop e inventario Apps.
+- `src/components/email-conversations/EmailConversations.tsx`, `backend/services/integrations/gmailService.js`, `outlookService.js`, `worldEmailAccountService.js`: account e conversazioni.
+- `src/components/file-browser/TreeRocket.tsx`, `backend/services/files/treeRocketService.js`, `applicationDiscoveryService.js` e `applicationDiscoveryCache.js`: radici file, Desktop e inventario Apps.
 - Test esistenti: `backend/test/planetGraphAndConversation.test.js`, `backend/test/obsidianAndWorldSettings.test.js`, altri test di persistenza account/Tree Rocket da confermare nei sorgenti.
 - Graphify descrive relazioni statiche del codice, non la correttezza runtime.
 

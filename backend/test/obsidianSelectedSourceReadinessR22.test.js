@@ -5,8 +5,8 @@ const net=require("node:net");
 const os=require("node:os");
 const path=require("node:path");
 const test=require("node:test");
-const planetGraph=require("../services/planetGraphService");
-const planetKnowledge=require("../services/planetKnowledgeService");
+const planetGraph=require("../services/planet-knowledge/planetGraphService");
+const planetKnowledge=require("../services/planet-knowledge/planetKnowledgeService");
 
 async function freePort(){
     const server=net.createServer();

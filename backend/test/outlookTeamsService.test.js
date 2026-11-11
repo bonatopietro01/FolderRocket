@@ -1,6 +1,6 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const {getAuthorizationUrl, isSafeTeamsNextLink, listTeamsDirectoryNextPage, listTeamsNextPage, shapeTeamsMessage, shapeTeamsMessages} = require("../services/outlookService");
+const {getAuthorizationUrl, isSafeTeamsNextLink, listTeamsDirectoryNextPage, listTeamsNextPage, shapeTeamsMessage, shapeTeamsMessages} = require("../services/integrations/outlookService");
 
 test("Teams messages are normalized to safe text and do not expose arbitrary links as downloadable files", () => {
     const message = shapeTeamsMessage({

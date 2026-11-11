@@ -1,4 +1,4 @@
-import type {ManagedFolder} from './components/FolderManagement';
+import type {ManagedFolder} from './components/file-browser/FolderManagement.tsx';
 
 export function folderProjectKey(folder: ManagedFolder) {
     return (folder.appearance?.workGroup ?? folder.description ?? '').trim().toLocaleLowerCase();

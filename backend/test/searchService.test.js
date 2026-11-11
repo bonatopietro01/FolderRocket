@@ -4,7 +4,7 @@ const fsPromises = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const {searchFiles} = require("../services/searchService");
+const {searchFiles} = require("../services/files/searchService");
 
 test("folder search asynchronously scans large directory listings and yields to the event loop", async t => {
     const root = await fsPromises.mkdtemp(path.join(os.tmpdir(), "folderrocket-search-"));

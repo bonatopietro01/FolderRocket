@@ -43,7 +43,7 @@ Verifiche: `npm run lint`, `npm run build` (TypeScript + Vite), `npm test` (47 t
 
 ## Context and Orientation
 
-La cartella di lavoro conteneva modifiche non committate preesistenti in `src/App.tsx`, `src/App.css`, `src/components/FolderManagement.tsx`, `src/components/GmailSourcePanel.tsx`, `backend/server.js` e altri file; sono state preservate. `FolderManagement` riceve `onAdd` dalla callback `addFolder` di `App.tsx`; il pannello sinistro include il launcher Tree Rocket e le preview. `DailyJob.tsx` legge attività, reminder ed eventi salvati localmente. `GmailSourcePanel.tsx` usa la selezione account per pianeta e mostra ora il solo account corrente con cambio esplicito a schede.
+La cartella di lavoro conteneva modifiche non committate preesistenti in `src/App.tsx`, `src/App.css`, `src/components/file-browser/FolderManagement.tsx`, `src/components/mail/GmailSourcePanel.tsx`, `backend/server.js` e altri file; sono state preservate. `FolderManagement` riceve `onAdd` dalla callback `addFolder` di `App.tsx`; il pannello sinistro include il launcher Tree Rocket e le preview. `DailyJob.tsx` legge attività, reminder ed eventi salvati localmente. `GmailSourcePanel.tsx` usa la selezione account per pianeta e mostra ora il solo account corrente con cambio esplicito a schede.
 
 `Tree Rocket` è la navigazione locale delle cartelle e non Graphify, che serve esclusivamente ad analizzare il codice. La schermata dei pianeti offre già l’identità visiva spaziale riutilizzabile. I comandi di progetto sono `npm run lint`, `npm test` e `npm run build`; i test mirati helper usano Node `node:test` secondo le istruzioni in `AGENTS.md`.
 

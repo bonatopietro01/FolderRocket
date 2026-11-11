@@ -1,6 +1,6 @@
 const assert=require("node:assert/strict");
 const test=require("node:test");
-const runtime=require("../services/localModelRuntime");
+const runtime=require("../services/planet-knowledge/localModelRuntime");
 
 function readableBytes(text){
     const bytes=new TextEncoder().encode(text);

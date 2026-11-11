@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {applicationFileLocation, applicationFileMayBeEssential, applicationFileSensitivity, applicationSensitivityLabel, filterApplicationFiles, groupApplicationFiles, isApplicationFileInManagedFolder} from '../src/applicationFiles.ts';
+import {applicationFileLocation, applicationFileMayBeEssential, applicationFileSensitivity, applicationSensitivityLabel, filterApplicationFiles, groupApplicationFiles, isApplicationFileInManagedFolder} from '../src/components/applications/applicationFiles.ts';
 
 const files = [
     {name: 'Gear.SLDPRT', path: 'C:\\Projects\\Machine\\Gear.SLDPRT'},

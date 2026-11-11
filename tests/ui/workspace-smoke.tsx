@@ -1,9 +1,9 @@
 // Local-only fixture: all network requests are mocked; no user files are read or moved.
 import {useEffect, useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import ApplicationsWorkspace from '../../src/components/ApplicationsWorkspace';
-import DashboardFolderBrowser from '../../src/components/DashboardFolderBrowser';
-import FileDropZone from '../../src/components/FileDropZone';
+import ApplicationsWorkspace from '../../src/components/applications/ApplicationsWorkspace';
+import DashboardFolderBrowser from '../../src/components/dashboard/DashboardFolderBrowser';
+import FileDropZone from '../../src/components/file-workflows/FileDropZone';
 import {watchFolderDragHover} from '../../src/folderDragHover';
 import '../../src/App.css';
 

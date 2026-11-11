@@ -35,7 +35,7 @@ Gating snapshot e Retry conversazioni sono implementati e testati. Il backend or
 
 ## Context and Orientation
 
-Il frontend React è in `src/App.tsx` e `src/components/`; il backend Express e le route sono in `backend/server.js`; Electron inoltra i log del processo backend da `desktop/main.cjs`. Gli stili condivisi sono in `src/App.css`. `src/components/TreeRocket.tsx` usa le API Tree Rocket e la paginazione esistente. `backend/test/`, `tests/` e `tests/ui/` contengono i test pertinenti. Graphify è un aiuto statico per navigare le dipendenze del codice, non prova il comportamento runtime.
+Il frontend React è in `src/App.tsx` e `src/components/`; il backend Express e le route sono in `backend/server.js`; Electron inoltra i log del processo backend da `desktop/main.cjs`. Gli stili condivisi sono in `src/App.css`. `src/components/file-browser/TreeRocket.tsx` usa le API Tree Rocket e la paginazione esistente. `backend/test/`, `tests/` e `tests/ui/` contengono i test pertinenti. Graphify è un aiuto statico per navigare le dipendenze del codice, non prova il comportamento runtime.
 
 ## Plan of Work
 

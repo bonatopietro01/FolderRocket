@@ -1,13 +1,13 @@
 import {useState} from "react";
 import {createRoot} from "react-dom/client";
-import FolderManagement, {type ManagedFolder} from "../../src/components/FolderManagement";
-import EmailConversations from "../../src/components/EmailConversations";
-import PlanetGraph from "../../src/components/PlanetGraph";
-import ProcessingWorkspace from "../../src/components/ProcessingWorkspace";
+import FolderManagement, {type ManagedFolder} from "../../src/components/file-browser/FolderManagement";
+import EmailConversations from "../../src/components/email-conversations/EmailConversations";
+import PlanetGraph from "../../src/components/planet-knowledge/PlanetGraph";
+import ProcessingWorkspace from "../../src/components/file-studio/ProcessingWorkspace";
 import {Planet} from "../../src/components/ChangeWorld";
-import {createDefaultWorlds, type WorkspaceWorld, type WorldPlanetStyle} from "../../src/worlds";
+import {createDefaultWorlds, type WorkspaceWorld, type WorldPlanetStyle} from "../../src/planets/worlds";
 import "../../src/App.css";
-import "../../src/worlds.css";
+import "../../src/planets/worlds.css";
 
 const worlds:WorkspaceWorld[]=["alpha","beta"].map(id=>({...createDefaultWorlds()[0],id,name:`Fixture ${id}`,graphEnabled:true,emailAccount:{provider:"gmail",blockId:`account-${id}`,email:`${id}@example.test`}}));
 const requests:string[]=[];

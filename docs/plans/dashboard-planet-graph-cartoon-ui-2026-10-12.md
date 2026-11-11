@@ -47,7 +47,7 @@ R1–R7 implementati nella UI. Il Reviewer ha richiesto un fix mirato per R1 (la
 
 ## Context and Orientation
 
-Il frontend è React/TypeScript e gli stili principali sono in `src/App.css` e `src/worlds.css`. La navigazione Dashboard è montata in `src/App.tsx`; Planet Graph in `src/components/PlanetGraph.tsx`; la pagina di selezione pianeti in `src/components/ChangeWorld.tsx`. `src/worlds.ts` contiene gli identificativi persistiti degli stili: devono restare compatibili. Il branch corrente è `feature/desktop-foundation`; non creare commit o push.
+Il frontend è React/TypeScript e gli stili principali sono in `src/App.css` e `src/planets/worlds.css`. La navigazione Dashboard è montata in `src/App.tsx`; Planet Graph in `src/components/planet-knowledge/PlanetGraph.tsx`; la pagina di selezione pianeti in `src/components/ChangeWorld.tsx`. `src/planets/worlds.ts` contiene gli identificativi persistiti degli stili: devono restare compatibili. Il branch corrente è `feature/desktop-foundation`; non creare commit o push.
 
 ## Plan of Work
 

@@ -33,7 +33,7 @@ requirement_coverage:
     acceptance_criteria: [Home, area, source, topic and label pages are browsable; lexical groupings disclose uncertainty; detail includes source evidence.]
     package: P1/P2
     owner: Backend + Frontend
-    relevant_files: [backend/server.js, backend/services/planetWikiService.js, src/components/PlanetWiki.tsx, src/App.tsx]
+    relevant_files: [backend/server.js, backend/services/planet-knowledge/planetWikiService.js, src/components/planet-knowledge/PlanetWiki.tsx, src/App.tsx]
     changes: [Per-planet wiki index and details API; read-only FolderRocket wiki UI with source evidence and lexical-topic provenance.]
     evidence: [backend/test/planetWikiService.test.js 7/7; synthetic 601-note pagination; Electron opened the Lavoro wiki and showed its index and scope panel.]
     status: PASS
@@ -42,7 +42,7 @@ requirement_coverage:
     acceptance_criteria: [Metadata-only counts and size; explicit unsupported/oversized/incomplete scope; narrow scope before scanning on limits; never silently publish an alphabetical subset.]
     package: P1
     owner: Backend
-    relevant_files: [backend/server.js, backend/services/planetWikiService.js]
+    relevant_files: [backend/server.js, backend/services/planet-knowledge/planetWikiService.js]
     changes: [Metadata-only scope preflight; visible unsupported/excluded files, limits and explicit blockers; empty or unsupported-only scopes are rejected.]
     evidence: [wiki preview limits tests; Electron empty-scope preview displayed zero counts, blocker and disabled Create wiki action.]
     status: PASS
@@ -51,7 +51,7 @@ requirement_coverage:
     acceptance_criteria: [Explicit per-planet Create/Rebuild action; no login or filesystem-triggered wiki scan; failure or incomplete scope preserves last-good; Obsidian autoSync remains separate.]
     package: P1/P2
     owner: Backend + Frontend
-    relevant_files: [backend/server.js, src/components/ChangeWorld.tsx, src/App.tsx, src/components/PlanetWiki.tsx]
+    relevant_files: [backend/server.js, src/components/ChangeWorld.tsx, src/App.tsx, src/components/planet-knowledge/PlanetWiki.tsx]
     changes: [Manual per-planet create/rebuild action; login and watcher refresh triggers removed; Obsidian autoSync remains an export setting; previous complete knowledge retained on preflight/extraction failures.]
     evidence: [backend static regression for auth/login and sync; synthetic rebuild returned ready; reviewer verified empty-scope guard.]
     status: PASS
@@ -60,7 +60,7 @@ requirement_coverage:
     acceptance_criteria: [Server-side search/filter; paginated index capped at 50 summaries; detail fetched on open; graph and Q&A fetched only in Graph view.]
     package: P1/P2
     owner: Backend + Frontend
-    relevant_files: [backend/server.js, backend/services/planetWikiService.js, src/components/PlanetWiki.tsx, src/components/PlanetGraph.tsx]
+    relevant_files: [backend/server.js, backend/services/planet-knowledge/planetWikiService.js, src/components/planet-knowledge/PlanetWiki.tsx, src/components/planet-knowledge/PlanetGraph.tsx]
     changes: [Server-side search/filter and 50-summary pagination; markdown loaded only by page-detail route; Graph is a separate lazy view.]
     evidence: [601-note no-duplicate pagination test; response metrics show 50 summaries/8060 bytes/no markdown and one-page detail/2018 bytes.]
     status: PASS
@@ -69,7 +69,7 @@ requirement_coverage:
     acceptance_criteria: [Detail displays provenance/source references; progress and failure reason visible; previous complete revision remains available.]
     package: P1/P2
     owner: Backend + Frontend
-    relevant_files: [backend/server.js, backend/services/planetWikiService.js, src/components/PlanetWiki.tsx]
+    relevant_files: [backend/server.js, backend/services/planet-knowledge/planetWikiService.js, src/components/planet-knowledge/PlanetWiki.tsx]
     changes: [Page source paths/dates and links; visible job progress, blockers and last-good notice.]
     evidence: [wiki detail source-ref test; reviewer confirmed authenticated user/planet isolation and last-good guards.]
     status: PASS
@@ -103,7 +103,7 @@ handoffs:
   - {sender: coordinator, recipient: frontend, requirements: [R55, R57, R58, R59], result: wiki UI, planet actions, lazy Graph and source-panel state}
   - {sender: coordinator, recipient: reviewer, requirements: [R55, R56, R57, R58, R59], result: initial MEDIUM finding fixed; focused re-review PASS}
 validation:
-  performed: [node --check backend/server.js, backend/services/planetWikiService.js, backend/test/planetWikiService.test.js PASS; node --test --test-concurrency=1 backend/test/planetWikiService.test.js 7/7 PASS; npm run lint PASS; npm run build PASS with the existing >500 kB chunk warning; node --test tests/planetFileOnlyGraphFrontend.test.mjs tests/uiRefinementR38R49.test.mjs 6/6 PASS; synthetic 1000-file HTTP harness and metrics; Electron test profile opened Lavoro Wiki and verified the empty-scope blocker; reviewer initial review and one focused re-review PASS.]
+  performed: [node --check backend/server.js, backend/services/planet-knowledge/planetWikiService.js, backend/test/planetWikiService.test.js PASS; node --test --test-concurrency=1 backend/test/planetWikiService.test.js 7/7 PASS; npm run lint PASS; npm run build PASS with the existing >500 kB chunk warning; node --test tests/planetFileOnlyGraphFrontend.test.mjs tests/uiRefinementR38R49.test.mjs 6/6 PASS; synthetic 1000-file HTTP harness and metrics; Electron test profile opened Lavoro Wiki and verified the empty-scope blocker; reviewer initial review and one focused re-review PASS.]
   not_performed: [Full wiki navigation with a supported file and its detail page in Electron; 1000-file Electron UI profile (performance fixture exercised the local backend/API); the full backend suite did not pass cleanly, as recorded below.]
   full_backend_suite: "npm test: 156 passed, 34 failed, 1 skipped. Failures include sandbox EPERM on temp-file renames and loopback readiness, plus an existing exact-prop assertion in backend/test/worldPersistence.test.js that expects the pre-wiki WorldGrid props. The task-specific wiki suite passed."
 blockers: []
@@ -135,7 +135,7 @@ Prova manuale Electron completata sul profilo locale isolato: apertura della Wik
 
 ## Context and Orientation
 
-La UI React/TypeScript vive in `src/components/PlanetGraph.tsx`, `src/components/ChangeWorld.tsx` e `src/App.tsx`. Il server locale Express vive in `backend/server.js`; logica di persistenza e trasformazione dovrà stare nel nuovo servizio `backend/services/planetWikiService.js` o nei servizi knowledge già esistenti. La generazione esistente produce già note per fonti, cartelle e argomenti. I dati sono locali e separati per utente e pianeta.
+La UI React/TypeScript vive in `src/components/planet-knowledge/PlanetGraph.tsx`, `src/components/ChangeWorld.tsx` e `src/App.tsx`. Il server locale Express vive in `backend/server.js`; logica di persistenza e trasformazione dovrà stare nel nuovo servizio `backend/services/planet-knowledge/planetWikiService.js` o nei servizi knowledge già esistenti. La generazione esistente produce già note per fonti, cartelle e argomenti. I dati sono locali e separati per utente e pianeta.
 
 Requisiti stabili:
 

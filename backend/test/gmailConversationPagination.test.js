@@ -11,8 +11,8 @@ test("Gmail conversation paging fetches message bodies only for the requested ba
     const script=String.raw`
     (async()=>{
       const assert=require("node:assert/strict");
-      const tokens=require("./services/emailTokenStore");
-      const gmail=require("./services/gmailService");
+      const tokens=require("./services/shared/emailTokenStore");
+      const gmail=require("./services/integrations/gmailService");
       const user="pagination-user";const block="pagination-gmail";
       tokens.saveConnection("gmail",user,{accessToken:"synthetic-token",refreshToken:"synthetic-refresh",expiresAt:Date.now()+3600000},block);
       const requests=[];
@@ -49,8 +49,8 @@ test("Gmail conversation text prefers plain text, converts HTML safely, and sepa
     const script=String.raw`
     (async()=>{
       const assert=require("node:assert/strict");
-      const tokens=require("./services/emailTokenStore");
-      const gmail=require("./services/gmailService");
+      const tokens=require("./services/shared/emailTokenStore");
+      const gmail=require("./services/integrations/gmailService");
       const user="mime-user";const block="mime-gmail";
       tokens.saveConnection("gmail",user,{accessToken:"synthetic-token",refreshToken:"synthetic-refresh",expiresAt:Date.now()+3600000},block);
       const requests=[];const b64=text=>Buffer.from(text,"utf8").toString("base64url");

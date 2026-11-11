@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {isWithinUsbPath, removeDisconnectedUsbFolders} from '../src/usbFolders.ts';
+import {isWithinUsbPath, removeDisconnectedUsbFolders} from '../src/components/devices/usbFolders.ts';
 
 const local = {id:'local', name:'Local', path:'C:\\Work', description:''};
 const usb = {id:'usb', name:'USB', path:'E:\\', usbDrivePath:'E:\\', description:''};

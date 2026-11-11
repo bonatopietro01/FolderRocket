@@ -19,9 +19,9 @@ test("Gmail and Outlook draft attachments are read asynchronously without changi
     (async () => {
         const assert = require("node:assert/strict");
         const fs = require("node:fs");
-        const store = require("./services/emailTokenStore");
-        const gmail = require("./services/gmailService");
-        const outlook = require("./services/outlookService");
+        const store = require("./services/shared/emailTokenStore");
+        const gmail = require("./services/integrations/gmailService");
+        const outlook = require("./services/integrations/outlookService");
         const attachmentPath = __ATTACHMENT_PATH__;
         const secondAttachmentPath = __SECOND_ATTACHMENT_PATH__;
         const content = Buffer.from([0, 1, 2, 42, 127, 128, 255]);

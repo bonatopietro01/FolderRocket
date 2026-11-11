@@ -25,7 +25,7 @@ Il grafo include solo dati locali e fonti configurate per quello specifico piane
 - Il repository contiene già preferenze e workspace separati per pianeta tramite worldId e activeWorldStorageScope; la configurazione backend dei mondi è salvata in settings.worlds[worldId].
 - Daily Job e activity snapshot forniscono riepiloghi e attività, non un archivio completo di email/thread o eventi. Non usarli come fonte autorevole senza identificativi e provenienza.
 - Gmail esiste già come integrazione per account/blocco: il servizio offre list/detail, allegati, invio e bozze. Il flusso di invio corrente non realizza ancora una risposta thread-safe; il supporto alle bozze con allegati esiste.
-- src/dailyActivity.ts emette eventi globali senza worldId nel payload. I produttori e i listener da collegare al grafo devono attribuire ogni operazione al pianeta esplicitamente.
+- src/components/daily-work/dailyActivity.ts emette eventi globali senza worldId nel payload. I produttori e i listener da collegare al grafo devono attribuire ogni operazione al pianeta esplicitamente.
 - Sono già presenti modifiche e file non tracciati di altri interventi. Non ripristinarli, rimuoverli o inglobarli nella nuova funzione.
 
 ## Decision Log
@@ -46,12 +46,12 @@ Verifiche: `npm test` (68 test), `npm run lint`, `npm run build`, `node --check 
 
 ## Context and Orientation
 
-- src/worlds.ts definisce il modello client dei pianeti e lo scope di persistenza locale.
+- src/planets/worlds.ts definisce il modello client dei pianeti e lo scope di persistenza locale.
 - src/App.tsx contiene WorldWorkspace, navigazione principale, logo appLogo e cambio pianeta.
 - src/components/ChangeWorld.tsx contiene WorldGrid e il pannello di personalizzazione.
-- src/dailyActivity.ts e src/worldActivitySnapshot.ts gestiscono dati attività e snapshot.
+- src/components/daily-work/dailyActivity.ts e src/planets/worldActivitySnapshot.ts gestiscono dati attività e snapshot.
 - backend/server.js implementa autenticazione, settings.worlds, attività del mondo e route email.
-- backend/services/gmailService.js gestisce account, chiamate Gmail, messaggi, allegati, bozze e invii.
+- backend/services/integrations/gmailService.js gestisce account, chiamate Gmail, messaggi, allegati, bozze e invii.
 - Test esistenti vicini alla modifica: backend/test/worldPersistence.test.js, worldAssistant.test.js, worldActivityEmailService.test.js, gmailAccountCatalog.test.js e emailDraftAsyncIo.test.js. Verificare i nomi e fixture reali prima di aggiungere test.
 - Graphify è un grafo statico della codebase, non dati utente. È stato aggiornato con `npm run graph:build`; una query mirata ha individuato i percorsi tra route, servizi e componenti e i risultati sono stati confermati nei sorgenti e nei test.
 - L’indicizzazione Gmail è limitata ai primi 100 messaggi inbox per account selezionato; l’elenco conversazioni legge fino a 40 messaggi per account per richiesta e non espone ancora paginazione successiva.

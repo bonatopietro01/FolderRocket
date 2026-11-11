@@ -3,11 +3,11 @@ import {useState, type CSSProperties} from "react";
 import {createRoot} from "react-dom/client";
 import {BriefcaseBusiness, FolderCog, LayoutDashboard, Shapes, Sparkles, WandSparkles} from "lucide-react";
 import ChangeWorld from "../../src/components/ChangeWorld";
-import {createDefaultWorlds, type WorkspaceWorld} from "../../src/worlds";
+import {createDefaultWorlds, type WorkspaceWorld} from "../../src/planets/worlds";
 import folderRocketWordmark from "../../src/assets/folderrocket-wordmark.png";
-import TreeRocket from "../../src/components/TreeRocket";
+import TreeRocket from "../../src/components/file-browser/TreeRocket";
 import "../../src/App.css";
-import "../../src/worlds.css";
+import "../../src/planets/worlds.css";
 
 const fixtureWorlds: WorkspaceWorld[] = createDefaultWorlds().map((world, index) => ({
     ...world,

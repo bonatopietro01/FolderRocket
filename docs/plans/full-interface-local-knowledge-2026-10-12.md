@@ -33,7 +33,7 @@ Complete the user-approved R1–R13 changes across FolderRocket while preserving
 ## Coordination and implementation order
 
 1. Architect audits current API/data/security/filesystem contracts read-only.
-2. Coordinator updates this TaskState with contract decisions and the reproduced baseline. Assign one writer per file: Frontend owns `src/**`; Backend owns `backend/server.js`, persistence, vault and account services; AIEngineer owns `backend/services/localKnowledgeEngine.js` plus a narrowly scoped optional local-model adapter. Backend owns route wiring and settings persistence. Agree interfaces before overlapping contracts.
+2. Coordinator updates this TaskState with contract decisions and the reproduced baseline. Assign one writer per file: Frontend owns `src/**`; Backend owns `backend/server.js`, persistence, vault and account services; AIEngineer owns `backend/services/planet-knowledge/localKnowledgeEngine.js` plus a narrowly scoped optional local-model adapter. Backend owns route wiring and settings persistence. Agree interfaces before overlapping contracts.
 3. Implement R4–R6 contracts and source/vault correctness before wiring UI readiness; then finish the independent UI requirements. Coordinator owns tests and plan updates. Reviewer reviews all file changes read-only and can request at most one focused fix/re-review cycle.
 4. Run bounded synthetic tests first, then repository build/lint and changed server syntax. Attempt rendered desktop/narrow UI inspection only if a permitted local browser/app surface is available. No personal account or real vault actions.
 

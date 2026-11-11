@@ -3,7 +3,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
-const {graphRecords, syncVault} = require("../services/obsidianVaultService");
+const {graphRecords, syncVault} = require("../services/planet-knowledge/obsidianVaultService");
 
 function sampleGraph() {
     return {

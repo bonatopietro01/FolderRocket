@@ -3,8 +3,8 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const {assertWorkspacePath} = require("../services/userPathSecurity");
-const {inventoryFileTypes} = require("../services/fileTypeInventoryService");
+const {assertWorkspacePath} = require("../services/files/userPathSecurity");
+const {inventoryFileTypes} = require("../services/files/fileTypeInventoryService");
 
 test("inventory marks missing roots unavailable without returning partial counts", async t => {
     const workspace = await fs.mkdtemp(path.join(os.tmpdir(), "folderrocket-inventory-r61-"));

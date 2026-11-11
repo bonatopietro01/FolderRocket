@@ -38,7 +38,7 @@ Verifiche: `npm run lint`, `npm run build`, `npm test` (49/49), `node --test bac
 
 ## Context and Orientation
 
-La dashboard è composta in `src/App.tsx`; `src/folderProjects.ts` fornisce i gruppi e `src/components/FolderScrollFrame.tsx` gestisce il viewport delle cartelle. Gli stili vivono in `src/App.css`. Tree Rocket è un overlay portal in `src/components/TreeRocket.tsx`, aperto dal launcher in `src/components/FolderManagement.tsx`. Local Conversion è in `src/components/ProcessingWorkspace.tsx`; Change Format è in `src/components/ChangeFormatPanel.tsx`.
+La dashboard è composta in `src/App.tsx`; `src/folderProjects.ts` fornisce i gruppi e `src/components/shared/FolderScrollFrame.tsx` gestisce il viewport delle cartelle. Gli stili vivono in `src/App.css`. Tree Rocket è un overlay portal in `src/components/file-browser/TreeRocket.tsx`, aperto dal launcher in `src/components/file-browser/FolderManagement.tsx`. Local Conversion è in `src/components/file-studio/ProcessingWorkspace.tsx`; Change Format è in `src/components/file-studio/ChangeFormatPanel.tsx`.
 
 Lo stato iniziale era pulito sul branch `feature/desktop-foundation`. `CODEX.md` è stato letto integralmente. Il grafo Graphify mancava di aggiornamento rispetto ad alcuni sorgenti; `npm run graph:build` lo ha rigenerato senza modificare file tracciati.
 
@@ -79,7 +79,7 @@ Le modifiche sono UI/helper e non migrano né eliminano dati. Ripetere build e t
 
 ## Interfaces and Dependencies
 
-Nessuna nuova dipendenza o API backend. Tipi esistenti `ManagedFolder` e `DashboardFolderLayout`; React/TypeScript e stili CSS attuali. Moduli primari: `src/App.tsx`, `src/folderProjects.ts`, `src/components/FolderScrollFrame.tsx`, `src/components/TreeRocket.tsx`, `src/components/FolderManagement.tsx`, `src/components/ProcessingWorkspace.tsx`, `src/components/ChangeFormatPanel.tsx`, `src/App.css` e test correlati.
+Nessuna nuova dipendenza o API backend. Tipi esistenti `ManagedFolder` e `DashboardFolderLayout`; React/TypeScript e stili CSS attuali. Moduli primari: `src/App.tsx`, `src/folderProjects.ts`, `src/components/shared/FolderScrollFrame.tsx`, `src/components/file-browser/TreeRocket.tsx`, `src/components/file-browser/FolderManagement.tsx`, `src/components/file-studio/ProcessingWorkspace.tsx`, `src/components/file-studio/ChangeFormatPanel.tsx`, `src/App.css` e test correlati.
 
 ## Revision Notes
 

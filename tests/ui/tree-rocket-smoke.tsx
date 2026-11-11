@@ -1,9 +1,9 @@
 // Isolated visual fixture. Every folder and file is fictitious; no user files are read or modified.
 import {useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import FolderScrollFrame from '../../src/components/FolderScrollFrame';
+import FolderScrollFrame from '../../src/components/shared/FolderScrollFrame';
 import {folderDescriptionGroups, folderProjectGroups} from '../../src/folderProjects';
-import TreeRocket from '../../src/components/TreeRocket';
+import TreeRocket from '../../src/components/file-browser/TreeRocket';
 import '../../src/App.css';
 
 const rootPath = 'C:\\Fixture';

@@ -3,7 +3,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const {executeCopyBatch,executeMoveBatch} = require("../services/fileBatchService");
+const {executeCopyBatch,executeMoveBatch} = require("../services/files/fileBatchService");
 
 async function fixture() {
     const root = await fs.promises.mkdtemp(path.join(os.tmpdir(), "folderrocket-file-batch-"));

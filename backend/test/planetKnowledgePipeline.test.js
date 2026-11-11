@@ -1,6 +1,6 @@
 const test=require("node:test");
 const assert=require("node:assert/strict");
-const {createSerialWorkQueue,createLatestGenerationSlot}=require("../services/planetKnowledgePipeline");
+const {createSerialWorkQueue,createLatestGenerationSlot}=require("../services/planet-knowledge/planetKnowledgePipeline");
 
 test("generation pipeline publishes the active generation then only the newest changed scope",async()=>{
     const queue=createSerialWorkQueue(),slot=createLatestGenerationSlot(),published=[];

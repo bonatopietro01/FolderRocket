@@ -7,10 +7,11 @@ import test from "node:test";
 const require=createRequire(import.meta.url);
 const ts=require("typescript");
 function loadModule(name,extra={}) {
-    const source=fs.readFileSync(new URL(`../src/${name}.ts`,import.meta.url),"utf8");
+    const modulePaths={obsidianSyncRetry:"planets/obsidianSyncRetry",diagnostics:"components/diagnostics/diagnostics"};
+    const source=fs.readFileSync(new URL(`../src/${modulePaths[name]||name}.ts`,import.meta.url),"utf8");
     const output=ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
     const module={exports:{}};
-    vm.runInNewContext(output,{module,exports:module.exports,require:id=>id==="./api"?{API_BASE_URL:"http://localhost:3000"}:require(id),Map,Date,Promise,URL,Request,Response,Headers,Event,CustomEvent,crypto:require("node:crypto").webcrypto,performance,console:{warn(){},error(){}},...extra});
+    vm.runInNewContext(output,{module,exports:module.exports,require:id=>id==="../../api.ts"?{API_BASE_URL:"http://localhost:3000"}:require(id),Map,Date,Promise,URL,Request,Response,Headers,Event,CustomEvent,crypto:require("node:crypto").webcrypto,performance,console:{warn(){},error(){}},...extra});
     return module.exports;
 }
 

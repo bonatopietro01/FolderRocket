@@ -10,7 +10,7 @@ const require = createRequire(import.meta.url);
 const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
 test("frontend diagnostics redact Windows paths that contain spaces", async () => {
-    const sourcePath = path.join(projectRoot, "src", "diagnostics.ts");
+    const sourcePath = path.join(projectRoot, "src", "components", "diagnostics", "diagnostics.ts");
     const source = fs.readFileSync(sourcePath, "utf8");
     const output = require("typescript").transpileModule(source, {
         compilerOptions: {
@@ -30,7 +30,7 @@ test("frontend diagnostics redact Windows paths that contain spaces", async () =
     vm.runInNewContext(output, {
         module,
         exports: module.exports,
-        require: id => id === "./api" ? {API_BASE_URL: "http://localhost"} : require(id),
+        require: id => id === "../../api.ts" ? {API_BASE_URL: "http://localhost"} : require(id),
         Map,
         Date,
         Promise,
@@ -53,7 +53,7 @@ test("frontend diagnostics redact Windows paths that contain spaces", async () =
 });
 
 test("expected startup session and incomplete-wiki responses do not become diagnostic errors", async () => {
-    const sourcePath = path.join(projectRoot, "src", "diagnostics.ts");
+    const sourcePath = path.join(projectRoot, "src", "components", "diagnostics", "diagnostics.ts");
     const source = fs.readFileSync(sourcePath, "utf8");
     const output = require("typescript").transpileModule(source, {
         compilerOptions: {
@@ -81,7 +81,7 @@ test("expected startup session and incomplete-wiki responses do not become diagn
     vm.runInNewContext(output, {
         module,
         exports: module.exports,
-        require: id => id === "./api" ? {API_BASE_URL: "http://localhost"} : require(id),
+        require: id => id === "../../api.ts" ? {API_BASE_URL: "http://localhost"} : require(id),
         Map,
         Date,
         Promise,

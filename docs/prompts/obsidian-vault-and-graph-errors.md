@@ -4,7 +4,7 @@ Analizza e correggi gli errori osservati aprendo **View graph** e il vault Obsid
 
 ## 1. Crash di View graph
 
-Il rapporto diagnostico del 4 ottobre 2026 contiene errori React ripetuti: `Cannot read properties of undefined (reading 'x')`. Nel codice attuale di `src/components/PlanetGraph.tsx`, `positionNodes` assegna coordinate soltanto ai primi 900 nodi di ciascun anello, mentre `visibleNodes` può includere 1.200 nodi. Il rendering usa `positions.get(node.id)!` e legge le coordinate senza verificare che esistano.
+Il rapporto diagnostico del 4 ottobre 2026 contiene errori React ripetuti: `Cannot read properties of undefined (reading 'x')`. Nel codice attuale di `src/components/planet-knowledge/PlanetGraph.tsx`, `positionNodes` assegna coordinate soltanto ai primi 900 nodi di ciascun anello, mentre `visibleNodes` può includere 1.200 nodi. Il rendering usa `positions.get(node.id)!` e legge le coordinate senza verificare che esistano.
 
 Correggi questa incoerenza: ogni nodo effettivamente visualizzato deve ricevere coordinate valide. Gestisci anche più nodi di tipo `world`, attualmente posizionati soltanto per il primo elemento. Aggiungi una protezione nel rendering per eventuali coordinate mancanti, senza limitarti a nascondere i nodi che oggi provocano il crash. Mantieni ricerca, selezione, collegamenti, zoom, trascinamento e isolamento tra pianeti.
 
@@ -14,7 +14,7 @@ Aggiungi una regressione con almeno 1.200 nodi dello stesso tipo, verificando co
 
 In `backend/server.js` è importata `listInboxThreads`, ma tre flussi richiamano `listGmailInboxThreads`: sincronizzazione Obsidian, indicizzazione del grafo e lista delle conversazioni. Il rapporto registra `listGmailInboxThreads is not defined`.
 
-Allinea l’import e le chiamate all’esportazione reale di `backend/services/gmailService.js`, usando un alias coerente se necessario. Verifica tutte e tre le route con un provider simulato: devono recuperare i thread dell’account del pianeta corretto. Non inviare email reali per i test. Un errore del provider deve produrre uno stato comprensibile; una sincronizzazione parziale deve indicare quali fonti sono state saltate.
+Allinea l’import e le chiamate all’esportazione reale di `backend/services/integrations/gmailService.js`, usando un alias coerente se necessario. Verifica tutte e tre le route con un provider simulato: devono recuperare i thread dell’account del pianeta corretto. Non inviare email reali per i test. Un errore del provider deve produrre uno stato comprensibile; una sincronizzazione parziale deve indicare quali fonti sono state saltate.
 
 ## 3. Vault esistente e apertura in Obsidian
 

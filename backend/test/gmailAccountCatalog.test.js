@@ -5,17 +5,17 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 const vm = require("node:vm");
-const {buildGmailAccountCatalog, collectAccountAssociations} = require("../services/gmailAccountCatalog");
+const {buildGmailAccountCatalog, collectAccountAssociations} = require("../services/shared/gmailAccountCatalog");
 
 function loadEmailAccountHelpers() {
-    const sourcePath = path.join(__dirname, "..", "..", "src", "emailAccounts.ts");
+    const sourcePath = path.join(__dirname, "..", "..", "src", "components", "mail", "emailAccounts.ts");
     const source = require("node:fs").readFileSync(sourcePath, "utf8");
     const output = require("typescript").transpileModule(source, {compilerOptions:{module:require("typescript").ModuleKind.CommonJS,target:require("typescript").ScriptTarget.ES2022}}).outputText;
     const module = {exports:{}};
     vm.runInNewContext(output, {
         module,
         exports: module.exports,
-        require: id => id === "./api" ? {API_BASE_URL:"http://localhost"} : require(id),
+        require: id => id === "../../api.ts" ? {API_BASE_URL:"http://localhost"} : require(id),
         Map,
         Date,
         Promise
@@ -66,7 +66,7 @@ test("existing Gmail tokens remain shared catalog entries and are not copied int
     const directory = await fs.mkdtemp(path.join(os.tmpdir(), "folderrocket-gmail-token-test-"));
     t.after(() => fs.rm(directory, {recursive: true, force: true}));
     const tokenDirectory = path.join(directory, "tokens");
-    const servicePath = path.resolve(__dirname, "../services/emailTokenStore.js");
+    const servicePath = path.resolve(__dirname, "../services/shared/emailTokenStore.js");
     const script = `
         const assert = require("node:assert/strict");
         const store = require(${JSON.stringify(servicePath)});
@@ -98,8 +98,8 @@ test("existing Gmail tokens remain shared catalog entries and are not copied int
 });
 
 test("an explicit no-account choice is persisted and excluded from scheduled Gmail access", () => {
-    const service = require("../services/emailAlertSettingsService");
-    const scheduler = require("node:fs").readFileSync(path.join(__dirname, "..", "services", "emailAlertScheduler.js"), "utf8");
+    const service = require("../services/conversations/emailAlertSettingsService");
+    const scheduler = require("node:fs").readFileSync(path.join(__dirname, "..", "services", "conversations", "emailAlertScheduler.js"), "utf8");
     const settings = service.normalizeProviderBlock({accountBlockId: null, rules: []});
     assert.equal(settings.accountBlockId, null);
     assert.match(scheduler, /providerSettings\.accountBlockId === null/);
@@ -116,7 +116,7 @@ test("Gmail account association discovery ignores blocks explicitly set to no ac
 test("Gmail picker keeps selection world-scoped, explicit, and race-isolated", () => {
     const root = path.join(__dirname, "..", "..");
     const app = require("node:fs").readFileSync(path.join(root, "src", "App.tsx"), "utf8");
-    const panel = require("node:fs").readFileSync(path.join(root, "src", "components", "GmailSourcePanel.tsx"), "utf8");
+    const panel = require("node:fs").readFileSync(path.join(root, "src", "components", "mail", "GmailSourcePanel.tsx"), "utf8");
     assert.match(app, /key=\{`\$\{world\.id\}-\$\{block\.id\}-\$\{world\.emailAccount\?\.provider === "gmail" \? world\.emailAccount\.blockId : "none"\}`\}/);
     assert.match(app, /accountBlockId=\{world\.emailAccount\?\.provider === "gmail" \? world\.emailAccount\.blockId : null\}/);
     assert.match(panel, /accountBlockId === null \? "" : accountBlockId \|\| alertBlockId/);

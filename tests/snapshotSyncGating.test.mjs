@@ -18,7 +18,7 @@ test("planet graph snapshot sync obeys the active planet source selection",()=>{
 });
 
 test("failed conversation list, thread, and Add chat loads expose explicit bounded retries",()=>{
-    const conversations=readFileSync(new URL("../src/components/EmailConversations.tsx",import.meta.url),"utf8");
+    const conversations=readFileSync(new URL("../src/components/email-conversations/EmailConversations.tsx",import.meta.url),"utf8");
     assert.match(conversations,/retryLoad,setRetryLoad\]=useState<"list"\|"thread"\|null>/);
     assert.match(conversations,/setRetryLoad\("list"\)/);
     assert.match(conversations,/setRetryLoad\("thread"\)/);

@@ -127,17 +127,49 @@ Electron's main process owns the desktop lifecycle and starts the local backend.
 
 ```text
 FolderRocket/
-├── src/                         # React renderer, UI and assets
-├── backend/                     # Express API, AI, database, services and tests
-├── desktop/                     # Electron main process, preload and config template
-├── browser-extension/           # Optional Gmail attachment bridge
-├── obsidian-plugin/             # Optional Obsidian companion
-├── tests/                       # Workspace regression tests and UI fixtures
-├── docs/                        # Guides, architecture notes, plans and prompts
-├── scripts/                     # Packaging and local development tools
-├── build/                       # Desktop packaging assets
-├── agent-kit/                   # Agent pack integration
-└── .agents/ .codex/ .claude/ .cursor/  # Agent procedures and runtime configuration
+├── src/
+│   ├── components/
+│   │   ├── applications/       # Application files workspace
+│   │   ├── auth/               # Session and account UI
+│   │   ├── calendar/           # Calendar source
+│   │   ├── daily-work/         # Agenda, notes and activity
+│   │   ├── dashboard/          # Source layout and folder browser
+│   │   ├── devices/            # USB and phone sources
+│   │   ├── diagnostics/        # Diagnostic UI and client capture
+│   │   ├── email-conversations/
+│   │   ├── file-browser/       # Folder management and Tree Rocket
+│   │   ├── file-studio/        # Conversion and document tools
+│   │   ├── file-workflows/     # Cargo, drop zones and trash UI
+│   │   ├── mail/               # Provider panels and alerts
+│   │   ├── planet-knowledge/   # Graph, wiki and source selection
+│   │   ├── search/
+│   │   ├── settings/
+│   │   ├── shared/             # Reusable icons, layout and helpers
+│   │   └── sources/            # Recent files, capture and domain
+│   ├── planets/                # Planet state, sync and styles
+│   └── assets/
+├── backend/
+│   ├── services/
+│   │   ├── analysis/
+│   │   ├── auth/
+│   │   ├── conversations/
+│   │   ├── diagnostics/
+│   │   ├── files/
+│   │   ├── integrations/
+│   │   ├── planet-knowledge/
+│   │   └── shared/             # Account/token helpers
+│   ├── ai/
+│   ├── database/
+│   └── test/
+├── desktop/                    # Electron lifecycle and preload
+├── browser-extension/
+├── obsidian-plugin/
+├── tests/                      # Regression tests and UI fixtures
+├── docs/                       # Architecture, guides and plans
+├── scripts/                    # Build and administration tools
+│   └── legacy/                 # Explicit manual legacy utility
+├── build/                      # Packaging assets
+└── agent-kit/                  # Agent integration (runtime dotfolders also retained)
 ```
 
 The tree shows the checked-in source areas; local dependencies, generated builds, releases and user data are excluded. See [the documentation index](docs/README.md) for architecture and development guides.

@@ -43,7 +43,7 @@ Tree Rocket e il riquadro Folders di Folder Management non sono stati modificati
 
 ## Context and Orientation
 
-Il frontend è React/TypeScript in `src/`. Gli entrypoint coinvolti sono `src/components/ChangeWorld.tsx`, `PlanetGraph.tsx`, `TreeRocket.tsx`, `FolderManagement.tsx`, `EmailConversations.tsx`, `src/App.tsx`, `src/App.css`, `src/worlds.ts` e `src/worlds.css`. Le relazioni del grafo e la serializzazione Obsidian sono in `backend/services/planetGraphService.js`, `obsidianVaultService.js` e nelle route di `backend/server.js`; email Gmail usa `backend/services/gmailService.js`; radici filesystem usano `backend/services/treeRocketService.js`.
+Il frontend è React/TypeScript in `src/`. Gli entrypoint coinvolti sono `src/components/ChangeWorld.tsx`, `PlanetGraph.tsx`, `TreeRocket.tsx`, `FolderManagement.tsx`, `EmailConversations.tsx`, `src/App.tsx`, `src/App.css`, `src/planets/worlds.ts` e `src/planets/worlds.css`. Le relazioni del grafo e la serializzazione Obsidian sono in `backend/services/planet-knowledge/planetGraphService.js`, `obsidianVaultService.js` e nelle route di `backend/server.js`; email Gmail usa `backend/services/integrations/gmailService.js`; radici filesystem usano `backend/services/files/treeRocketService.js`.
 
 Test interessati: `backend/test/obsidianAndWorldSettings.test.js`, `planetGraphAndConversation.test.js`, `treeRocketService.test.js`, `dashboardTreeRocketUi.test.js`, `gmailConversationPagination.test.js`, più gli helper in `tests/planetGraphLayout.test.mjs`, `planetGraphQuery.test.mjs`, `worldObsidianFrontend.test.mjs` e `workspaceLayoutAndEmailPagination.test.mjs`.
 
@@ -93,7 +93,7 @@ Graphify aggiornato in `graphify-out/` (cartella ignorata da Git): 2.335 nodi e 
 
 ## Interfaces and Dependencies
 
-Riutilizzare lo schema `WorkspaceWorld` e la persistenza esistente in `src/worlds.ts` / backend preferences. Riutilizzare `planetGraphService` per nodi/archi stabili e `obsidianVaultService` per note/link; non aggiungere un'altra fonte di verità. Estendere l'interfaccia Gmail service/router esistente per ricerca sender/date e paginazione, mantenendo i controlli di account del pianeta. Non introdurre dipendenze runtime nuove.
+Riutilizzare lo schema `WorkspaceWorld` e la persistenza esistente in `src/planets/worlds.ts` / backend preferences. Riutilizzare `planetGraphService` per nodi/archi stabili e `obsidianVaultService` per note/link; non aggiungere un'altra fonte di verità. Estendere l'interfaccia Gmail service/router esistente per ricerca sender/date e paginazione, mantenendo i controlli di account del pianeta. Non introdurre dipendenze runtime nuove.
 
 ## Revision Notes
 

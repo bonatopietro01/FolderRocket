@@ -6,7 +6,7 @@ const read=path=>readFileSync(new URL(path,import.meta.url),"utf8");
 
 test("Applications and Tree Rocket use bounded responsive workspace controls",()=>{
     const css=read("../src/App.css");
-    const tree=read("../src/components/TreeRocket.tsx");
+    const tree=read("../src/components/file-browser/TreeRocket.tsx");
     assert.match(css,/\.app:has\(\.applicationsView\)[^{]*\{[^}]*height:100dvh[^}]*overflow:hidden/);
     assert.match(css,/\.applicationsWorkspace \.applicationsGrid[^{]*\{[^}]*overflow:auto/);
     assert.match(tree,/className="treeRocketBrowseSelect"[\s\S]*aria-label="Browse location"[\s\S]*value=\{treeRootMode\}/);
@@ -15,7 +15,7 @@ test("Applications and Tree Rocket use bounded responsive workspace controls",()
 });
 
 test("dashboard Sources omit their headings, place add controls after blocks, and center short folder rows",()=>{
-    const column=read("../src/components/DashboardSourceColumn.tsx");
+    const column=read("../src/components/dashboard/DashboardSourceColumn.tsx");
     const css=read("../src/App.css");
     assert.match(column,/className="sourcesBlockList"[\s\S]*className="sourcesAddFooter"/);
     assert.doesNotMatch(column,/<div className="sourcesColumnHeader"><strong>\{title\}<\/strong><\/div>/);
@@ -25,13 +25,13 @@ test("dashboard Sources omit their headings, place add controls after blocks, an
 });
 
 test("folder scroll edge indicators follow the active layout axis",()=>{
-    const frame=read("../src/components/FolderScrollFrame.tsx");
+    const frame=read("../src/components/shared/FolderScrollFrame.tsx");
     assert.match(frame,/layout === "folders-top"[\s\S]*viewport\.scrollLeft[\s\S]*viewport\.scrollTop/);
     assert.match(frame,/viewport\.scrollWidth - viewport\.clientWidth[\s\S]*viewport\.scrollHeight - viewport\.clientHeight/);
 });
 
 test("dashboard add-block picker escapes clipped source scrollers and remains keyboard-dismissible",()=>{
-    const column=read("../src/components/DashboardSourceColumn.tsx");
+    const column=read("../src/components/dashboard/DashboardSourceColumn.tsx");
     const css=read("../src/App.css");
     assert.match(column,/createPortal\([\s\S]*document\.body/);
     assert.match(column,/window\.addEventListener\("scroll", place, true\)/);
@@ -53,7 +53,7 @@ test("planet sections retain mounted unsaved controls when disclosures collapse"
 });
 
 test("Planet Graph keeps one local knowledge consultation with evidence and compact indexing details",()=>{
-    const graph=read("../src/components/PlanetGraph.tsx");
+    const graph=read("../src/components/planet-knowledge/PlanetGraph.tsx");
     const css=read("../src/App.css");
     assert.match(graph,/<section className="planetKnowledgeQuery" aria-label="Ask this planet's knowledge">/);
     assert.match(graph,/async function askKnowledge\([\s\S]*?\$\{knowledgeUrl\}\/query/);
@@ -66,9 +66,9 @@ test("Planet Graph keeps one local knowledge consultation with evidence and comp
 });
 
 test("Gmail Add chat has server search/paging and thread details request small pages",()=>{
-    const conversations=read("../src/components/EmailConversations.tsx");
+    const conversations=read("../src/components/email-conversations/EmailConversations.tsx");
     const server=read("../backend/server.js");
-    const gmail=read("../backend/services/gmailService.js");
+    const gmail=read("../backend/services/integrations/gmailService.js");
     assert.match(conversations,/Showing up to 20 received inbox messages per page/);
     assert.match(conversations,/No additional received conversations from this sender in the last 30 days\./);
     assert.match(conversations,/Load more conversations/);
@@ -94,7 +94,7 @@ test("Conversations uses the available application height and the shared readabl
 });
 
 test("selecting another email conversation clears and gates prior thread details",()=>{
-    const conversations=read("../src/components/EmailConversations.tsx");
+    const conversations=read("../src/components/email-conversations/EmailConversations.tsx");
     assert.match(conversations,/function selectConversation\(thread:ThreadSummary\)[\s\S]*threadGeneration\.current\+\+;setSelected\(thread\);setDetail\(null\);setDetailSelectionKey\(""\)/);
     assert.match(conversations,/if\(token===threadGeneration\.current&&selectedKeyRef\.current===requestedKey\)/);
     assert.match(conversations,/const visibleDetail=detailSelectionKey===currentSelectionKey\?detail:null/);
@@ -103,7 +103,7 @@ test("selecting another email conversation clears and gates prior thread details
 });
 
 test("Tree Rocket Desktop roots exclude linked Folder Management folders",()=>{
-    const tree=read("../src/components/TreeRocket.tsx");
+    const tree=read("../src/components/file-browser/TreeRocket.tsx");
     assert.match(tree,/treeRootMode === "desktop" \? hostRoots\.filter\(folder => folder\.kind === "desktop"\) : \[\.\.\.linkedRoots, \.\.\.hostRoots\]/);
     assert.match(tree,/\[hostRoots, linkedRoots, treeRootMode\]/);
     assert.match(tree,/mode=\$\{treeRootMode\}/);
@@ -144,7 +144,7 @@ test("conversation badge distinguishes unsupported and failed checks from a vali
 });
 
 test("opening Conversations does not acknowledge the inbox; only the opened local thread is acknowledged",()=>{
-    const conversations=read("../src/components/EmailConversations.tsx");
+    const conversations=read("../src/components/email-conversations/EmailConversations.tsx");
     const app=read("../src/App.tsx");
     const listLoader=conversations.slice(conversations.indexOf("const loadThreads="),conversations.indexOf("useEffect(()=>{const timer=window.setTimeout(()=>void loadThreads()"));
     assert.doesNotMatch(listLoader,/notifications\/acknowledge/);

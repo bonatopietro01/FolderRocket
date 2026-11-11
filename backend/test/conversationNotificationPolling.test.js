@@ -3,8 +3,8 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const test = require("node:test");
 
-const {createConversationNotificationService} = require("../services/conversationNotificationService");
-const {observeInboxThreads} = require("../services/conversationNotificationPolling");
+const {createConversationNotificationService} = require("../services/conversations/conversationNotificationService");
+const {observeInboxThreads} = require("../services/conversations/conversationNotificationPolling");
 
 test("notification polling establishes a quiet baseline, reports only new sync messages, and keeps history silent", async t => {
     const dataDirectory = await fs.mkdtemp(path.join(__dirname, ".notification-poll-"));

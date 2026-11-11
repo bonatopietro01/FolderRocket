@@ -43,9 +43,9 @@ Completare le richieste dell'utente relative alla navigazione Desktop di Tree Ro
 
 ## Context and Orientation
 
-Frontend: `src/App.tsx`, `src/App.css`, `src/worlds.ts`, `src/components/ChangeWorld.tsx`, `TreeRocket.tsx`, `PlanetGraph.tsx`, `EmailConversations.tsx`, `DashboardSourceColumn.tsx`, `FolderManagement.tsx`, `ProcessingWorkspace.tsx`, `ApplicationsWorkspace.tsx`.
+Frontend: `src/App.tsx`, `src/App.css`, `src/planets/worlds.ts`, `src/components/ChangeWorld.tsx`, `TreeRocket.tsx`, `PlanetGraph.tsx`, `EmailConversations.tsx`, `DashboardSourceColumn.tsx`, `FolderManagement.tsx`, `ProcessingWorkspace.tsx`, `ApplicationsWorkspace.tsx`.
 
-Backend: `backend/server.js`, `backend/services/treeRocketService.js`, `obsidianVaultService.js`, `planetGraphService.js`, `gmailService.js`, `emailAlertScheduler.js`. Test seams principali: `backend/test/treeRocketService.test.js`, `obsidianAndWorldSettings.test.js`, `planetGraphAndConversation.test.js`, `worldActivityEmailService.test.js`, `dashboardTreeRocketUi.test.js` e regressioni helper in `tests/`.
+Backend: `backend/server.js`, `backend/services/files/treeRocketService.js`, `obsidianVaultService.js`, `planetGraphService.js`, `gmailService.js`, `emailAlertScheduler.js`. Test seams principali: `backend/test/treeRocketService.test.js`, `obsidianAndWorldSettings.test.js`, `planetGraphAndConversation.test.js`, `worldActivityEmailService.test.js`, `dashboardTreeRocketUi.test.js` e regressioni helper in `tests/`.
 
 ## Plan of Work
 

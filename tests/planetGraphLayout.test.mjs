@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
-import {normalizePlanetGraphData, positionPlanetGraphNodes} from "../src/components/planetGraphLayout.ts";
+import {normalizePlanetGraphData, positionPlanetGraphNodes} from "../src/components/planet-knowledge/planetGraphLayout.ts";
 
 test("layout assigns positions to every visible node, including nodes beyond the old ring cap", () => {
     const nodes=Array.from({length:1200},(_,index)=>({id:`folder-${index}`,type:"folder",label:`Folder ${index}`}));
@@ -40,9 +40,9 @@ test("invalid graph node and edge shapes are discarded before layout", () => {
 });
 
 test("planet graph identifies Obsidian and explains verified shared graph/vault links", () => {
-    const component=readFileSync(new URL("../src/components/PlanetGraph.tsx",import.meta.url),"utf8");
+    const component=readFileSync(new URL("../src/components/planet-knowledge/PlanetGraph.tsx",import.meta.url),"utf8");
     const css=readFileSync(new URL("../src/App.css",import.meta.url),"utf8");
-    assert.match(component,/obsidianMark from "\.\.\/assets\/obsidian-mark\.svg"/);
+    assert.match(component,/obsidianMark from "\.\.\/\.\.\/assets\/obsidian-mark\.svg"/);
     assert.match(component,/<h1>Planet \{world\.name\} Graph<\/h1>/);
     assert.match(component,/Knowledge links and generated Obsidian notes share the same planet scope/);
     assert.match(css,/\.planetGraphTitle>img\s*\{/);

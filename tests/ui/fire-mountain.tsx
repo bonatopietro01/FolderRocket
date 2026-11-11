@@ -1,8 +1,8 @@
 // This fixture never calls the backend or touches real files.
 import {useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import FireMountain from '../../src/components/FireMountain';
-import RecentFilesSourcePanel from '../../src/components/RecentFilesSourcePanel';
+import FireMountain from '../../src/components/file-workflows/FireMountain';
+import RecentFilesSourcePanel from '../../src/components/sources/RecentFilesSourcePanel';
 import '../../src/App.css';
 
 const requests: string[] = [];

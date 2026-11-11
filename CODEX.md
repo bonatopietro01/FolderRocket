@@ -1,5 +1,7 @@
 # CODEX.md — FolderRocket Project Context
 
+> Current layout: see [repository structure](docs/architecture/REPOSITORY_STRUCTURE.md). The product descriptions below include historical prototype assumptions; verify behavior in current source. FolderRocket currently has an Electron host, provider panels, search and planet knowledge UI.
+
 ## 1. Project identity
 
 **Project name:** FolderRocket
@@ -120,7 +122,7 @@ Contains:
 
 ## 5. FileDropZone behavior
 
-`src/components/FileDropZone.tsx` is the main destination-folder component.
+`src/components/file-workflows/FileDropZone.tsx` is the main destination-folder component.
 
 ### 5.1 Required capabilities
 
@@ -225,7 +227,7 @@ The exact data model may evolve, but archive data and deadline data must remain 
 
 ```text
 backend/database/excelManager.js
-backend/services/archiveService.js
+backend/services/files/archiveService.js
 ```
 
 ### 6.3 Manual archive synchronization
@@ -312,7 +314,7 @@ Motivazione
 
 ```text
 backend/database/deadlineExcelManager.js
-backend/services/deadlineService.js
+backend/services/analysis/deadlineService.js
 backend/ai/deadlineAnalyzer.js
 ```
 
@@ -433,7 +435,7 @@ The intended user flow is:
 ### 8.2 Current component
 
 ```text
-src/components/FireMountain.tsx
+src/components/file-workflows/FireMountain.tsx
 ```
 
 ### 8.3 Browser limitations

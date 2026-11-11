@@ -7,7 +7,7 @@ import {createRequire} from 'node:module';
 const require=createRequire(new URL('../backend/package.json',import.meta.url));
 const JSZip=require('jszip');
 const {DOMParser}=require('@xmldom/xmldom');
-const {formatDocx,classifyParagraph}=require('./services/docxFormatService');
+const {formatDocx,classifyParagraph}=require('./services/files/docxFormatService');
 const W='http://schemas.openxmlformats.org/wordprocessingml/2006/main',R='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 
 async function fixture(file,mother){

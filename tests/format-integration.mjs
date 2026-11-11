@@ -5,7 +5,7 @@ import path from 'node:path';
 import {promisify} from 'node:util';
 import {execFile} from 'node:child_process';
 import assert from 'node:assert/strict';
-import {changeFormat} from '../backend/services/changeFormatService.js';
+import {changeFormat} from '../backend/services/files/changeFormatService.js';
 const run=promisify(execFile);
 const withWord=process.argv.includes('--word');
 const directory=await fs.mkdtemp(path.join(os.tmpdir(),'folderrocket-format-test-'));

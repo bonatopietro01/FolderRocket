@@ -19,7 +19,7 @@ Esaminare i sorgenti, i test, la documentazione e la configurazione di FolderRoc
 
 ## Surprises & Discoveries
 
-- All'inizio del lavoro il branch è `feature/desktop-foundation`. Erano già presenti modifiche a `AGENTS.md`, `src/App.css`, `src/components/TreeRocket.tsx`, test UI e `.codex/agents/`; vanno preservate.
+- All'inizio del lavoro il branch è `feature/desktop-foundation`. Erano già presenti modifiche a `AGENTS.md`, `src/App.css`, `src/components/file-browser/TreeRocket.tsx`, test UI e `.codex/agents/`; vanno preservate.
 - Il grafo `graphify-out/graph.json` iniziale conteneva 1916 nodi. È stato aggiornato due volte durante l'audit; il risultato finale contiene 1955 nodi e 3778 archi. Le query mirate confermano i punti d'ingresso `src/App.tsx`, `src/api.ts`, `backend/server.js`, i flussi file, la ricerca e le bozze email. Ogni relazione è stata verificata nel codice e nei test pertinenti.
 - Il repository documenta profili locali e permessi futuri in `docs/LOCAL_PROFILES_ROADMAP.md` e `docs/WORLD_PERMISSIONS_FUTURE.md`, oltre a più piani Tree Rocket e note workflow.
 - La build Vite segnala CSS come principale quota dei tempi di plugin; gli asset `tree-rocket-logo.png` (1.45 MB) e `folderrocket-space-login.png` (1.71 MB) sono grandi. La build elenca però diversi chunk e non stabilisce che questi asset rallentino l'avvio: verificarne i punti di caricamento e misurare prima di proporre ottimizzazioni.
@@ -47,11 +47,11 @@ Tre correzioni prestazionali/privacy e una correzione di isolamento dei percorsi
 
 ## Context and Orientation
 
-Moduli nuovi/modificati per l’audit: `backend/services/searchService.js`, `backend/services/gmailService.js`, `backend/services/outlookService.js`, `backend/services/diagnosticsService.js`, `backend/services/userPathSecurity.js`, `src/diagnostics.ts`; test nuovi/estesi in `backend/test/` e `tests/diagnostics.test.mjs`.
+Moduli nuovi/modificati per l’audit: `backend/services/files/searchService.js`, `backend/services/integrations/gmailService.js`, `backend/services/integrations/outlookService.js`, `backend/services/diagnostics/diagnosticsService.js`, `backend/services/files/userPathSecurity.js`, `src/components/diagnostics/diagnostics.ts`; test nuovi/estesi in `backend/test/` e `tests/diagnostics.test.mjs`.
 
 Frontend React/TypeScript/Vite in `src/`, API comune in `src/api.ts`, backend Node/Express in `backend/`, processi e preload Electron in `desktop/`, estensione opzionale Gmail in `browser-extension/`, test backend in `backend/test/` e regressioni/helper/fixture UI in `tests/`. I package definiscono `npm run build` (TypeScript e Vite), `npm run lint`, `npm test` e `npm run graph:build`. `tests/README.md` descrive i test helper Node 24 e le fixture UI.
 
-Per modifiche alla dashboard Tree Rocket si deve rispettare il worktree già modificato: `src/App.css`, `src/components/TreeRocket.tsx`, `backend/test/dashboardTreeRocketUi.test.js`, `tests/README.md` e `tests/ui/tree-rocket-smoke.tsx`.
+Per modifiche alla dashboard Tree Rocket si deve rispettare il worktree già modificato: `src/App.css`, `src/components/file-browser/TreeRocket.tsx`, `backend/test/dashboardTreeRocketUi.test.js`, `tests/README.md` e `tests/ui/tree-rocket-smoke.tsx`.
 
 ## Plan of Work
 

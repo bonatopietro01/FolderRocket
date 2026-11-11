@@ -1,7 +1,7 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
-const {appendDigestHistory, buildWorldActivityDigest, dueDigestKey, nextDigestAt, normalizeWorldActivityNotifications, sanitizeActivitySnapshot, selectActivitySnapshotSources, validForEnable} = require("../services/worldActivityEmailService");
-const {runWorldActivityDigest} = require("../services/emailAlertScheduler");
+const {appendDigestHistory, buildWorldActivityDigest, dueDigestKey, nextDigestAt, normalizeWorldActivityNotifications, sanitizeActivitySnapshot, selectActivitySnapshotSources, validForEnable} = require("../services/conversations/worldActivityEmailService");
+const {runWorldActivityDigest} = require("../services/conversations/emailAlertScheduler");
 
 const baseConfig = {
     enabled:true,

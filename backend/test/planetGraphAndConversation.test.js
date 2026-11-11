@@ -5,10 +5,10 @@ const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
 
-const graphStore = require("../services/planetGraphService");
-const gmail = require("../services/gmailService");
-const obsidianVault = require("../services/obsidianVaultService");
-const canonicalPaths = require("../services/canonicalPathContainment");
+const graphStore = require("../services/planet-knowledge/planetGraphService");
+const gmail = require("../services/integrations/gmailService");
+const obsidianVault = require("../services/planet-knowledge/obsidianVaultService");
+const canonicalPaths = require("../services/files/canonicalPathContainment");
 
 test("planet graph persistence is isolated by user and world", async t => {
     const root = await fs.mkdtemp(path.join(os.tmpdir(), "folderrocket-planet-graph-"));
@@ -121,7 +121,7 @@ test("planet graph persistence keeps only world and local filesystem nodes",asyn
 });
 
 test("sender conversation query is limited to a rolling 30-day inbox scope and rejects query injection",()=>{
-    const {senderInboxQuery}=require("../services/emailConversationSelectionService");
+    const {senderInboxQuery}=require("../services/conversations/emailConversationSelectionService");
     assert.equal(senderInboxQuery("Alice@example.com"),"newer_than:30d from:alice@example.com");
     assert.throws(()=>senderInboxQuery("alice@example.com OR in:anywhere"),/invalid/i);
     const server=require("node:fs").readFileSync(require("node:path").join(__dirname,"..","server.js"),"utf8");
@@ -376,8 +376,8 @@ test("Gmail replies retain provider thread and RFC reply headers without sending
     const script = String.raw`
     (async () => {
         const assert = require("node:assert/strict");
-        const store = require("./services/emailTokenStore");
-        const gmail = require("./services/gmailService");
+        const store = require("./services/shared/emailTokenStore");
+        const gmail = require("./services/integrations/gmailService");
         const userId = "synthetic-reply-user";
         const blockId = "synthetic-gmail";
         store.saveConnection("gmail", userId, {accessToken:"synthetic-token",refreshToken:"synthetic-refresh",expiresAt:Date.now()+3600000,scopes:"https://www.googleapis.com/auth/gmail.compose"}, blockId);

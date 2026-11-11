@@ -1,14 +1,14 @@
 // Isolated UI fixture; requests never reach the real backend.
 import {useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import ProcessingWorkspace from '../../src/components/ProcessingWorkspace';
-import RecentFilesSourcePanel from '../../src/components/RecentFilesSourcePanel';
-import PhoneSourcePanel from '../../src/components/PhoneSourcePanel';
-import DashboardSourceBlock from '../../src/components/DashboardSourceBlock';
-import FolderManagement from '../../src/components/FolderManagement';
-import type {ManagedFolder} from '../../src/components/FolderManagement';
-import FolderAppearanceStyles from '../../src/components/FolderAppearanceStyles';
-import FileDropZone from '../../src/components/FileDropZone';
+import ProcessingWorkspace from '../../src/components/file-studio/ProcessingWorkspace';
+import RecentFilesSourcePanel from '../../src/components/sources/RecentFilesSourcePanel';
+import PhoneSourcePanel from '../../src/components/devices/PhoneSourcePanel';
+import DashboardSourceBlock from '../../src/components/dashboard/DashboardSourceBlock';
+import FolderManagement from '../../src/components/file-browser/FolderManagement';
+import type {ManagedFolder} from '../../src/components/file-browser/FolderManagement';
+import FolderAppearanceStyles from '../../src/components/shared/FolderAppearanceStyles';
+import FileDropZone from '../../src/components/file-workflows/FileDropZone';
 import {folderProjectGroups} from '../../src/folderProjects';
 import '../../src/App.css';
 const files=[{name:'mother.docx',path:'C:\\Fixture\\mother.docx',size:4096},{name:'child.docx',path:'C:\\Fixture\\child.docx',size:4096}];

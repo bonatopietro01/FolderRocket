@@ -20,7 +20,7 @@ Ogni pianeta potrà inoltre configurare riepiloghi/alert email opt-in con fonti 
 
 ## Surprises & Discoveries
 
-- `backend/services/emailAlertScheduler.js` già controlla regole Gmail/Outlook ogni 30 secondi e conserva i risultati per pianeta; non invia notifiche in uscita.
+- `backend/services/conversations/emailAlertScheduler.js` già controlla regole Gmail/Outlook ogni 30 secondi e conserva i risultati per pianeta; non invia notifiche in uscita.
 - `DailyJob` e `StickyNotes` leggono la cronologia e i promemoria da localStorage, non dal backend. Il backend deve ricevere solo snapshot minimizzati e limitati, con `worldId` esplicito, per poterli includere nei digest.
 - Il token Gmail attuale richiede `gmail.readonly` e `gmail.compose`; il token Outlook richiede `Mail.Read` e `Mail.ReadWrite`, ma non `Mail.Send`. La concessione Outlook per l'invio deve essere una scelta OAuth separata e manifesta.
 - `backend/scripts/open-application.ps1` usa `Get-StartApps` per risolvere nomi/appId in avvio, ma Tree Rocket Apps non offre ancora una route di inventario.
@@ -46,11 +46,11 @@ Verifiche completate: `npm run lint`; `npm run build` (TypeScript e Vite); `npm 
 
 ## Context and Orientation
 
-La UI Tree Rocket è in `src/components/TreeRocket.tsx`, montata da `src/components/FolderManagement.tsx`; i relativi stili sono in `src/App.css`. Il servizio filesystem è `backend/services/treeRocketService.js` e le route sono in `backend/server.js`. Il launcher PowerShell è `backend/scripts/open-application.ps1`, eseguito da `backend/services/windowsTask.js`.
+La UI Tree Rocket è in `src/components/file-browser/TreeRocket.tsx`, montata da `src/components/file-browser/FolderManagement.tsx`; i relativi stili sono in `src/App.css`. Il servizio filesystem è `backend/services/files/treeRocketService.js` e le route sono in `backend/server.js`. Il launcher PowerShell è `backend/scripts/open-application.ps1`, eseguito da `backend/services/windowsTask.js`.
 
-Folders on Top usa `src/App.tsx`, `src/folderProjects.ts`, `src/components/FolderScrollFrame.tsx` e regole CSS sovrapposte in `src/App.css`. Folder Management espone `ManagedFolder.appearance`; File Studio applica i colori tramite `src/components/FolderAppearanceStyles.tsx`.
+Folders on Top usa `src/App.tsx`, `src/folderProjects.ts`, `src/components/shared/FolderScrollFrame.tsx` e regole CSS sovrapposte in `src/App.css`. Folder Management espone `ManagedFolder.appearance`; File Studio applica i colori tramite `src/components/shared/FolderAppearanceStyles.tsx`.
 
-Le preferenze server per pianeta sono JSON in `userPreferencesService.js` e `worlds[worldId]`. Gli alert inbox sono normalizzati da `emailAlertSettingsService.js` ed elaborati da `emailAlertScheduler.js`; provider OAuth e API sono in `gmailService.js`, `outlookService.js` e `googleCalendarService.js`. Daily activity e reminder sono lato frontend in `src/dailyActivity.ts` e `src/components/StickyNotes.tsx`; `DailyJob.tsx` ha già composizione email manuale in bozza, non invio automatico.
+Le preferenze server per pianeta sono JSON in `userPreferencesService.js` e `worlds[worldId]`. Gli alert inbox sono normalizzati da `emailAlertSettingsService.js` ed elaborati da `emailAlertScheduler.js`; provider OAuth e API sono in `gmailService.js`, `outlookService.js` e `googleCalendarService.js`. Daily activity e reminder sono lato frontend in `src/components/daily-work/dailyActivity.ts` e `src/components/daily-work/StickyNotes.tsx`; `DailyJob.tsx` ha già composizione email manuale in bozza, non invio automatico.
 
 Il checkout contiene già modifiche locali in numerosi file e un ExecPlan non tracciato del lavoro precedente. Non sostituire né ripulire tali file; modificare solo i punti necessari e lasciare intatti gli altri cambiamenti dell'utente.
 

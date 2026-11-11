@@ -3,13 +3,13 @@ const fs = require("node:fs/promises");
 const os = require("node:os");
 const path = require("node:path");
 const test = require("node:test");
-const {legacyEmailAccountCandidates, normalizeEmailAccount, resolveWorldEmailAccount} = require("../services/worldEmailAccountService");
-const graphStore = require("../services/planetGraphService");
-const {syncVault, normalizeSourceSelection, fileOnlySourceSelection, filterRecordsBySources, filterGraphBySources, graphRecords, normalizeRecordBatch, MAX_NOTES} = require("../services/obsidianVaultService");
-const {listTreeRoots, resolveDesktopRoot} = require("../services/treeRocketService");
+const {legacyEmailAccountCandidates, normalizeEmailAccount, resolveWorldEmailAccount} = require("../services/conversations/worldEmailAccountService");
+const graphStore = require("../services/planet-knowledge/planetGraphService");
+const {syncVault, normalizeSourceSelection, fileOnlySourceSelection, filterRecordsBySources, filterGraphBySources, graphRecords, normalizeRecordBatch, MAX_NOTES} = require("../services/planet-knowledge/obsidianVaultService");
+const {listTreeRoots, resolveDesktopRoot} = require("../services/files/treeRocketService");
 const {resolveManagedObsidianVault} = require("../../desktop/obsidianVaultProtocol.cjs");
-const {buildProviderAccountCatalog} = require("../services/providerAccountCatalog");
-const {safePlanetVaultFolderName,migrateLegacyVault} = require("../services/obsidianVaultPaths");
+const {buildProviderAccountCatalog} = require("../services/shared/providerAccountCatalog");
+const {safePlanetVaultFolderName,migrateLegacyVault} = require("../services/planet-knowledge/obsidianVaultPaths");
 
 test("world settings API validates and round-trips all supported planet styles and colors", async () => {
     const server=await fs.readFile(path.join(__dirname,"..","server.js"),"utf8");
@@ -82,7 +82,7 @@ test("Gmail inbox account selection stays per planet while Daily Jobs keeps its 
     assert.deepEqual(resolveWorldEmailAccount(settings.worlds.work,settings,"work").selection,{provider:"gmail",blockId:"gmail-work"});
     assert.deepEqual(resolveWorldEmailAccount(settings.worlds.personal,settings,"personal").selection,{provider:"gmail",blockId:"gmail-personal"});
     assert.equal(resolveWorldEmailAccount({name:"New planet"},{...settings,worlds:{...settings.worlds,new:{name:"New planet"}}},"new").selection,null,"a new planet does not inherit another planet's connected inbox account");
-    const digest=require("../services/worldActivityEmailService").normalizeWorldActivityNotifications(settings.worlds.work.activityNotifications);
+    const digest=require("../services/conversations/worldActivityEmailService").normalizeWorldActivityNotifications(settings.worlds.work.activityNotifications);
     assert.equal(digest.senderProvider,"outlook");
     assert.equal(digest.senderBlockId,"outlook-digest","the Daily Jobs sender is separate from the planet inbox account");
     const route=require("node:fs").readFileSync(path.join(__dirname,"..","server.js"),"utf8");
@@ -253,7 +253,7 @@ test("authenticated per-world Obsidian and account settings stay local and world
     const personal=await fetch(`${base}/worlds/personal/obsidian`,auth);assert.equal((await personal.json()).config.enabled,false,"one planet's vault setting must not leak to another");
     const previousTokenDirectory=process.env.FOLDERROCKET_TOKEN_DIR;process.env.FOLDERROCKET_TOKEN_DIR=path.join(root,"tokens");
     try {
-        const emailTokenStore=require("../services/emailTokenStore");
+        const emailTokenStore=require("../services/shared/emailTokenStore");
         emailTokenStore.saveConnection("gmail",authUser.id,{email:"selected@example.test",accessToken:"synthetic-access-token",refreshToken:"synthetic-refresh-token",expiresAt:Date.now()+3600000},"gmail-settings-fixture");
         emailTokenStore.saveConnection("outlook",authUser.id,{email:"outlook@example.test",accessToken:"synthetic-outlook-access-token",refreshToken:"synthetic-outlook-refresh-token",expiresAt:Date.now()+3600000},"outlook-settings-fixture");
         const selectedAccount=await fetch(`${base}/settings/worlds/work`,{...auth,method:"PUT",headers:{...auth.headers,"Content-Type":"application/json"},body:JSON.stringify({emailAccount:{provider:"gmail",blockId:"gmail-settings-fixture"}})});assert.equal(selectedAccount.status,200,await selectedAccount.text());

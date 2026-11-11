@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import {recentFiles} from '../backend/services/recentFilesService.js';
-import {validateFormatJob} from '../backend/services/changeFormatService.js';
+import {recentFiles} from '../backend/services/files/recentFilesService.js';
+import {validateFormatJob} from '../backend/services/files/changeFormatService.js';
 import {folderDescriptionGroups, folderProjectGroups} from '../src/folderProjects.ts';
 
 test('recent scan includes nested new files once and excludes temporary downloads', async()=>{

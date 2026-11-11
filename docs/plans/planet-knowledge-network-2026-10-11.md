@@ -32,7 +32,7 @@ Poiché il repository non contiene un modello locale o un motore di embeddings, 
 
 ## Surprises & Discoveries
 
-- `graphRecords()` in `backend/services/obsidianVaultService.js` produce attualmente soprattutto metadati e collegamenti da edge già indicizzati; non estrae contenuti di file né crea conoscenza tematica.
+- `graphRecords()` in `backend/services/planet-knowledge/obsidianVaultService.js` produce attualmente soprattutto metadati e collegamenti da edge già indicizzati; non estrae contenuti di file né crea conoscenza tematica.
 - `backend/ai/reader.js` estrae localmente DOCX, PDF, TXT e XLSX. La selezione grafica include anche DOC/PPT/media, ma nel repository non è stato trovato un estrattore locale per quei formati, OCR, modello locale, embeddings o vector store.
 - `backend/ai/analyzer.js` e altri servizi AI usano OpenAI; non devono essere riutilizzati dal nuovo percorso.
 - La selezione sorgenti appartiene a `world.obsidian` e già contiene categorie, root, subfolder, estensioni e thread selezionati. Account Gmail è quello già associato esplicitamente al Planet; l’attuale export Outlook di conversazioni è non supportato.
@@ -57,19 +57,19 @@ Poiché il repository non contiene un modello locale o un motore di embeddings, 
 - La query segnala possibili contraddizioni solo quando fonti distinte contengono frasi con contenuto lessicale quasi uguale e negazione esplicita opposta. Il messaggio dichiara che si tratta di un controllo euristico e invita a verificare le note citate.
 - Planet Graph mostra inizialmente 100 nodi e li espande a gruppi di 100; il layout dei nodi knowledge resta dentro il viewBox anche al massimo di 500 nodi, nascondendo le etichette secondarie solo quando la vista è densa.
 - Limiti correnti: fino a 250 file selezionati, 2 MB per file, 25 MB totali, 30 record di attività, 20 conversazioni Gmail con fino a 10 messaggi ciascuna, query/context bounded; job in batch con pausa/ripresa/annullamento cooperativi. La UI segnala candidati, selezionati, tetto ed eventuale lista oltre la finestra visibile.
-- Evidenze finali: suite mirata `node --test backend/test/localKnowledgeEngine.test.js tests/planetGraphLayout.test.mjs tests/knowledgeCandidateSelection.test.mjs tests/worldObsidianFrontend.test.mjs` passata 19/19. `npm run build`, `npm run lint`, `node --check backend/server.js`, `node --check backend/services/planetKnowledgeService.js`, `node --check backend/services/localKnowledgeEngine.js` e `git diff --check` passano. Il build riporta il warning Vite non bloccante per chunk minificati oltre 500 kB.
+- Evidenze finali: suite mirata `node --test backend/test/localKnowledgeEngine.test.js tests/planetGraphLayout.test.mjs tests/knowledgeCandidateSelection.test.mjs tests/worldObsidianFrontend.test.mjs` passata 19/19. `npm run build`, `npm run lint`, `node --check backend/server.js`, `node --check backend/services/planet-knowledge/planetKnowledgeService.js`, `node --check backend/services/planet-knowledge/localKnowledgeEngine.js` e `git diff --check` passano. Il build riporta il warning Vite non bloccante per chunk minificati oltre 500 kB.
 - Suite completa `npm test`: 141/144 passati. I due test che avviano server locali non raggiungono l’endpoint loopback nonostante il messaggio di ascolto; il test di sicurezza symlink fallisce con `EPERM`. Sono limiti di rete/filesystem del sandbox, non regressioni osservate nei test mirati.
 - La review read-only ha trovato tre difetti residui (riattivazione di file esclusi, segnalazione di conflitti, nodi knowledge fuori viewport); sono stati corretti e coperti dai test mirati. In base al limite di un solo ciclo di fix/review non è stata chiesta una seconda review dopo questi ultimi fix.
 - Nessuna prova manuale con vault Obsidian reale, account Gmail personale o UI live è stata eseguita. I test di layout verificano le coordinate rispetto al viewBox, ma non sostituiscono la validazione visiva nell’app.
 
 ## Context and Orientation
 
-- `src/worlds.ts` e `src/components/ChangeWorld.tsx`: selezione delle sorgenti e impostazioni per Planet.
+- `src/planets/worlds.ts` e `src/components/ChangeWorld.tsx`: selezione delle sorgenti e impostazioni per Planet.
 - `backend/server.js`: `POST /worlds/:worldId/obsidian/sync` risolve scope/record/email; `GET /worlds/:worldId/graph` legge il grafo del Planet; `POST /worlds/:worldId/graph/index` accoda l’indicizzazione.
-- `backend/services/planetGraphService.js`: persistenza atomica delle sorgenti e dei nodi del grafo per utente/Planet.
-- `backend/services/obsidianVaultService.js`: selezione, filtri, proiezione Markdown, manifest, hash, conflitti, pruning controllato.
+- `backend/services/planet-knowledge/planetGraphService.js`: persistenza atomica delle sorgenti e dei nodi del grafo per utente/Planet.
+- `backend/services/planet-knowledge/obsidianVaultService.js`: selezione, filtri, proiezione Markdown, manifest, hash, conflitti, pruning controllato.
 - `backend/ai/reader.js`: parser locali già presenti. Non usare `backend/ai/analyzer.js` per la nuova knowledge feature.
-- `src/components/PlanetGraph.tsx` e `src/components/planetGraphQuery.ts`: grafo UI e query locale esistenti, attualmente limitati ai metadati.
+- `src/components/planet-knowledge/PlanetGraph.tsx` e `src/components/planet-knowledge/planetGraphQuery.ts`: grafo UI e query locale esistenti, attualmente limitati ai metadati.
 - `.codex/agents/README.md`: coordinatore, Architect read-only, Backend, AIEngineer, Frontend e Reviewer read-only; contratti prima delle modifiche e un owner per file.
 
 ## Plan of Work
@@ -129,7 +129,7 @@ Usare identificatori stabili basati su scope e ID sorgente o hash, non titoli vi
 
 ## Interfaces and Dependencies
 
-- Config esistente `WorldObsidianSourceSelection` in `src/worlds.ts` e normalizer in `obsidianVaultService.js`.
+- Config esistente `WorldObsidianSourceSelection` in `src/planets/worlds.ts` e normalizer in `obsidianVaultService.js`.
 - Intake server-side per documenti risolti e autorizzati; vietato passare raw path dal browser al motore.
 - `sourceSelection.excludedFileIds` contiene solo ID di nodi file già indicizzati, massimo 500; la lista candidati UI contiene soltanto id/titolo/scope/estensione/stato e non il percorso locale.
 - Job di conoscenza scoped a user/Planet: una coda attiva per scope, stato leggibile, pausa/ripresa ai confini dei batch e cancellazione cooperativa. Stato job in memoria; non equivale a watcher persistente quando l’app è chiusa.

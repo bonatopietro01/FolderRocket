@@ -40,7 +40,7 @@ requirement_coverage:
     acceptance_criteria: [409 still blocks sync when the wiki does not match scope/revision; the last complete vault is preserved; UI points to per-planet Obsidian vault settings; repeated expected 409s do not flood diagnostics; manual and automatic sync remain distinct.]
     package: P3
     owner: Frontend
-    relevant_files: [src/App.tsx, src/diagnostics.ts, backend/server.js, src/components/ChangeWorld.tsx, src/components/PlanetWikiRebuildControls.tsx]
+    relevant_files: [src/App.tsx, src/components/diagnostics/diagnostics.ts, backend/server.js, src/components/ChangeWorld.tsx, src/components/planet-knowledge/PlanetWikiRebuildControls.tsx]
     changes: [App points users to Obsidian vault settings; diagnostics suppresses expected sync 409 noise; backend readiness guard unchanged]
     evidence: [backend/test/obsidianGraphProjection.test.js verifies sync does not queue ingestion; tests/diagnostics.test.mjs verifies 409 handling; reviewer found no remaining R60 issue]
     status: COMPLETE
@@ -49,7 +49,7 @@ requirement_coverage:
     acceptance_criteria: [Missing/non-directory roots are reported explicitly; unavailable requests return no partial inventory; invalid paths remain rejected; configured-root scope is preserved; both Folder Management and USB callers show a useful status.]
     package: P2
     owner: Backend + Frontend
-    relevant_files: [backend/server.js, backend/services/fileTypeInventoryService.js, backend/services/userPathSecurity.js, src/components/FolderManagement.tsx, src/components/UsbSourcePanel.tsx]
+    relevant_files: [backend/server.js, backend/services/files/fileTypeInventoryService.js, backend/services/files/userPathSecurity.js, src/components/file-browser/FolderManagement.tsx, src/components/devices/UsbSourcePanel.tsx]
     changes: [Added explicit unavailable response with no partial scan; preserved workspace containment; both UI callers show unavailable/error state]
     evidence: [backend/test/fileTypeInventoryR61.test.js passes missing, mixed, non-directory, validator ENOTDIR, valid-count and path-boundary cases; reviewer approved R61]
     status: COMPLETE
@@ -58,8 +58,8 @@ requirement_coverage:
     acceptance_criteria: [Unauthenticated /auth/me still returns 401; startup-only GET /auth/me 401 is not captured as an error; other auth failures remain diagnosable.]
     package: P3
     owner: Frontend
-    relevant_files: [src/diagnostics.ts, src/components/AuthGate.tsx]
-    changes: [src/diagnostics.ts suppresses GET /auth/me 401 only when diagnostics identity is startup]
+    relevant_files: [src/components/diagnostics/diagnostics.ts, src/components/auth/AuthGate.tsx]
+    changes: [src/components/diagnostics/diagnostics.ts suppresses GET /auth/me 401 only when diagnostics identity is startup]
     evidence: [tests/diagnostics.test.mjs passes startup and authenticated 401 cases]
     status: COMPLETE
   - id: R63
@@ -85,7 +85,7 @@ requirement_coverage:
     acceptance_criteria: [Black hole has a black center and bright amber/gold accretion disk; galaxy has a soft blue-violet spiral and warm bright core; both remain distinct and legible at rendered sizes.]
     package: P3
     owner: Frontend
-    relevant_files: [src/components/ChangeWorld.tsx, src/worlds.css, src/assets]
+    relevant_files: [src/components/ChangeWorld.tsx, src/planets/worlds.css, src/assets]
     changes: [Generated and integrated src/assets/planet-black-hole-inspired.png and src/assets/planet-galaxy-inspired.png; older assets preserved]
     evidence: [Both assets are 1254x1254 PNGs with transparent corners and match the requested amber disk and violet spiral directions; Electron rendering not captured]
     status: COMPLETE
@@ -94,8 +94,8 @@ requirement_coverage:
     acceptance_criteria: [Cards align with consistent dimensions and internal layout; desktop shows four per row; smaller widths reduce columns without horizontal overflow; card actions still work.]
     package: P3
     owner: Frontend
-    relevant_files: [src/worlds.css, src/components/ChangeWorld.tsx]
-    changes: [src/worlds.css keeps cards at 354px, four desktop columns, responsive breakpoints, and compact status/retry action rows]
+    relevant_files: [src/planets/worlds.css, src/components/ChangeWorld.tsx]
+    changes: [src/planets/worlds.css keeps cards at 354px, four desktop columns, responsive breakpoints, and compact status/retry action rows]
     evidence: [21 frontend tests pass; reviewer confirmed the action area fits without clipping; actual Electron viewport not verified]
     status: COMPLETE
   - id: R67
@@ -103,7 +103,7 @@ requirement_coverage:
     acceptance_criteria: [Action is planet-scoped; label follows valid-wiki state; preview and scope blockers remain; no duplicate mutation controls remain on planet cards or wiki page; wiki browsing remains available.]
     package: P3
     owner: Frontend
-    relevant_files: [src/components/ChangeWorld.tsx, src/components/PlanetWiki.tsx, src/App.tsx, src/components/PlanetWikiRebuildControls.tsx]
+    relevant_files: [src/components/ChangeWorld.tsx, src/components/planet-knowledge/PlanetWiki.tsx, src/App.tsx, src/components/planet-knowledge/PlanetWikiRebuildControls.tsx]
     changes: [PlanetWikiRebuildControls owns preview and create/rebuild in the selected planet's Obsidian vault settings; Wiki page and card remain browse-only]
     evidence: [Saved-scope gate, current-ready label, preview limits, active-job guard, and explicit graph index action confirmed by tests/source review]
     status: COMPLETE
@@ -153,7 +153,7 @@ status: COMPLETE_WITH_ENVIRONMENT_LIMITS
 
 - `POST /worlds/:worldId/obsidian/sync` deliberately returns `KNOWLEDGE_INCOMPLETE` when the saved wiki fingerprint/revision does not match current scope. Preserve this guard; the user’s planet state was not inspected.
 - `POST /file-types/inventory` calls `assertUserPath` before checking `existsSync`; a missing root throws the exact reported message before filtering.
-- `AuthGate` calls `/auth/me` before login; `src/diagnostics.ts` currently records this expected 401 as a warning and later migrates startup diagnostics to the signed-in user.
+- `AuthGate` calls `/auth/me` before login; `src/components/diagnostics/diagnostics.ts` currently records this expected 401 as a warning and later migrates startup diagnostics to the signed-in user.
 - Wiki create/rebuild controls currently appear on planet cards and in the wiki page. The settings editor already owns per-planet Obsidian scope and sync settings.
 - The current `Planet` rendering draws the black hole and galaxy with CSS gradients; the old `planet-black-hole.png` asset appears black in a default-background preview and is not referenced by the component. New dedicated assets avoid changing that file.
 
@@ -193,7 +193,7 @@ Validation: `npm run lint`, `npm run build`, backend syntax check, 21 focused fr
 
 ## Context and Orientation
 
-La diagnostica fetch è in `src/diagnostics.ts`; il gate di sessione è in `src/components/AuthGate.tsx`; la route inventory è in `backend/server.js`. `ChangeWorld.tsx` contiene la griglia pianeti e l’editor con le impostazioni Obsidian; `PlanetWiki.tsx` presenta l’indice e il dettaglio della wiki. `src/worlds.css` definisce layout, card e rendering CSS dei pianeti. Il flusso esistente per preflight e ricostruzione usa `/worlds/:worldId/wiki/preview`, `/worlds/:worldId/graph/index` e il riepilogo di stato del grafo.
+La diagnostica fetch è in `src/components/diagnostics/diagnostics.ts`; il gate di sessione è in `src/components/auth/AuthGate.tsx`; la route inventory è in `backend/server.js`. `ChangeWorld.tsx` contiene la griglia pianeti e l’editor con le impostazioni Obsidian; `PlanetWiki.tsx` presenta l’indice e il dettaglio della wiki. `src/planets/worlds.css` definisce layout, card e rendering CSS dei pianeti. Il flusso esistente per preflight e ricostruzione usa `/worlds/:worldId/wiki/preview`, `/worlds/:worldId/graph/index` e il riepilogo di stato del grafo.
 
 Il worktree iniziale è `feature/desktop-foundation` e contiene numerose modifiche locali relative a R38–R53 e R55–R59. Nessuna di queste va ripristinata. Gli eventi Gmail, i planet ID storici e gli errori del 13–24 ottobre restano classificabili soltanto dal log fornito, salvo riproduzione sintetica di una causa comune.
 

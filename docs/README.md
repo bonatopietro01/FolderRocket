@@ -4,6 +4,8 @@ Start with the [project README](../README.md) for product overview, setup and re
 
 ## Architecture and development
 
+- [Repository structure and cleanup ledger](architecture/REPOSITORY_STRUCTURE.md) lists the actual groups and file moves.
+
 - [Current project map](agents/PROJECT_MAP.md) describes verified modules, ownership and local data boundaries.
 - [Development and releases](DEVELOPMENT_AND_RELEASES.md) covers development checks and packaging.
 - [Diagnostics and performance](DIAGNOSTICS_AND_PERFORMANCE.md) covers local diagnostics.

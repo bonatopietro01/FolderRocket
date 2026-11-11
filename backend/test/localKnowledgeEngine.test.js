@@ -1,7 +1,7 @@
 const assert=require("node:assert/strict");
 const fs=require("node:fs");
 const test=require("node:test");
-const {analyzeKnowledgeDocuments,retrieveKnowledge,buildKnowledgeSummaryPrompt,validateKnowledgeSummary}=require("../services/localKnowledgeEngine");
+const {analyzeKnowledgeDocuments,retrieveKnowledge,buildKnowledgeSummaryPrompt,validateKnowledgeSummary}=require("../services/planet-knowledge/localKnowledgeEngine");
 
 const firstText=[
     "Project: Atlas",
@@ -250,6 +250,6 @@ test("local retrieval flags close evidence statements with opposite explicit neg
 });
 
 test("the local knowledge engine has no provider or network dependency",()=>{
-    const source=fs.readFileSync(require.resolve("../services/localKnowledgeEngine"),"utf8");
+    const source=fs.readFileSync(require.resolve("../services/planet-knowledge/localKnowledgeEngine"),"utf8");
     assert.doesNotMatch(source,/require\(["']openai["']\)|from ["']openai["']|fetch\s*\(|https?:\/\//iu);
 });
